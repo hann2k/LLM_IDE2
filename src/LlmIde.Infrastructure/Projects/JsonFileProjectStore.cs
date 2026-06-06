@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LlmIde.Core.Providers;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
 
@@ -13,8 +14,9 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// Initializes a project at the supplied path.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
+    /// <param name="projectName">The project name.</param>
     /// <returns>The initialization result.</returns>
-    public ProjectInitializationResult Initialize(string projectRoot)
+    public ProjectInitializationResult Initialize(string projectRoot, string projectName)
     {
         string normalizedRoot = Path.GetFullPath(projectRoot);
         Directory.CreateDirectory(normalizedRoot);
@@ -23,19 +25,36 @@ public sealed class JsonFileProjectStore : IProjectStore
         bool created = !Directory.Exists(metadataRoot);
         Directory.CreateDirectory(metadataRoot);
 
-        CreateDirectories(metadataRoot);
-        ProjectInfo projectInfo = EnsureProjectInfo(normalizedRoot, metadataRoot);
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.ProjectStateFileName), CreateDefaultProjectState());
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.CriteriaFileName), Array.Empty<Criterion>());
-        EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName), string.Empty);
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName), new Dictionary<string, object>());
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName), new Dictionary<string, object>());
-        EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
-        EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
-        EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.ArtifactsDirectoryName, LlmIdeLayout.ArtifactsIndexFileName), Array.Empty<object>());
+        try
+        {
+            WriteProgress(metadataRoot, "metadata-directory", "running", string.Empty);
+            CreateDirectories(metadataRoot);
+            WriteProgress(metadataRoot, "directories", "running", string.Empty);
+            ProjectInfo projectInfo = EnsureProjectInfo(normalizedRoot, metadataRoot, projectName);
+            WriteProgress(metadataRoot, "project-info", "running", string.Empty);
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.ProjectStateFileName), CreateDefaultProjectState());
+            WriteProgress(metadataRoot, "project-state", "running", string.Empty);
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.CriteriaFileName), Array.Empty<Criterion>());
+            WriteProgress(metadataRoot, "criteria", "running", string.Empty);
+            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName), string.Empty);
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName), new Dictionary<string, object>());
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName), new Dictionary<string, object>());
+            WriteProgress(metadataRoot, "policies", "running", string.Empty);
+            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
+            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
+            WriteProgress(metadataRoot, "conversations", "running", string.Empty);
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
+            WriteProgress(metadataRoot, "settings", "running", string.Empty);
+            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.ArtifactsDirectoryName, LlmIdeLayout.ArtifactsIndexFileName), Array.Empty<object>());
+            WriteProgress(metadataRoot, "completed", "completed", string.Empty);
 
-        return new ProjectInitializationResult(normalizedRoot, projectInfo, created);
+            return new ProjectInitializationResult(normalizedRoot, projectInfo, created);
+        }
+        catch (Exception ex)
+        {
+            WriteProgress(metadataRoot, "failed", "failed", ex.Message);
+            throw;
+        }
     }
 
     /// <summary>
@@ -88,7 +107,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="metadataRoot">The metadata root path.</param>
     /// <returns>The project information.</returns>
-    private static ProjectInfo EnsureProjectInfo(string projectRoot, string metadataRoot)
+    private static ProjectInfo EnsureProjectInfo(string projectRoot, string metadataRoot, string projectName)
     {
         string projectFile = Path.Combine(metadataRoot, LlmIdeLayout.ProjectFileName);
 
@@ -106,7 +125,7 @@ public sealed class JsonFileProjectStore : IProjectStore
         ProjectInfo projectInfo = new ProjectInfo
         {
             ProjectId = $"proj_{Guid.NewGuid():N}",
-            Title = new DirectoryInfo(projectRoot).Name,
+            Title = projectName,
             CreatedAt = now,
             UpdatedAt = now,
             DefaultProvider = "deepseek",
@@ -130,12 +149,21 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// Creates the default provider settings.
     /// </summary>
     /// <returns>The default provider settings.</returns>
-    private static Dictionary<string, object> CreateDefaultProviderSettings()
+    private static ProviderSettingsDocument CreateDefaultProviderSettings()
     {
-        return new Dictionary<string, object>
+        return new ProviderSettingsDocument
         {
-            ["default_provider"] = "deepseek",
-            ["providers"] = new Dictionary<string, object>()
+            DefaultProvider = "deepseek",
+            Providers =
+            [
+                new ProviderSettings
+                {
+                    Name = "deepseek",
+                    ApiKey = string.Empty,
+                    Endpoint = "https://api.deepseek.com/chat/completions",
+                    Model = "deepseek-chat"
+                }
+            ]
         };
     }
 
@@ -178,5 +206,25 @@ public sealed class JsonFileProjectStore : IProjectStore
     {
         string json = JsonSerializer.Serialize(value, JsonOptions.Default);
         File.WriteAllText(path, json);
+    }
+
+    /// <summary>
+    /// Writes initialization progress.
+    /// </summary>
+    /// <param name="metadataRoot">The metadata root path.</param>
+    /// <param name="step">The latest step.</param>
+    /// <param name="status">The progress status.</param>
+    /// <param name="errorMessage">The error message.</param>
+    private static void WriteProgress(string metadataRoot, string step, string status, string errorMessage)
+    {
+        ProjectInitProgress progress = new ProjectInitProgress
+        {
+            Step = step,
+            Status = status,
+            ErrorMessage = errorMessage,
+            UpdatedAt = DateTimeOffset.UtcNow
+        };
+
+        WriteJson(Path.Combine(metadataRoot, LlmIdeLayout.InitProgressFileName), progress);
     }
 }

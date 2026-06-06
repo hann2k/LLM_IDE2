@@ -16,6 +16,11 @@ public static class LlmIdeLayout
     public const string ProjectFileName = "project.json";
 
     /// <summary>
+    /// Gets the init progress file name.
+    /// </summary>
+    public const string InitProgressFileName = "init-progress.json";
+
+    /// <summary>
     /// Gets the project state file name.
     /// </summary>
     public const string ProjectStateFileName = "project-state.json";

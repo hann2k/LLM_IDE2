@@ -9,8 +9,9 @@ public interface IProjectStore
     /// Initializes a project at the supplied path.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
+    /// <param name="projectName">The project name.</param>
     /// <returns>The initialization result.</returns>
-    ProjectInitializationResult Initialize(string projectRoot);
+    ProjectInitializationResult Initialize(string projectRoot, string projectName);
 
     /// <summary>
     /// Determines whether a path is an initialized project.
