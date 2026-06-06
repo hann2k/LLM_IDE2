@@ -1,4 +1,4 @@
-# LLM IDE Project Folder Structure v0.4
+# LLM IDE Project Folder Structure v0.5
 
 ## 0. 개발환경
 
@@ -75,6 +75,49 @@ Project는 이름 기반으로 관리한다.
 API 기반 구조이므로 장기 세션을 유지하지 않는다.
 새 요청은 매번 IDE가 필요한 맥락을 조립하여 Provider API에 전달한다.
 
+대화 원본 저장과 API에 주입하는 맥락은 분리한다.
+모든 원본 대화는 장기 기록으로 저장하지만, 매 API 요청마다 과거 전체 원문을 전송하지 않는다.
+기본 맥락 관리 전략은 `Summary + Window`로 한다.
+
+과거 대화는 `Rolling Context Summary`로 압축하여 전달하고, 최근 대화는 제한된 원문 `Recent Window`로 전달한다.
+현재 사용자 요청은 항상 원문 그대로 전달한다.
+맥락 압축은 IDE 내부 알고리즘이 아니라 LLM Provider API를 이용해 수행한다.
+
+맥락 압축 원칙:
+
+```text
+원본은 저장한다.
+과거는 압축해서 넣는다.
+최근은 원문으로 유지한다.
+압축은 LLM에게 맡긴다.
+```
+
+### Agent Boundary Principle
+
+LLM IDE는 에이전트 기능을 수용할 수 있는 구조로 설계한다.
+그러나 MVP에서는 자율 실행 에이전트를 구현하지 않는다.
+
+AI는 다음을 할 수 있다.
+
+* 응답 생성
+* 요약
+* 상태 변경 후보 제안
+* 산출물 초안 생성
+* 파일/맥락 기반 분석
+
+AI는 사용자 승인 없이 다음을 할 수 없다.
+
+* Project State 변경
+* Criteria 변경
+* Artifact 확정 저장
+* 파일 수정
+* 프로젝트 삭제
+* 외부 명령 실행
+* 다음 작업 자동 실행
+
+이 원칙은 LLM IDE의 정체성이다.
+LLM IDE는 AI가 작업을 제안하고 사용자가 승인하는 구조를 기본으로 한다.
+
 또한 MVP 단계에서는 GUI보다 핵심 기능 구현을 우선한다.
 
 ```text
@@ -86,7 +129,82 @@ MVP = CLI 기반 구현
 
 ---
 
-## 2. 수정된 프로젝트 구성
+## 2. Context Management Strategy
+
+LLM IDE의 기본 맥락 관리 전략은 다음 구조다.
+
+```text
+Raw Conversation Log
+ + Rolling Context Summary
+ + Recent Window
+```
+
+### Raw Conversation Log
+
+Raw Conversation Log는 사용자와 AI의 모든 대화 원문을 저장한다.
+
+용도:
+
+* 감사
+* 재현
+* 검색
+* 디버깅
+* 추적
+
+저장 위치:
+
+* SQLite `conversation.db`
+* JSONL `messages.jsonl`
+
+Raw Conversation Log는 장기 기록의 원본이지만, 매 API 요청에 전체 원문으로 포함하지 않는다.
+
+### Rolling Context Summary
+
+Rolling Context Summary는 다음 요청에 필요한 과거 맥락을 압축한 요약이다.
+이 요약은 LLM Provider API를 사용해 생성한다.
+Rolling Context Summary는 원본 대화 로그를 대체하지 않는다.
+
+압축 실패 시 기존 Summary를 유지한다.
+사용자 응답이 정상적으로 생성된 경우, 압축 실패는 chat 실패로 처리하지 않는다.
+
+### Recent Window
+
+Recent Window는 최근 N개의 user/assistant 발화를 원문 그대로 포함한다.
+
+목적:
+
+* 직전 흐름 유지
+* 지시어 참조 유지
+* 말투와 형식 유지
+* 짧은 문맥 연속성 보장
+
+Recent Window는 Rolling Context Summary를 보완한다.
+
+### 기본 조립 알고리즘
+
+```text
+[과거 맥락] Rolling Context Summary
++
+[최근 대화] Recent Window
++
+[현재 요청] User Request
+```
+
+Sliding Window는 Recent Window 구현에만 사용한다.
+RAG는 MVP에서 제외하고 File Store 구현 이후 다시 검토한다.
+
+적용 알고리즘:
+
+| 알고리즘 | 적용 여부 | LLM IDE에서의 역할 |
+| --- | --- | --- |
+| Sliding Window | 부분 채택 | Recent Window 구현에 사용 |
+| Conversation Summary Buffer | 채택 | Rolling Context Summary 생성에 사용 |
+| Summary + Window | 기본 전략 | 장기 대화 관리 기본 구조 |
+| Session-based RAG | 보류 | File Store 이후 후속 검토 |
+
+---
+
+## 3. 수정된 프로젝트 구성
 
 IDE 프로그램 하부의 프로젝트 이름 저장소:
 
@@ -124,6 +242,7 @@ IDE 프로그램 하부의 프로젝트 이름 저장소:
  │   ├─ criteria.json
  │   ├─ policies/
  │   │   ├─ system-rule.md
+ │   │   ├─ compression-rule.md
  │   │   ├─ context-policy.json
  │   │   └─ provider-policy.json
  │   ├─ context/
@@ -132,8 +251,13 @@ IDE 프로그램 하부의 프로젝트 이름 저장소:
  │   │   ├─ conversation.db
  │   │   ├─ messages.jsonl
  │   │   ├─ requests.jsonl
- │   │   └─ context-packages/
- │   │       └─ <request_id>.json
+ │   │   ├─ context-packages/
+ │   │   │   └─ <request_id>.json
+ │   │   └─ rolling-context/
+ │   │       ├─ current.md
+ │   │       ├─ history/
+ │   │       │   └─ rctx_000001.md
+ │   │       └─ index.jsonl
  │   ├─ artifacts/
  │   │   ├─ artifacts.index.json
  │   │   └─ <artifact_id>.md
@@ -156,7 +280,7 @@ IDE 프로그램 하부의 프로젝트 이름 저장소:
 
 ---
 
-## 3. 애플리케이션 구조
+## 4. 애플리케이션 구조
 
 초기 구현은 CLI 기반으로 진행한다.
 
@@ -254,7 +378,7 @@ WPF는 Core를 호출하는 UI 계층이다.
 
 ---
 
-## 4. 제거된 구성
+## 5. 제거된 구성
 
 아래 항목은 프로젝트 구조에서 제거한다.
 
@@ -268,7 +392,7 @@ WPF는 Core를 호출하는 UI 계층이다.
 
 ---
 
-## 5. 수정된 핵심 모델
+## 6. 수정된 핵심 모델
 
 ```text
 Project Registry
@@ -301,19 +425,24 @@ Application
 
 ---
 
-## 6. 요청 실행 구조
+## 7. 요청 실행 구조
 
 API 호출의 실행 단위는 Request다.
 
 ```text
 User Input
  → Context Builder
- → Context Package
+ → Context Package 생성
  → Provider API Request
  → Assistant Response
- → Message Log 저장
+ → Raw Conversation Log 저장
  → Request Log 저장
+ → Compression Request 실행
+ → Rolling Context Summary 갱신
 ```
+
+Compression Request는 사용자 응답 이후 별도의 내부 LLM 요청으로 실행한다.
+Compression Request 실패는 chat 실패가 아니다.
 
 CLI와 WPF는 동일한 실행 흐름을 사용한다.
 
@@ -329,7 +458,7 @@ WPF
 
 ---
 
-## 7. Context Package의 역할
+## 8. Context Package의 역할
 
 Context Package는 특정 API 요청에 실제로 들어간 맥락 스냅샷이다.
 
@@ -339,6 +468,7 @@ Context Package는 특정 API 요청에 실제로 들어간 맥락 스냅샷이�
   "system_rule": "",
   "active_criteria": [],
   "project_state": {},
+  "rolling_context_summary": "",
   "context_notes": [],
   "attached_messages": [],
   "attached_artifacts": [],
@@ -350,9 +480,165 @@ Context Package는 특정 API 요청에 실제로 들어간 맥락 스냅샷이�
 
 이 파일은 API 기반 구조에서 요청 재현성과 추적성을 보장하는 핵심 데이터다.
 
+API 요청에 포함되는 맥락 구조:
+
+```text
+[System Rule]
+[Active Criteria]
+[Project State]
+[Rolling Context Summary]
+[Recent Window]
+[Manual Attachments]
+[Artifacts]
+[User Request]
+```
+
+규칙:
+
+* 과거 전체 대화 원문은 포함하지 않는다.
+* 과거 대화는 Rolling Context Summary로 표현한다.
+* 최근 대화만 제한된 개수의 원문으로 포함한다.
+* 현재 사용자 요청은 항상 원문으로 포함한다.
+* Manual Attachments는 사용자가 명시적으로 선택한 경우에만 포함한다.
+
+우선순위:
+
+1. System Rule
+2. Active Criteria
+3. Project State
+4. User Request
+5. Manual Attachments
+6. Artifacts
+7. Rolling Context Summary
+8. Recent Window
+
 ---
 
-## 8. MVP 최소 파일
+## 9. 정책 파일
+
+### compression-rule.md
+
+초기 Compression Rule은 다음 내용으로 생성한다.
+
+```markdown
+# Compression Rule
+
+너는 대화 맥락 압축기다.
+
+목표:
+- 다음 요청에 필요한 과거 맥락만 보존한다.
+- 기존 Rolling Context Summary와 현재 user/assistant 대화를 병합한다.
+- 중복은 제거한다.
+- 원문에 없는 내용을 추가하지 않는다.
+- 추정하지 않는다.
+- 불확실한 내용은 확정 사실처럼 쓰지 않는다.
+
+반드시 보존할 항목:
+- 프로젝트 정체성
+- 현재 진행 상태
+- 확정 결정
+- 활성 제약
+- 중요한 기술 세부사항
+- 미해결 질문
+- 사용자가 명시한 선호
+- 앞으로 착각하면 안 되는 내용
+
+제거할 항목:
+- 단순 인사
+- 반복 설명
+- 해결된 사소한 논의
+- 장기 맥락에 불필요한 문장
+
+출력 형식은 Markdown으로 한다.
+```
+
+### Rolling Context Summary 출력 형식
+
+```markdown
+# Rolling Context Summary
+
+## Project Identity
+
+## Current Progress
+
+## Confirmed Decisions
+
+## Active Constraints
+
+## Important Technical Details
+
+## Open Questions
+
+## Recent Context To Preserve
+
+## Do Not Assume
+```
+
+### rolling-context/index.jsonl
+
+```json
+{
+  "rolling_context_id": "rctx_000001",
+  "source_request_id": "req_000001",
+  "previous_rolling_context_id": null,
+  "content_path": "conversations/rolling-context/history/rctx_000001.md",
+  "is_current": true,
+  "created_at": "",
+  "provider": "deepseek",
+  "model": "deepseek-chat",
+  "status": "completed",
+  "error": null
+}
+```
+
+`status` 값:
+
+* `completed`
+* `failed`
+* `superseded`
+
+새 Summary는 `history/`에 저장하고 `current.md`를 갱신한다.
+이전 Summary는 삭제하지 않는다.
+
+### context-policy.json 확장
+
+```json
+{
+  "context_management_strategy": "summary_plus_window",
+  "include_rolling_context_summary": true,
+  "rolling_context_path": "conversations/rolling-context/current.md",
+  "recent_turn_count": 3,
+  "max_recent_turn_chars": 12000,
+  "max_rolling_context_chars": 24000,
+  "compression_enabled": true,
+  "compression_provider": "deepseek",
+  "compression_model": "deepseek-chat",
+  "compression_after_chat": true,
+  "compression_failure_strategy": "keep_previous",
+  "rag_enabled": false
+}
+```
+
+`context_management_strategy` 허용 값:
+
+* `window_only`
+* `summary_only`
+* `summary_plus_window`
+* `rag`
+
+MVP 기본값은 `summary_plus_window`다.
+
+`compression_failure_strategy` 허용 값:
+
+* `keep_previous`
+* `clear_current`
+* `fail_chat`
+
+MVP 기본값은 `keep_previous`다.
+
+---
+
+## 10. MVP 최소 파일
 
 IDE 프로그램 하부 고정 저장소:
 
@@ -373,12 +659,18 @@ IDE 프로그램 하부 고정 저장소:
      ├─ criteria.json
      ├─ policies/
      │   ├─ system-rule.md
+     │   ├─ compression-rule.md
      │   ├─ context-policy.json
      │   └─ provider-policy.json
      ├─ conversations/
+     │   ├─ conversation.db
      │   ├─ messages.jsonl
      │   ├─ requests.jsonl
-     │   └─ context-packages/
+     │   ├─ context-packages/
+     │   └─ rolling-context/
+     │       ├─ current.md
+     │       ├─ history/
+     │       └─ index.jsonl
      ├─ settings/
      │   └─ providers.json
      └─ artifacts/
@@ -398,7 +690,122 @@ lock
 
 ---
 
-## 9. MVP 개발 절차
+## 11. Request Log와 SQLite 확장
+
+Chat Request 기록 필드:
+
+```text
+request_type: chat
+used_rolling_context_id
+rolling_context_path
+recent_turn_count
+compression_request_id
+compression_status
+compression_error
+```
+
+Compression Request는 별도 Request로 저장한다.
+
+```text
+request_type: compression
+source_chat_request_id
+provider
+model
+status
+error
+```
+
+`request_type` 허용 값:
+
+* `chat`
+* `compression`
+* `model_list`
+* `state_candidate`
+
+SQLite에는 `rolling_context_summaries` 테이블을 추가한다.
+
+```text
+rolling_context_id
+source_request_id
+previous_rolling_context_id
+content
+content_path
+created_at
+provider
+model
+status
+error
+is_current
+```
+
+후속 검토 테이블:
+
+```text
+context_package_items
+ ├─ context_package_id
+ ├─ request_id
+ ├─ item_type
+ ├─ item_id
+ ├─ source_path
+ ├─ included_chars
+ ├─ priority
+ └─ created_at
+```
+
+MVP 구현 우선순위:
+
+1. `rolling-context/current.md`
+2. `rolling-context/history/<rolling_context_id>.md`
+3. `rolling-context/index.jsonl`
+4. SQLite `rolling_context_summaries`
+5. `context_package_items`
+
+---
+
+## 12. Compression Request 구조
+
+Compression Request 입력:
+
+```text
+[Compression Rule]
+
+[Previous Rolling Context Summary]
+기존 current.md 내용
+
+[Current User Message]
+이번 user 원문
+
+[Current Assistant Response]
+이번 assistant 원문
+
+[Task]
+위 내용을 병합하여 다음 요청에 사용할 Rolling Context Summary를 갱신하라.
+```
+
+규칙:
+
+* 과거 전체 원문 대화를 포함하지 않는다.
+* 이전 Summary와 현재 user/assistant 대화만 포함한다.
+* 사용자에게 출력하지 않는다.
+* 결과는 `rolling-context/` 아래에 저장한다.
+
+Compression 실패 정책:
+
+* 사용자 응답이 성공했고 raw log 저장이 끝난 뒤 compression이 실패하면 사용자 응답은 정상으로 유지한다.
+* raw user/assistant message는 유지한다.
+* 기존 `current.md`는 유지한다.
+* `requests.jsonl`에 `compression_failed`를 기록한다.
+* 다음 chat은 이전 Summary를 사용한다.
+
+금지:
+
+* Compression 실패 때문에 사용자 응답을 폐기하지 않는다.
+* Raw Conversation Log를 롤백하지 않는다.
+* 빈 Summary로 덮어쓰지 않는다.
+
+---
+
+## 13. MVP 개발 절차
 
 ### Phase 1. 프로젝트 초기화 및 프로젝트 목록 관리 (CLI)
 
@@ -624,28 +1031,73 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-### Phase 6. Context Builder
+### Phase 6. Rolling Context Compression
+
+목표:
+
+* 장기 대화 맥락을 Rolling Context Summary로 관리한다.
+* 압축은 LLM Provider API를 이용한다.
+* 원본 대화 로그와 압축 맥락을 분리해 저장한다.
+
+구현 항목:
+
+* `conversations/rolling-context/` 폴더 생성
+* `rolling-context/current.md` 생성
+* `rolling-context/history/` 생성
+* `rolling-context/index.jsonl` 생성
+* `policies/compression-rule.md` 생성
+* `context-policy.json` 압축 정책 확장
+* SQLite `rolling_context_summaries` 테이블 추가
+* chat 응답 이후 Compression Request 실행
+* 이전 Summary와 현재 user/assistant 대화를 병합
+* 새 Summary를 `history/`에 저장
+* `current.md` 갱신
+* 기존 Summary를 `superseded` 상태로 기록
+* Compression Request를 Request Log에 별도로 기록
+* Compression 실패 시 기존 Summary 유지
+
+완료 기준:
+
+* chat 이후 Rolling Context Summary가 생성된다.
+* 다음 chat 요청에 `current.md`가 포함된다.
+* 원본 대화 로그는 삭제되거나 덮어써지지 않는다.
+* Compression Request가 일반 chat request와 구분되어 기록된다.
+* Compression 실패 시 사용자 응답은 정상 유지된다.
+* Compression 실패 시 기존 Summary가 유지된다.
+
+---
+
+### Phase 7. Context Builder v1
 
 목표:
 
 * 요청에 필요한 맥락을 조립한다.
+* Summary + Window 전략을 적용한다.
 
 구현 항목:
 
 * System Rule 주입
 * Active Criteria 주입
 * Project State 주입
-* 최근 대화 포함
+* Rolling Context Summary 주입
+* Recent Window 주입
+* Manual Attachments 주입
+* Artifact 주입
 * Context Package 생성
+* 요청별 사용된 `rolling_context_id` 기록
+* 최근 대화 포함 개수와 문자 수 제한 적용
 
 완료 기준:
 
 * 요청마다 Context Package가 생성된다.
 * 동일한 요청을 재현할 수 있다.
+* 과거 전체 대화 원문은 요청에 포함되지 않는다.
+* Rolling Context Summary와 Recent Window가 함께 주입된다.
+* Context Package에서 어떤 Summary와 최근 대화가 사용되었는지 확인할 수 있다.
 
 ---
 
-### Phase 7. Artifact 저장
+### Phase 8. Artifact 저장
 
 목표:
 
@@ -666,7 +1118,7 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-### Phase 8. Context Notes
+### Phase 9. Context Notes
 
 목표:
 
@@ -685,11 +1137,13 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-### Phase 9. File Store
+### Phase 10. File Store
 
 목표:
 
 * 프로젝트 파일을 AI 맥락으로 활용한다.
+* MVP에서는 파일 등록, 추출, 요약, 명시적 첨부까지만 구현한다.
+* RAG 검색은 MVP에서 제외하고 File Store 안정화 이후 검토한다.
 
 구현 항목:
 
@@ -703,9 +1157,17 @@ llmide criteria remove MyProject <criterion-id>
 * 파일 내용을 요청에 포함할 수 있다.
 * 포함 이력을 추적할 수 있다.
 
+후속 검토 항목:
+
+* `file_chunks`
+* embedding index
+* semantic retrieval
+* session/project RAG
+* query-based file context selection
+
 ---
 
-### Phase 10. State Update Candidate
+### Phase 11. State Update Candidate
 
 목표:
 
@@ -725,7 +1187,7 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-### Phase 11. WPF GUI 적용
+### Phase 12. WPF GUI 적용
 
 목표:
 
@@ -752,7 +1214,7 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-### Phase 12. Local Server 적용
+### Phase 13. Local Server 적용
 
 목표:
 
@@ -787,7 +1249,22 @@ llmide criteria remove MyProject <criterion-id>
 
 ---
 
-## 10. 현재 확정 결정
+## 14. MVP 완료 기준
+
+MVP는 다음 조건을 만족해야 한다.
+
+* 긴 대화에서도 과거 전체 원문을 매 요청에 포함하지 않는다.
+* 과거 맥락은 Rolling Context Summary로 전달한다.
+* 최근 대화는 Recent Window로 전달한다.
+* Rolling Context Summary는 LLM Provider API를 통해 생성한다.
+* Raw Conversation Log와 압축 맥락은 별도로 보존한다.
+* Compression 실패 시 raw conversation과 사용자 응답은 유지한다.
+* 각 요청에서 어떤 압축 맥락이 사용되었는지 추적할 수 있다.
+* `Summary + Window`를 기본 맥락 관리 전략으로 사용한다.
+
+---
+
+## 15. 현재 확정 결정
 
 * 개발 환경은 .NET 10이다.
 * 주 개발 언어는 C#이다.
@@ -818,10 +1295,98 @@ llmide criteria remove MyProject <criterion-id>
 * Conversation Log는 Project에 직접 귀속된다.
 * Request Log는 API 호출 단위로 저장한다.
 * Context Package는 각 요청에 실제 주입된 맥락 스냅샷이다.
+* 대화 원본 저장과 API 요청 맥락 주입은 분리한다.
+* 모든 원본 대화는 SQLite와 JSONL에 보존한다.
+* 과거 장기 맥락은 전체 원문이 아니라 Rolling Context Summary로 전달한다.
+* 최근 대화는 제한된 Recent Window로 원문 전달한다.
+* 기본 맥락 관리 전략은 `Summary + Window`다.
+* Sliding Window는 Recent Window 구현에만 사용한다.
+* Conversation Summary Buffer 방식은 Rolling Context Summary 생성에 사용한다.
+* RAG는 MVP에서 제외하고 File Store 이후 다시 검토한다.
+* Rolling Context Summary는 LLM Provider API의 Compression Request로 생성한다.
+* chat 응답 이후 이전 Summary와 현재 user/assistant 대화를 압축해 Summary를 갱신한다.
+* 다음 chat은 갱신된 Rolling Context Summary를 포함한다.
+* Compression 실패 시 기존 Summary를 유지한다.
 * AI의 장기 기억에 의존하지 않는다.
 * IDE가 프로젝트 상태, 기준, 정책, 맥락, 산출물을 저장한다.
-* MVP는 Project → Provider → Conversation → Criteria → State → Context → Artifact 순서로 구현한다.
+* LLM IDE는 에이전트 기능을 수용할 수 있는 구조로 설계한다.
+* MVP에서는 자율 실행 에이전트를 구현하지 않는다.
+* AI는 응답 생성, 요약, 상태 변경 후보 제안, 산출물 초안 생성, 파일/맥락 기반 분석을 수행할 수 있다.
+* AI는 사용자 승인 없이 Project State, Criteria, Artifact, 파일, 프로젝트를 변경할 수 없다.
+* AI는 사용자 승인 없이 외부 명령 실행이나 다음 작업 자동 실행을 할 수 없다.
+* MVP는 Project → Provider → Conversation → Criteria → State → Rolling Context Compression → Context Builder → Artifact 순서로 구현한다.
 * GUI보다 Core와 CLI 기능 완성을 우선한다.
 * TCP/UDP 서버는 후속 `LlmIde.Server` 어댑터 계층으로 추가한다.
 * Server는 로컬 LLM 웹서비스 또는 에이전트 도구 런타임 형태를 모두 고려한다.
 * Server, CLI, WPF는 동일한 Core 서비스를 사용한다.
+
+---
+
+## 16. 현재 진행 상태
+
+* Phase 1 완료: 프로젝트 초기화 및 프로젝트 목록 관리
+* Phase 2 완료: Provider 기반 대화
+* Phase 3 완료: 대화 로그 저장
+* Phase 4 완료: Criteria 관리
+* 다음 작업: Phase 5 Project State 관리
+* 이후 작업: Phase 6 Rolling Context Compression
+
+---
+
+## 17. Codex 작업 목록
+
+### Codex Task 005. Project State 관리 구현
+
+* `project-state.json` 저장소 구현
+* stage, current task, completed items, next actions, blockers 관리
+* CLI state 명령 구현
+* chat 요청에 Project State 포함
+
+### Codex Task 006. Rolling Context 저장소 구조 생성
+
+* `conversations/rolling-context/current.md` 생성
+* `conversations/rolling-context/history/` 생성
+* `conversations/rolling-context/index.jsonl` 생성
+* SQLite `rolling_context_summaries` 테이블 추가
+
+### Codex Task 007. Compression Rule 및 context-policy 확장
+
+* `policies/compression-rule.md` 생성
+* `context-policy.json`에 Summary + Window 정책 추가
+* compression failure strategy 적용
+
+### Codex Task 008. Compression Request 생성기 구현
+
+* 이전 Rolling Context Summary 로드
+* 현재 user/assistant 메시지 수집
+* Compression Rule 기반 내부 요청 생성
+* Provider API로 Summary 생성
+
+### Codex Task 009. chat 후 Rolling Context Summary 갱신 구현
+
+* chat 응답 저장 후 Compression Request 실행
+* 새 Summary를 history에 저장
+* `current.md` 갱신
+* 실패 시 기존 Summary 유지
+
+### Codex Task 010. Context Builder v1에서 Rolling Summary + Recent Window 주입
+
+* Rolling Context Summary 포함
+* Recent Window 포함
+* 전체 과거 원문 제외
+* Context Package에 사용된 맥락 기록
+
+### Codex Task 011. Request Log에 used_rolling_context_id 및 compression_status 기록
+
+* chat request와 compression request 구분
+* `used_rolling_context_id` 기록
+* `compression_status` 기록
+* `compression_error` 기록
+
+---
+
+## 18. v0.5 요약
+
+v0.5에서는 LLM IDE의 장기 대화 관리 전략을 `Summary + Window`로 확정한다.
+원본 대화는 모두 저장하고, 과거 맥락은 압축하며, 최근 대화는 제한된 원문 창으로 유지한다.
+압축은 LLM Provider API를 통해 수행하고, RAG는 MVP에서 제외한다.
