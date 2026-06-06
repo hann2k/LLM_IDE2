@@ -10,11 +10,6 @@ namespace LlmIde.Core.Providers;
 public sealed class ChatService
 {
     /// <summary>
-    /// The number of previous messages to inject into a provider request.
-    /// </summary>
-    private const int MaxRecentMessages = 20;
-
-    /// <summary>
     /// The provider settings store.
     /// </summary>
     private readonly IProviderSettingsStore providerSettingsStore;
@@ -40,6 +35,11 @@ public sealed class ChatService
     private readonly ProjectStateService projectStateService;
 
     /// <summary>
+    /// The rolling context store.
+    /// </summary>
+    private readonly IRollingContextStore rollingContextStore;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
@@ -47,18 +47,21 @@ public sealed class ChatService
     /// <param name="conversationLogStore">The conversation log store.</param>
     /// <param name="criteriaService">The criteria service.</param>
     /// <param name="projectStateService">The project state service.</param>
+    /// <param name="rollingContextStore">The rolling context store.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
         IConversationLogStore conversationLogStore,
         CriteriaService criteriaService,
-        ProjectStateService projectStateService)
+        ProjectStateService projectStateService,
+        IRollingContextStore rollingContextStore)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
+        this.rollingContextStore = rollingContextStore;
     }
 
     /// <summary>
@@ -83,6 +86,7 @@ public sealed class ChatService
         response.RequestId = preparedRequest.RequestId;
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
+        await CompressAfterChatAsync(projectRoot, preparedRequest, message, response.Content, cancellationToken);
 
         return response;
     }
@@ -128,6 +132,7 @@ public sealed class ChatService
         };
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
+        await CompressAfterChatAsync(projectRoot, preparedRequest, message, response.Content, cancellationToken);
         return response;
     }
 
@@ -147,7 +152,8 @@ public sealed class ChatService
             throw new InvalidOperationException($"Provider is not available: {settings.Name}");
         }
 
-        IReadOnlyList<ConversationMessageRecord> recentMessages = conversationLogStore.GetRecentMessages(projectRoot, MaxRecentMessages);
+        rollingContextStore.EnsureInitialized(projectRoot);
+        RollingContextSummary? rollingContext = rollingContextStore.LoadCurrent(projectRoot);
         IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
         ProjectState projectState = projectStateService.Get(projectRoot);
 
@@ -159,10 +165,10 @@ public sealed class ChatService
         ChatProviderRequest request = new ChatProviderRequest
         {
             Model = settings.Model,
-            Messages = BuildProviderMessages(recentMessages, activeCriteria, projectState, message)
+            Messages = BuildProviderMessages(activeCriteria, projectState, rollingContext, message)
         };
         string requestId = $"req_{Guid.NewGuid():N}";
-        ContextPackage contextPackage = CreateContextPackage(requestId, message, recentMessages, activeCriteria, projectState);
+        ContextPackage contextPackage = CreateContextPackage(requestId, message, activeCriteria, projectState, rollingContext);
 
         return new PreparedChatRequest(provider, settings, request, requestId, contextPackage);
     }
@@ -170,20 +176,21 @@ public sealed class ChatService
     /// <summary>
     /// Builds the provider messages for a chat request.
     /// </summary>
-    /// <param name="recentMessages">The recent stored messages.</param>
     /// <param name="activeCriteria">The active criteria.</param>
     /// <param name="projectState">The project state.</param>
+    /// <param name="rollingContext">The rolling context summary.</param>
     /// <param name="message">The current user message.</param>
     /// <returns>The provider messages.</returns>
     private static List<ChatMessage> BuildProviderMessages(
-        IReadOnlyList<ConversationMessageRecord> recentMessages,
         IReadOnlyList<Criterion> activeCriteria,
         ProjectState projectState,
+        RollingContextSummary? rollingContext,
         string message)
     {
         List<ChatMessage> messages = [];
         string criteriaMessage = BuildCriteriaMessage(activeCriteria);
         string stateMessage = BuildProjectStateMessage(projectState);
+        string rollingContextMessage = BuildRollingContextMessage(rollingContext);
 
         if (!string.IsNullOrWhiteSpace(criteriaMessage))
         {
@@ -203,13 +210,14 @@ public sealed class ChatService
             });
         }
 
-        messages.AddRange(recentMessages
-                .Select(storedMessage => new ChatMessage
-                {
-                    Role = storedMessage.Role,
-                    Content = storedMessage.Content
-                })
-                .ToList());
+        if (!string.IsNullOrWhiteSpace(rollingContextMessage))
+        {
+            messages.Add(new ChatMessage
+            {
+                Role = "system",
+                Content = rollingContextMessage
+            });
+        }
 
         messages.Add(new ChatMessage
         {
@@ -256,6 +264,24 @@ public sealed class ChatService
             builder.AppendLine();
         }
 
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Builds the rolling context system message.
+    /// </summary>
+    /// <param name="rollingContext">The rolling context summary.</param>
+    /// <returns>The system message content.</returns>
+    private static string BuildRollingContextMessage(RollingContextSummary? rollingContext)
+    {
+        if (rollingContext is null || string.IsNullOrWhiteSpace(rollingContext.Content))
+        {
+            return string.Empty;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("Use this compressed prior conversation context:");
+        builder.AppendLine(rollingContext.Content);
         return builder.ToString();
     }
 
@@ -330,9 +356,15 @@ public sealed class ChatService
         conversationLogStore.AppendRequest(projectRoot, new ConversationRequestRecord
         {
             RequestId = preparedRequest.RequestId,
+            RequestType = "chat",
             Provider = preparedRequest.Settings.Name,
             Model = preparedRequest.Request.Model,
             ContextPackagePath = contextPackagePath,
+            UsedRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId,
+            RollingContextPath = preparedRequest.ContextPackage.RollingContextPath,
+            RecentTurnCount = 0,
+            CompressionRequestId = preparedRequest.CompressionRequestId,
+            CompressionStatus = "pending",
             CreatedAt = createdAt
         });
 
@@ -346,6 +378,124 @@ public sealed class ChatService
             Model = preparedRequest.Request.Model,
             CreatedAt = createdAt
         });
+    }
+
+    /// <summary>
+    /// Runs rolling context compression after a successful chat response.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="preparedRequest">The prepared request.</param>
+    /// <param name="userMessage">The current user message.</param>
+    /// <param name="assistantMessage">The assistant response.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    private async Task CompressAfterChatAsync(
+        string projectRoot,
+        PreparedChatRequest preparedRequest,
+        string userMessage,
+        string assistantMessage,
+        CancellationToken cancellationToken)
+    {
+        string previousRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId;
+
+        try
+        {
+            ChatProviderRequest compressionRequest = new ChatProviderRequest
+            {
+                Model = preparedRequest.Request.Model,
+                Messages =
+                [
+                    new ChatMessage
+                    {
+                        Role = "system",
+                        Content = rollingContextStore.LoadCompressionRule(projectRoot)
+                    },
+                    new ChatMessage
+                    {
+                        Role = "user",
+                        Content = BuildCompressionPrompt(
+                            preparedRequest.ContextPackage.RollingContextSummary,
+                            userMessage,
+                            assistantMessage)
+                    }
+                ]
+            };
+            ChatProviderResponse compressionResponse = await preparedRequest.Provider.SendAsync(
+                compressionRequest,
+                preparedRequest.Settings,
+                cancellationToken);
+            RollingContextSummary summary = rollingContextStore.SaveCompleted(
+                projectRoot,
+                preparedRequest.RequestId,
+                string.IsNullOrWhiteSpace(previousRollingContextId) ? null : previousRollingContextId,
+                compressionResponse.Content,
+                preparedRequest.Settings.Name,
+                preparedRequest.Request.Model);
+
+            conversationLogStore.AppendRequest(projectRoot, new ConversationRequestRecord
+            {
+                RequestId = preparedRequest.CompressionRequestId,
+                RequestType = "compression",
+                SourceChatRequestId = preparedRequest.RequestId,
+                Provider = preparedRequest.Settings.Name,
+                Model = preparedRequest.Request.Model,
+                ContextPackagePath = summary.ContentPath,
+                UsedRollingContextId = previousRollingContextId,
+                RollingContextPath = summary.ContentPath,
+                Status = "completed",
+                CreatedAt = summary.CreatedAt
+            });
+        }
+        catch (Exception ex)
+        {
+            RollingContextSummary failedSummary = rollingContextStore.SaveFailed(
+                projectRoot,
+                preparedRequest.RequestId,
+                string.IsNullOrWhiteSpace(previousRollingContextId) ? null : previousRollingContextId,
+                preparedRequest.Settings.Name,
+                preparedRequest.Request.Model,
+                ex.Message);
+
+            conversationLogStore.AppendRequest(projectRoot, new ConversationRequestRecord
+            {
+                RequestId = preparedRequest.CompressionRequestId,
+                RequestType = "compression",
+                SourceChatRequestId = preparedRequest.RequestId,
+                Provider = preparedRequest.Settings.Name,
+                Model = preparedRequest.Request.Model,
+                ContextPackagePath = failedSummary.ContentPath,
+                UsedRollingContextId = previousRollingContextId,
+                Status = "failed",
+                Error = ex.Message,
+                CreatedAt = failedSummary.CreatedAt
+            });
+        }
+    }
+
+    /// <summary>
+    /// Builds the compression prompt.
+    /// </summary>
+    /// <param name="previousSummary">The previous rolling summary.</param>
+    /// <param name="userMessage">The current user message.</param>
+    /// <param name="assistantMessage">The current assistant message.</param>
+    /// <returns>The compression prompt.</returns>
+    private static string BuildCompressionPrompt(
+        string previousSummary,
+        string userMessage,
+        string assistantMessage)
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("[Previous Rolling Context Summary]");
+        builder.AppendLine(string.IsNullOrWhiteSpace(previousSummary) ? "(none)" : previousSummary);
+        builder.AppendLine();
+        builder.AppendLine("[Current User Message]");
+        builder.AppendLine(userMessage);
+        builder.AppendLine();
+        builder.AppendLine("[Current Assistant Response]");
+        builder.AppendLine(assistantMessage);
+        builder.AppendLine();
+        builder.AppendLine("[Task]");
+        builder.AppendLine("위 내용을 병합하여 다음 요청에 사용할 Rolling Context Summary를 갱신하라.");
+        return builder.ToString();
     }
 
     /// <summary>
@@ -392,27 +542,27 @@ public sealed class ChatService
     /// </summary>
     /// <param name="requestId">The request identifier.</param>
     /// <param name="message">The user message.</param>
-    /// <param name="recentMessages">The recent conversation messages.</param>
     /// <param name="activeCriteria">The active criteria.</param>
     /// <param name="projectState">The project state.</param>
+    /// <param name="rollingContext">The rolling context summary.</param>
     /// <returns>The context package.</returns>
     private static ContextPackage CreateContextPackage(
         string requestId,
         string message,
-        IReadOnlyList<ConversationMessageRecord> recentMessages,
         IReadOnlyList<Criterion> activeCriteria,
-        ProjectState projectState)
+        ProjectState projectState,
+        RollingContextSummary? rollingContext)
     {
         return new ContextPackage
         {
             RequestId = requestId,
             UserRequest = message,
             ProjectState = projectState,
+            UsedRollingContextId = rollingContext?.RollingContextId ?? string.Empty,
+            RollingContextPath = rollingContext?.ContentPath ?? string.Empty,
+            RollingContextSummary = rollingContext?.Content ?? string.Empty,
             ActiveCriteria = activeCriteria
                 .Select(criterion => $"{criterion.Title}: {criterion.Description}")
-                .ToList(),
-            RecentTurns = recentMessages
-                .Select(recentMessage => $"{recentMessage.Role}: {recentMessage.Content}")
                 .ToList()
         };
     }
@@ -448,5 +598,11 @@ public sealed class ChatService
         ProviderSettings Settings,
         ChatProviderRequest Request,
         string RequestId,
-        ContextPackage ContextPackage);
+        ContextPackage ContextPackage)
+    {
+        /// <summary>
+        /// Gets the compression request identifier.
+        /// </summary>
+        public string CompressionRequestId { get; } = $"req_{Guid.NewGuid():N}";
+    }
 }

@@ -1329,7 +1329,8 @@ MVP는 다음 조건을 만족해야 한다.
 * Phase 3 완료: 대화 로그 저장
 * Phase 4 완료: Criteria 관리
 * Phase 5 완료: Project State 관리
-* 다음 작업: Phase 6 Rolling Context Compression
+* Phase 6 완료: Rolling Context Compression
+* 다음 작업: Phase 7 Context Builder v1
 
 ---
 
@@ -1346,6 +1347,8 @@ MVP는 다음 조건을 만족해야 한다.
 
 ### Codex Task 006. Rolling Context 저장소 구조 생성
 
+상태: 완료
+
 * `conversations/rolling-context/current.md` 생성
 * `conversations/rolling-context/history/` 생성
 * `conversations/rolling-context/index.jsonl` 생성
@@ -1353,11 +1356,15 @@ MVP는 다음 조건을 만족해야 한다.
 
 ### Codex Task 007. Compression Rule 및 context-policy 확장
 
+상태: 완료
+
 * `policies/compression-rule.md` 생성
 * `context-policy.json`에 Summary + Window 정책 추가
 * compression failure strategy 적용
 
 ### Codex Task 008. Compression Request 생성기 구현
+
+상태: 완료
 
 * 이전 Rolling Context Summary 로드
 * 현재 user/assistant 메시지 수집
@@ -1365,6 +1372,8 @@ MVP는 다음 조건을 만족해야 한다.
 * Provider API로 Summary 생성
 
 ### Codex Task 009. chat 후 Rolling Context Summary 갱신 구현
+
+상태: 완료
 
 * chat 응답 저장 후 Compression Request 실행
 * 새 Summary를 history에 저장

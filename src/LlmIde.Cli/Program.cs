@@ -40,7 +40,8 @@ public static class Program
                 new SqliteConversationLogStore()
             ]),
             criteriaService,
-            projectStateService);
+            projectStateService,
+            new FileRollingContextStore());
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>

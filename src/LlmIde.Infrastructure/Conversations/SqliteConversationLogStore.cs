@@ -58,27 +58,57 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
             (
                 turn_id,
                 request_id,
+                request_type,
+                source_chat_request_id,
                 created_at,
                 provider,
                 model,
-                context_package_path
+                context_package_path,
+                used_rolling_context_id,
+                rolling_context_path,
+                recent_turn_count,
+                compression_request_id,
+                compression_status,
+                compression_error,
+                status,
+                error
             )
             values
             (
                 $turn_id,
                 $request_id,
+                $request_type,
+                $source_chat_request_id,
                 $created_at,
                 $provider,
                 $model,
-                $context_package_path
+                $context_package_path,
+                $used_rolling_context_id,
+                $rolling_context_path,
+                $recent_turn_count,
+                $compression_request_id,
+                $compression_status,
+                $compression_error,
+                $status,
+                $error
             );
             """;
         command.Parameters.AddWithValue("$turn_id", request.RequestId);
         command.Parameters.AddWithValue("$request_id", request.RequestId);
+        command.Parameters.AddWithValue("$request_type", request.RequestType);
+        command.Parameters.AddWithValue("$source_chat_request_id", request.SourceChatRequestId);
         command.Parameters.AddWithValue("$created_at", request.CreatedAt.ToString("O"));
         command.Parameters.AddWithValue("$provider", request.Provider);
         command.Parameters.AddWithValue("$model", request.Model);
         command.Parameters.AddWithValue("$context_package_path", request.ContextPackagePath);
+        command.Parameters.AddWithValue("$used_rolling_context_id", request.UsedRollingContextId);
+        command.Parameters.AddWithValue("$rolling_context_path", request.RollingContextPath);
+        command.Parameters.AddWithValue("$recent_turn_count", request.RecentTurnCount);
+        command.Parameters.AddWithValue("$compression_request_id", request.CompressionRequestId);
+        command.Parameters.AddWithValue("$compression_status", request.CompressionStatus);
+        command.Parameters.AddWithValue("$compression_error", request.CompressionError);
+        command.Parameters.AddWithValue("$status", request.Status);
+        command.Parameters.AddWithValue("$error", request.Error);
         command.ExecuteNonQuery();
     }
 
@@ -191,10 +221,20 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
             (
                 turn_id text primary key,
                 request_id text not null unique,
+                request_type text not null default 'chat',
+                source_chat_request_id text not null default '',
                 created_at text not null,
                 provider text not null,
                 model text not null,
-                context_package_path text not null
+                context_package_path text not null,
+                used_rolling_context_id text not null default '',
+                rolling_context_path text not null default '',
+                recent_turn_count integer not null default 0,
+                compression_request_id text not null default '',
+                compression_status text not null default '',
+                compression_error text not null default '',
+                status text not null default 'completed',
+                error text not null default ''
             );
 
             create table if not exists conversation_messages
@@ -218,7 +258,63 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
             );
             """;
         command.ExecuteNonQuery();
+        EnsureConversationTurnColumns(connection);
         return databasePath;
+    }
+
+    /// <summary>
+    /// Ensures new conversation_turns columns exist for older databases.
+    /// </summary>
+    /// <param name="connection">The SQLite connection.</param>
+    private static void EnsureConversationTurnColumns(SqliteConnection connection)
+    {
+        Dictionary<string, string> columns = new Dictionary<string, string>
+        {
+            ["request_type"] = "text not null default 'chat'",
+            ["source_chat_request_id"] = "text not null default ''",
+            ["used_rolling_context_id"] = "text not null default ''",
+            ["rolling_context_path"] = "text not null default ''",
+            ["recent_turn_count"] = "integer not null default 0",
+            ["compression_request_id"] = "text not null default ''",
+            ["compression_status"] = "text not null default ''",
+            ["compression_error"] = "text not null default ''",
+            ["status"] = "text not null default 'completed'",
+            ["error"] = "text not null default ''"
+        };
+        HashSet<string> existingColumns = GetColumns(connection, "conversation_turns");
+
+        foreach (KeyValuePair<string, string> column in columns)
+        {
+            if (existingColumns.Contains(column.Key))
+            {
+                continue;
+            }
+
+            using SqliteCommand command = connection.CreateCommand();
+            command.CommandText = $"alter table conversation_turns add column {column.Key} {column.Value};";
+            command.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// Gets existing table columns.
+    /// </summary>
+    /// <param name="connection">The SQLite connection.</param>
+    /// <param name="tableName">The table name.</param>
+    /// <returns>The column names.</returns>
+    private static HashSet<string> GetColumns(SqliteConnection connection, string tableName)
+    {
+        HashSet<string> columns = new HashSet<string>(StringComparer.Ordinal);
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = $"pragma table_info({tableName});";
+        using SqliteDataReader reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            columns.Add(reader.GetString(1));
+        }
+
+        return columns;
     }
 
     /// <summary>

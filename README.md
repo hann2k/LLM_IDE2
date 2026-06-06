@@ -21,6 +21,8 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 * 활성 Criteria 자동 주입
 * Project State 조회, 수정, 목록 항목 관리
 * Project State 자동 주입
+* Rolling Context Summary 생성 및 저장
+* 이전 대화 원문 대신 압축 맥락을 다음 요청에 주입
 * 대용량 응답 스트리밍 출력
 * Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
@@ -37,7 +39,11 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
      │   ├─ conversation.db
      │   ├─ messages.jsonl
      │   ├─ requests.jsonl
-     │   └─ context-packages/
+     │   ├─ context-packages/
+     │   └─ rolling-context/
+     │       ├─ current.md
+     │       ├─ history/
+     │       └─ index.jsonl
      └─ settings/
          └─ providers.json
 ```
@@ -222,7 +228,8 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
 긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.
 
-같은 프로젝트에서 대화를 이어가면 최근 대화 맥락이 다음 요청에 자동으로 포함된다.
+같은 프로젝트에서 대화를 이어가면 chat 응답 이후 Rolling Context Summary가 생성된다.
+다음 요청에는 이전 대화 원문 전체가 아니라 압축된 `current.md`와 현재 발화가 포함된다.
 
 ```bash
 ./llmide chat MyProject "세계에서 가장 높은 산은?"
@@ -246,7 +253,7 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 ```
 
 debug 출력에는 `request_id`, provider, model, messages가 표시된다.
-현재 JSON 출력에서 한국어는 유니코드 이스케이프 형태로 보일 수 있다.
+한국어는 사람이 읽을 수 있는 형태로 출력된다.
 
 ## 주의사항
 

@@ -38,12 +38,14 @@ public sealed class JsonFileProjectStore : IProjectStore
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.CriteriaFileName), Array.Empty<Criterion>());
             WriteProgress(metadataRoot, "criteria", "running", string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName), string.Empty);
+            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.CompressionRuleFileName), string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName), new Dictionary<string, object>());
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName), new Dictionary<string, object>());
             WriteProgress(metadataRoot, "policies", "running", string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
             SqliteConversationLogStore.EnsureDatabase(normalizedRoot);
+            new FileRollingContextStore().EnsureInitialized(normalizedRoot);
             WriteProgress(metadataRoot, "conversations", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
             WriteProgress(metadataRoot, "settings", "running", string.Empty);
@@ -99,6 +101,11 @@ public sealed class JsonFileProjectStore : IProjectStore
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.ContextPackagesDirectoryName));
+        Directory.CreateDirectory(Path.Combine(
+            metadataRoot,
+            LlmIdeLayout.ConversationsDirectoryName,
+            LlmIdeLayout.RollingContextDirectoryName,
+            LlmIdeLayout.RollingContextHistoryDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.ArtifactsDirectoryName));
     }

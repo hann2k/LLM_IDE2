@@ -26,6 +26,21 @@ public sealed class ContextPackage
     public object ProjectState { get; set; } = new object();
 
     /// <summary>
+    /// Gets or sets the rolling context identifier used for the request.
+    /// </summary>
+    public string UsedRollingContextId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the rolling context path used for the request.
+    /// </summary>
+    public string RollingContextPath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the rolling context summary content.
+    /// </summary>
+    public string RollingContextSummary { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets context notes.
     /// </summary>
     public List<string> ContextNotes { get; set; } = [];

@@ -34,7 +34,7 @@ public static class Program
             ProviderSettingsAreCreatedWithEmptyApiKey,
             CliChatPrintsProviderResponse,
             CliChatStoresConversationLogs,
-            CliChatInjectsRecentMessages,
+            CliChatInjectsRollingSummary,
             CliChatDebugPrintsSentRequest,
             CliChatStopsWithoutActiveCriteria,
             CliModelsListPrintsAvailableModels,
@@ -72,6 +72,9 @@ public static class Program
         AssertFileExists(result.ProjectRoot, ".llmide/project.json");
         AssertFileExists(result.ProjectRoot, ".llmide/init-progress.json");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/conversation.db");
+        AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/current.md");
+        AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/index.jsonl");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/compression-rule.md");
         AssertFileExists(workspace.Root, "project/projects.json");
     }
 
@@ -327,18 +330,21 @@ public static class Program
 
         AssertEqual(0, chatExitCode, "Chat should succeed.");
         AssertTrue(File.Exists(databasePath), "Conversation database should be created.");
-        AssertEqual(1, CountRows(databasePath, "conversation_turns"), "One conversation turn should be stored.");
+        AssertEqual(2, CountRows(databasePath, "conversation_turns"), "Chat and compression requests should be stored.");
         AssertEqual(2, CountRows(databasePath, "conversation_messages"), "User and assistant messages should be stored in SQLite.");
         AssertEqual(1, CountRows(databasePath, "context_packages"), "One context package should be stored in SQLite.");
+        AssertEqual(1, CountRows(databasePath, "rolling_context_summaries"), "One rolling context summary should be stored in SQLite.");
         AssertEqual(2, File.ReadAllLines(messagesPath).Length, "User and assistant messages should be stored.");
-        AssertEqual(1, File.ReadAllLines(requestsPath).Length, "One request should be stored.");
+        AssertEqual(2, File.ReadAllLines(requestsPath).Length, "Chat and compression requests should be stored.");
         AssertEqual(1, Directory.GetFiles(packagesPath, "*.json").Length, "One context package should be stored.");
+        AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
+        AssertEqual("ok:2", File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md")), "Current rolling context should be updated.");
     }
 
     /// <summary>
-    /// Verifies that CLI chat injects recent messages into the next provider request.
+    /// Verifies that CLI chat injects the rolling summary into the next provider request.
     /// </summary>
-    private static void CliChatInjectsRecentMessages()
+    private static void CliChatInjectsRollingSummary()
     {
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
@@ -351,11 +357,14 @@ public static class Program
             AddDefaultCriterion(application, "MemoryProject");
             application.Run(["chat", "MemoryProject", "first"]);
             Console.SetOut(output);
-            int exitCode = application.Run(["chat", "MemoryProject", "second"]);
+            int exitCode = application.Run(["chat", "MemoryProject", "second", "--debug"]);
             string chatOutput = output.ToString();
 
             AssertEqual(0, exitCode, "Second chat should succeed.");
-            AssertContains(chatOutput, "ok:5");
+            AssertContains(chatOutput, "Use this compressed prior conversation context");
+            AssertContains(chatOutput, "ok:2");
+            AssertContains(chatOutput, "ok:4");
+            AssertFalse(chatOutput.Contains("\"content\": \"first\"", StringComparison.Ordinal), "Previous raw user message should not be sent.");
         }
         finally
         {
@@ -689,7 +698,8 @@ public static class Program
                 new SqliteConversationLogStore()
             ]),
             criteriaService,
-            projectStateService);
+            projectStateService,
+            new FileRollingContextStore());
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -741,6 +751,7 @@ public static class Program
             "conversation_turns" => "select count(*) from conversation_turns;",
             "conversation_messages" => "select count(*) from conversation_messages;",
             "context_packages" => "select count(*) from context_packages;",
+            "rolling_context_summaries" => "select count(*) from rolling_context_summaries;",
             _ => throw new InvalidOperationException($"Unexpected table: {tableName}")
         };
 

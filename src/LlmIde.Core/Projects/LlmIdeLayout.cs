@@ -41,6 +41,11 @@ public static class LlmIdeLayout
     public const string SystemRuleFileName = "system-rule.md";
 
     /// <summary>
+    /// Gets the compression rule file name.
+    /// </summary>
+    public const string CompressionRuleFileName = "compression-rule.md";
+
+    /// <summary>
     /// Gets the context policy file name.
     /// </summary>
     public const string ContextPolicyFileName = "context-policy.json";
@@ -74,6 +79,26 @@ public static class LlmIdeLayout
     /// Gets the context packages directory name.
     /// </summary>
     public const string ContextPackagesDirectoryName = "context-packages";
+
+    /// <summary>
+    /// Gets the rolling context directory name.
+    /// </summary>
+    public const string RollingContextDirectoryName = "rolling-context";
+
+    /// <summary>
+    /// Gets the current rolling context file name.
+    /// </summary>
+    public const string CurrentRollingContextFileName = "current.md";
+
+    /// <summary>
+    /// Gets the rolling context history directory name.
+    /// </summary>
+    public const string RollingContextHistoryDirectoryName = "history";
+
+    /// <summary>
+    /// Gets the rolling context index file name.
+    /// </summary>
+    public const string RollingContextIndexFileName = "index.jsonl";
 
     /// <summary>
     /// Gets the settings directory name.
