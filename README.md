@@ -17,6 +17,8 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 * JSONL/JSON 보조 대화 로그
 * 최근 대화 맥락 자동 주입
 * DeepSeek 모델 목록 조회 및 기본 모델 교체
+* Criteria 생성, 수정, 삭제, 활성/비활성 관리
+* 활성 Criteria 자동 주입
 * 대용량 응답 스트리밍 출력
 * Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
@@ -174,11 +176,28 @@ DeepSeek API에서 현재 사용할 수 있는 모델 목록을 조회한다.
 ./llmide models set MyProject deepseek-reasoner
 ```
 
+### Criteria 관리
+
+Criteria는 프로젝트가 응답에서 지켜야 할 기준이다.
+활성 Criteria는 매 대화 요청마다 자동으로 Provider 메시지에 포함된다.
+
+```bash
+./llmide criteria add MyProject --title "Korean" --description "항상 한국어로 답한다" --priority high
+./llmide criteria list MyProject
+./llmide criteria update MyProject <criterion-id> --description "한국어를 기본으로 사용한다"
+./llmide criteria deactivate MyProject <criterion-id>
+./llmide criteria activate MyProject <criterion-id>
+./llmide criteria remove MyProject <criterion-id>
+```
+
 ### 대화 실행
 
 ```bash
 ./llmide chat MyProject "안녕"
 ```
+
+`chat`은 활성 Criteria가 하나 이상 있어야 실행된다.
+활성 Criteria가 없으면 Provider API로 전송하지 않고 중단한다.
 
 기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
 긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.

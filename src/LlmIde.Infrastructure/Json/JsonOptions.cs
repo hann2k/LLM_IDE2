@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 
 namespace LlmIde.Infrastructure.Json;
@@ -12,6 +13,7 @@ public static class JsonOptions
     /// </summary>
     public static JsonSerializerOptions Default { get; } = new JsonSerializerOptions
     {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
@@ -21,6 +23,7 @@ public static class JsonOptions
     /// </summary>
     public static JsonSerializerOptions Compact { get; } = new JsonSerializerOptions
     {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         WriteIndented = false,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };

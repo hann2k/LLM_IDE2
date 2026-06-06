@@ -2,10 +2,12 @@ using LlmIde.Cli;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Conversations;
+using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
 using System.Runtime.CompilerServices;
+using System.Text.Json;
 
 namespace LlmIde.Tests;
 
@@ -34,8 +36,12 @@ public static class Program
             CliChatStoresConversationLogs,
             CliChatInjectsRecentMessages,
             CliChatDebugPrintsSentRequest,
+            CliChatStopsWithoutActiveCriteria,
             CliModelsListPrintsAvailableModels,
             CliModelsSetUpdatesProviderSettings,
+            CliCriteriaAddListUpdateDeactivateRemove,
+            CliChatInjectsActiveCriteria,
+            JsonOptionsPreserveKoreanText,
             CliWithoutOptionsPrintsFullUsage
         ];
 
@@ -165,6 +171,15 @@ public static class Program
             AssertContains(usage, "llmide projects move <project-name> <new-project-path>");
             AssertContains(usage, "llmide models list <project-name>");
             AssertContains(usage, "llmide models set <project-name> <model>");
+            AssertContains(usage, "llmide criteria list <project-name>");
+            AssertContains(usage, "llmide criteria add <project-name> --title <title> --description <description>");
+            AssertContains(usage, "llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
+            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --title <title>");
+            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --description <description>");
+            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --priority <priority>");
+            AssertContains(usage, "llmide criteria remove <project-name> <criterion-id>");
+            AssertContains(usage, "llmide criteria activate <project-name> <criterion-id>");
+            AssertContains(usage, "llmide criteria deactivate <project-name> <criterion-id>");
             AssertContains(usage, "llmide chat <project-name> <message>");
             AssertContains(usage, "llmide chat <project-name> <message> --debug");
             AssertContains(usage, "llmide chat <project-name> <message> --no-stream");
@@ -261,6 +276,7 @@ public static class Program
         try
         {
             application.Run(["init", "--name", "ChatProject"]);
+            AddDefaultCriterion(application, "ChatProject");
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "ChatProject", "hello"]);
             string chatOutput = output.ToString();
@@ -283,6 +299,7 @@ public static class Program
         CliApplication application = CreateCliApplication(workspace.Root);
 
         application.Run(["init", "--name", "LogProject"]);
+        AddDefaultCriterion(application, "LogProject");
         int chatExitCode = application.Run(["chat", "LogProject", "hello"]);
         string projectRoot = Path.Combine(workspace.Root, "LogProject");
         string messagesPath = Path.Combine(projectRoot, ".llmide", "conversations", "messages.jsonl");
@@ -313,13 +330,14 @@ public static class Program
         try
         {
             application.Run(["init", "--name", "MemoryProject"]);
+            AddDefaultCriterion(application, "MemoryProject");
             application.Run(["chat", "MemoryProject", "first"]);
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "MemoryProject", "second"]);
             string chatOutput = output.ToString();
 
             AssertEqual(0, exitCode, "Second chat should succeed.");
-            AssertContains(chatOutput, "ok:3");
+            AssertContains(chatOutput, "ok:4");
         }
         finally
         {
@@ -340,6 +358,7 @@ public static class Program
         try
         {
             application.Run(["init", "--name", "DebugProject"]);
+            AddDefaultCriterion(application, "DebugProject");
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "DebugProject", "hello", "--debug"]);
             string chatOutput = output.ToString();
@@ -350,12 +369,31 @@ public static class Program
             AssertContains(chatOutput, "\"role\": \"user\"");
             AssertContains(chatOutput, "\"content\": \"hello\"");
             AssertContains(chatOutput, "response:");
-            AssertContains(chatOutput, "ok:1");
+            AssertContains(chatOutput, "ok:2");
         }
         finally
         {
             Console.SetOut(originalOutput);
         }
+    }
+
+    /// <summary>
+    /// Verifies that CLI chat stops before provider transmission without active criteria.
+    /// </summary>
+    private static void CliChatStopsWithoutActiveCriteria()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+
+        application.Run(["init", "--name", "NoCriteriaProject"]);
+        int exitCode = application.Run(["chat", "NoCriteriaProject", "hello"]);
+        string projectRoot = Path.Combine(workspace.Root, "NoCriteriaProject");
+        string messagesPath = Path.Combine(projectRoot, ".llmide", "conversations", "messages.jsonl");
+        string requestsPath = Path.Combine(projectRoot, ".llmide", "conversations", "requests.jsonl");
+
+        AssertEqual(1, exitCode, "Chat without active criteria should fail.");
+        AssertEqual(0, File.ReadAllLines(messagesPath).Length, "No message should be stored when criteria are missing.");
+        AssertEqual(0, File.ReadAllLines(requestsPath).Length, "No request should be stored when criteria are missing.");
     }
 
     /// <summary>
@@ -402,6 +440,111 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies that CLI criteria commands create, list, update, deactivate, and remove criteria.
+    /// </summary>
+    private static void CliCriteriaAddListUpdateDeactivateRemove()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "CriteriaProject"]);
+            Console.SetOut(output);
+            int addExitCode = application.Run([
+                "criteria",
+                "add",
+                "CriteriaProject",
+                "--title",
+                "Korean",
+                "--description",
+                "Answer in Korean",
+                "--priority",
+                "high"]);
+            string addOutput = output.ToString();
+            string criterionId = addOutput.Split(':', StringSplitOptions.TrimEntries)[1].Trim();
+
+            output.GetStringBuilder().Clear();
+            int listExitCode = application.Run(["criteria", "list", "CriteriaProject"]);
+            string listOutput = output.ToString();
+
+            output.GetStringBuilder().Clear();
+            int updateExitCode = application.Run(["criteria", "update", "CriteriaProject", criterionId, "--title", "KoreanOnly"]);
+            int deactivateExitCode = application.Run(["criteria", "deactivate", "CriteriaProject", criterionId]);
+            IReadOnlyList<Criterion> criteriaAfterDeactivate = new JsonCriteriaStore().Load(Path.Combine(workspace.Root, "CriteriaProject"));
+            int removeExitCode = application.Run(["criteria", "remove", "CriteriaProject", criterionId]);
+            IReadOnlyList<Criterion> criteriaAfterRemove = new JsonCriteriaStore().Load(Path.Combine(workspace.Root, "CriteriaProject"));
+
+            AssertEqual(0, addExitCode, "Criteria add should succeed.");
+            AssertEqual(0, listExitCode, "Criteria list should succeed.");
+            AssertContains(listOutput, "Korean");
+            AssertContains(listOutput, "Answer in Korean");
+            AssertEqual(0, updateExitCode, "Criteria update should succeed.");
+            AssertEqual("KoreanOnly", criteriaAfterDeactivate[0].Title, "Criterion title should be updated.");
+            AssertEqual(0, deactivateExitCode, "Criteria deactivate should succeed.");
+            AssertEqual("inactive", criteriaAfterDeactivate[0].Status, "Criterion should be inactive.");
+            AssertEqual(0, removeExitCode, "Criteria remove should succeed.");
+            AssertEqual(0, criteriaAfterRemove.Count, "Criterion should be removed.");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that active criteria are injected into chat provider requests.
+    /// </summary>
+    private static void CliChatInjectsActiveCriteria()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "CriteriaChatProject"]);
+            application.Run([
+                "criteria",
+                "add",
+                "CriteriaChatProject",
+                "--title",
+                "Korean",
+                "--description",
+                "Answer in Korean"]);
+            Console.SetOut(output);
+            int chatExitCode = application.Run(["chat", "CriteriaChatProject", "hello", "--debug"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, chatExitCode, "Chat with criteria should succeed.");
+            AssertContains(chatOutput, "\"role\": \"system\"");
+            AssertContains(chatOutput, "Follow these active project criteria");
+            AssertContains(chatOutput, "Answer in Korean");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that JSON serialization keeps Korean text readable.
+    /// </summary>
+    private static void JsonOptionsPreserveKoreanText()
+    {
+        string json = JsonSerializer.Serialize(new Dictionary<string, string>
+        {
+            ["text"] = "항상 한국어로 답한다"
+        }, JsonOptions.Default);
+
+        AssertContains(json, "항상 한국어로 답한다");
+        AssertFalse(json.Contains("\\uD56D", StringComparison.OrdinalIgnoreCase), "Korean text should not be unicode escaped.");
+    }
+
+    /// <summary>
     /// Creates a project initializer for tests.
     /// </summary>
     /// <param name="ideProgramRoot">The test IDE program root.</param>
@@ -421,6 +564,7 @@ public static class Program
     {
         IProjectStore projectStore = new JsonFileProjectStore();
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
         ChatService chatService = new ChatService(
@@ -433,7 +577,8 @@ public static class Program
             [
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
-            ]));
+            ]),
+            criteriaService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -447,7 +592,25 @@ public static class Program
             registry,
             chatService,
             providerSettingsStore,
-            providerSettingsService);
+            providerSettingsService,
+            criteriaService);
+    }
+
+    /// <summary>
+    /// Adds a default active criterion to a test project.
+    /// </summary>
+    /// <param name="application">The CLI application.</param>
+    /// <param name="projectName">The project name.</param>
+    private static void AddDefaultCriterion(CliApplication application, string projectName)
+    {
+        application.Run([
+            "criteria",
+            "add",
+            projectName,
+            "--title",
+            "Default",
+            "--description",
+            "Use project criteria"]);
     }
 
     /// <summary>

@@ -165,6 +165,7 @@ Solution
  ├─ LlmIde.Core
  ├─ LlmIde.Infrastructure
  ├─ LlmIde.Cli
+ ├─ LlmIde.Server (후속 단계)
  └─ LlmIde.Wpf (후속 단계)
 ```
 
@@ -208,6 +209,37 @@ MVP 실행 환경
 * Criteria 관리
 * State 관리
 * Artifact 관리
+
+### LlmIde.Server
+
+후속 로컬 서버 계층
+
+목표:
+
+```text
+CLI와 WPF 외부에서도 LLM IDE 기능을 호출할 수 있게 한다.
+```
+
+포함 기능:
+
+* 로컬 TCP 서버
+* 로컬 UDP 서버
+* 로컬 HTTP API 검토
+* OpenAI/DeepSeek 호환 형식의 요청 중계 검토
+* Project 관리 API
+* Provider 모델 조회 API
+* Conversation 요청 API
+* Criteria 관리 API
+* Artifact 관리 API
+
+원칙:
+
+```text
+Server는 Core를 호출하는 어댑터 계층이다.
+비즈니스 로직은 Core에만 존재한다.
+```
+
+서버 계층은 로컬 프로그램에서 LLM 웹서비스처럼 호출하거나, 에이전트 도구 런타임처럼 호출하는 양쪽 가능성을 열어둔다.
 
 ### LlmIde.Wpf
 
@@ -538,19 +570,34 @@ llmide models set MyProject deepseek-reasoner
 * Criteria 생성
 * Criteria 수정
 * Criteria 삭제
+* Criteria 활성화
+* Criteria 비활성화
+* criteria.json 저장
 * Active Criteria 주입
+* 요청별 Context Package에 Active Criteria 기록
+* Active Criteria가 없으면 chat 요청 중단
 * CLI 관리 명령 구현
 
 예시:
 
 ```bash
-llmide criteria add
-llmide criteria list
+llmide criteria add MyProject --title "Korean" --description "항상 한국어로 답한다" --priority high
+llmide criteria list MyProject
+llmide criteria update MyProject <criterion-id> --description "한국어를 기본으로 사용한다"
+llmide criteria deactivate MyProject <criterion-id>
+llmide criteria activate MyProject <criterion-id>
+llmide criteria remove MyProject <criterion-id>
 ```
 
 완료 기준:
 
 * 활성 기준이 API 요청에 포함된다.
+* 활성 기준은 system 메시지로 Provider 요청에 포함된다.
+* 비활성 기준은 Provider 요청에 포함되지 않는다.
+* 활성 기준이 하나도 없으면 Provider API로 전송하지 않고 중단한다.
+* Criteria를 생성, 조회, 수정, 삭제할 수 있다.
+* Criteria를 활성화, 비활성화할 수 있다.
+* 요청별 Context Package에서 사용된 활성 기준을 확인할 수 있다.
 * 요청 로그에서 사용된 기준을 확인할 수 있다.
 
 ---
@@ -705,6 +752,41 @@ llmide criteria list
 
 ---
 
+### Phase 12. Local Server 적용
+
+목표:
+
+* CLI와 GUI 외부의 로컬 프로그램이 LLM IDE 기능을 호출할 수 있게 한다.
+* LLM IDE를 로컬 LLM 웹서비스 또는 에이전트 도구 런타임처럼 사용할 수 있게 한다.
+
+구현 항목:
+
+* `LlmIde.Server` 프로젝트 추가
+* 로컬 TCP 서버 구현
+* 로컬 UDP 서버 구현
+* 로컬 HTTP API 적용 여부 검토
+* 서버 시작/중지 명령
+* 서버 포트 설정
+* Project 목록/열기 API
+* Provider 모델 목록 조회 API
+* Provider 기본 모델 교체 API
+* Chat 요청 API
+* Streaming Chat 응답 API
+* Criteria 생성/수정/삭제/활성화/비활성화 API
+* Artifact 조회/저장 API
+* 로컬 접근 제한 및 보안 정책
+
+완료 기준:
+
+* Core 로직 수정 없이 Server 계층을 적용할 수 있다.
+* CLI, WPF, Server가 동일한 Core 서비스를 사용한다.
+* 로컬 프로그램이 TCP 또는 UDP로 프로젝트 기능을 호출할 수 있다.
+* Chat 요청은 기존 Conversation Log와 Context Package에 기록된다.
+* 활성 Criteria, Project State, Context가 서버 요청에도 동일하게 주입된다.
+* Streaming 응답을 서버 프로토콜에서 처리할 수 있다.
+
+---
+
 ## 10. 현재 확정 결정
 
 * 개발 환경은 .NET 10이다.
@@ -740,3 +822,6 @@ llmide criteria list
 * IDE가 프로젝트 상태, 기준, 정책, 맥락, 산출물을 저장한다.
 * MVP는 Project → Provider → Conversation → Criteria → State → Context → Artifact 순서로 구현한다.
 * GUI보다 Core와 CLI 기능 완성을 우선한다.
+* TCP/UDP 서버는 후속 `LlmIde.Server` 어댑터 계층으로 추가한다.
+* Server는 로컬 LLM 웹서비스 또는 에이전트 도구 런타임 형태를 모두 고려한다.
+* Server, CLI, WPF는 동일한 Core 서비스를 사용한다.

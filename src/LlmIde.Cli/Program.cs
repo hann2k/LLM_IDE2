@@ -22,6 +22,7 @@ public static class Program
         string ideProgramRoot = AppContext.BaseDirectory;
         IProjectStore projectStore = new JsonFileProjectStore();
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
@@ -35,7 +36,8 @@ public static class Program
             [
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
-            ]));
+            ]),
+            criteriaService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -48,7 +50,8 @@ public static class Program
             projectRegistryService,
             chatService,
             providerSettingsStore,
-            providerSettingsService);
+            providerSettingsService,
+            criteriaService);
 
         return application.Run(args);
     }
@@ -90,6 +93,11 @@ public sealed class CliApplication
     private readonly ProviderSettingsService providerSettingsService;
 
     /// <summary>
+    /// The criteria service.
+    /// </summary>
+    private readonly CriteriaService criteriaService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -98,13 +106,15 @@ public sealed class CliApplication
     /// <param name="chatService">The chat service.</param>
     /// <param name="providerSettingsStore">The provider settings store.</param>
     /// <param name="providerSettingsService">The provider settings service.</param>
+    /// <param name="criteriaService">The criteria service.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
         ProjectRegistryService projectRegistryService,
         ChatService chatService,
         IProviderSettingsStore providerSettingsStore,
-        ProviderSettingsService providerSettingsService)
+        ProviderSettingsService providerSettingsService,
+        CriteriaService criteriaService)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
@@ -112,6 +122,7 @@ public sealed class CliApplication
         this.chatService = chatService;
         this.providerSettingsStore = providerSettingsStore;
         this.providerSettingsService = providerSettingsService;
+        this.criteriaService = criteriaService;
     }
 
     /// <summary>
@@ -165,6 +176,11 @@ public sealed class CliApplication
         if (command == "models")
         {
             return RunModels(args);
+        }
+
+        if (command == "criteria")
+        {
+            return RunCriteria(args);
         }
 
         PrintUsage();
@@ -345,6 +361,227 @@ public sealed class CliApplication
         providerSettingsService.SetDefaultModel(project.Path, args[3]);
         Console.WriteLine($"model: {args[3]}");
         return 0;
+    }
+
+    /// <summary>
+    /// Runs the criteria command group.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteria(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        string subCommand = args[1].Trim().ToLowerInvariant();
+
+        if (subCommand == "list")
+        {
+            return RunCriteriaList(args);
+        }
+
+        if (subCommand == "add")
+        {
+            return RunCriteriaAdd(args);
+        }
+
+        if (subCommand == "update")
+        {
+            return RunCriteriaUpdate(args);
+        }
+
+        if (subCommand == "remove")
+        {
+            return RunCriteriaRemove(args);
+        }
+
+        if (subCommand == "activate")
+        {
+            return RunCriteriaActivate(args);
+        }
+
+        if (subCommand == "deactivate")
+        {
+            return RunCriteriaDeactivate(args);
+        }
+
+        PrintCriteriaUsage();
+        return 1;
+    }
+
+    /// <summary>
+    /// Lists criteria.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaList(string[] args)
+    {
+        if (args.Length != 3)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        IReadOnlyList<Criterion> criteria = criteriaService.List(project.Path);
+
+        foreach (Criterion criterion in criteria)
+        {
+            Console.WriteLine($"{criterion.CriterionId}  {criterion.Status}  {criterion.Priority}  {criterion.Title}");
+
+            if (!string.IsNullOrWhiteSpace(criterion.Description))
+            {
+                Console.WriteLine($"  {criterion.Description}");
+            }
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Adds a criterion.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaAdd(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        CriteriaOptions options = ParseCriteriaOptions(args.Skip(3).ToArray());
+        Criterion criterion = criteriaService.Add(
+            project.Path,
+            options.Title ?? string.Empty,
+            options.Description ?? string.Empty,
+            options.Priority ?? "normal");
+        Console.WriteLine($"criterion: {criterion.CriterionId}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Updates a criterion.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaUpdate(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        string criterionId = args[3];
+        CriteriaOptions options = ParseCriteriaOptions(args.Skip(4).ToArray());
+        criteriaService.Update(project.Path, criterionId, options.Title, options.Description, options.Priority);
+        Console.WriteLine($"updated: {criterionId}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Removes a criterion.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaRemove(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        bool removed = criteriaService.Remove(project.Path, args[3]);
+        Console.WriteLine(removed ? "removed" : "not found");
+        return removed ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Activates a criterion.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaActivate(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        criteriaService.Activate(project.Path, args[3]);
+        Console.WriteLine($"activated: {args[3]}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Deactivates a criterion.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunCriteriaDeactivate(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintCriteriaUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        criteriaService.Deactivate(project.Path, args[3]);
+        Console.WriteLine($"deactivated: {args[3]}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Parses criteria options.
+    /// </summary>
+    /// <param name="args">The criteria option arguments.</param>
+    /// <returns>The parsed options.</returns>
+    private static CriteriaOptions ParseCriteriaOptions(string[] args)
+    {
+        CriteriaOptions options = new CriteriaOptions();
+        int index = 0;
+
+        while (index < args.Length)
+        {
+            string option = args[index];
+
+            if (option == "--title")
+            {
+                options.Title = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--description")
+            {
+                options.Description = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--priority")
+            {
+                options.Priority = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unknown criteria option: {option}");
+        }
+
+        return options;
     }
 
     /// <summary>
@@ -646,6 +883,15 @@ public sealed class CliApplication
         Console.WriteLine("  llmide projects move <project-name> <new-project-path>");
         Console.WriteLine("  llmide models list <project-name>");
         Console.WriteLine("  llmide models set <project-name> <model>");
+        Console.WriteLine("  llmide criteria list <project-name>");
+        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description>");
+        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --title <title>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --description <description>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --priority <priority>");
+        Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
+        Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
+        Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
         Console.WriteLine("  llmide chat <project-name> <message>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
         Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
@@ -675,6 +921,23 @@ public sealed class CliApplication
         Console.WriteLine("Usage:");
         Console.WriteLine("  llmide models list <project-name>");
         Console.WriteLine("  llmide models set <project-name> <model>");
+    }
+
+    /// <summary>
+    /// Prints criteria command usage.
+    /// </summary>
+    private static void PrintCriteriaUsage()
+    {
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  llmide criteria list <project-name>");
+        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description>");
+        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --title <title>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --description <description>");
+        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --priority <priority>");
+        Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
+        Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
+        Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
     }
 
     /// <summary>
@@ -714,4 +977,25 @@ public sealed class ChatDebugView
     /// Gets or sets the sent messages.
     /// </summary>
     public List<ChatMessage> Messages { get; set; } = [];
+}
+
+/// <summary>
+/// Describes parsed criteria command options.
+/// </summary>
+public sealed class CriteriaOptions
+{
+    /// <summary>
+    /// Gets or sets the criterion title.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets the criterion description.
+    /// </summary>
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets the criterion priority.
+    /// </summary>
+    public string? Priority { get; set; }
 }

@@ -1,4 +1,5 @@
 using LlmIde.Core.Conversations;
+using LlmIde.Core.Projects;
 using System.Text;
 
 namespace LlmIde.Core.Providers;
@@ -29,19 +30,27 @@ public sealed class ChatService
     private readonly IConversationLogStore conversationLogStore;
 
     /// <summary>
+    /// The criteria service.
+    /// </summary>
+    private readonly CriteriaService criteriaService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
     /// <param name="providers">The available providers.</param>
     /// <param name="conversationLogStore">The conversation log store.</param>
+    /// <param name="criteriaService">The criteria service.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
-        IConversationLogStore conversationLogStore)
+        IConversationLogStore conversationLogStore,
+        CriteriaService criteriaService)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
+        this.criteriaService = criteriaService;
     }
 
     /// <summary>
@@ -131,26 +140,102 @@ public sealed class ChatService
         }
 
         IReadOnlyList<ConversationMessageRecord> recentMessages = conversationLogStore.GetRecentMessages(projectRoot, MaxRecentMessages);
+        IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
+
+        if (activeCriteria.Count == 0)
+        {
+            throw new InvalidOperationException("No active criteria. Add or activate at least one criterion before chat.");
+        }
+
         ChatProviderRequest request = new ChatProviderRequest
         {
             Model = settings.Model,
-            Messages = recentMessages
+            Messages = BuildProviderMessages(recentMessages, activeCriteria, message)
+        };
+        string requestId = $"req_{Guid.NewGuid():N}";
+        ContextPackage contextPackage = CreateContextPackage(requestId, message, recentMessages, activeCriteria);
+
+        return new PreparedChatRequest(provider, settings, request, requestId, contextPackage);
+    }
+
+    /// <summary>
+    /// Builds the provider messages for a chat request.
+    /// </summary>
+    /// <param name="recentMessages">The recent stored messages.</param>
+    /// <param name="activeCriteria">The active criteria.</param>
+    /// <param name="message">The current user message.</param>
+    /// <returns>The provider messages.</returns>
+    private static List<ChatMessage> BuildProviderMessages(
+        IReadOnlyList<ConversationMessageRecord> recentMessages,
+        IReadOnlyList<Criterion> activeCriteria,
+        string message)
+    {
+        List<ChatMessage> messages = [];
+        string criteriaMessage = BuildCriteriaMessage(activeCriteria);
+
+        if (!string.IsNullOrWhiteSpace(criteriaMessage))
+        {
+            messages.Add(new ChatMessage
+            {
+                Role = "system",
+                Content = criteriaMessage
+            });
+        }
+
+        messages.AddRange(recentMessages
                 .Select(storedMessage => new ChatMessage
                 {
                     Role = storedMessage.Role,
                     Content = storedMessage.Content
                 })
-                .Append(new ChatMessage
-                {
-                    Role = "user",
-                    Content = message
-                })
-                .ToList()
-        };
-        string requestId = $"req_{Guid.NewGuid():N}";
-        ContextPackage contextPackage = CreateContextPackage(requestId, message, recentMessages);
+                .ToList());
 
-        return new PreparedChatRequest(provider, settings, request, requestId, contextPackage);
+        messages.Add(new ChatMessage
+        {
+            Role = "user",
+            Content = message
+        });
+
+        return messages;
+    }
+
+    /// <summary>
+    /// Builds the criteria system message.
+    /// </summary>
+    /// <param name="activeCriteria">The active criteria.</param>
+    /// <returns>The system message content.</returns>
+    private static string BuildCriteriaMessage(IReadOnlyList<Criterion> activeCriteria)
+    {
+        if (activeCriteria.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("Follow these active project criteria for this response:");
+
+        foreach (Criterion criterion in activeCriteria)
+        {
+            builder.Append("- ");
+            builder.Append(criterion.Title);
+
+            if (!string.IsNullOrWhiteSpace(criterion.Priority))
+            {
+                builder.Append(" [");
+                builder.Append(criterion.Priority);
+                builder.Append(']');
+            }
+
+            if (!string.IsNullOrWhiteSpace(criterion.Description))
+            {
+                builder.Append(": ");
+                builder.Append(criterion.Description);
+            }
+
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
@@ -230,16 +315,21 @@ public sealed class ChatService
     /// <param name="requestId">The request identifier.</param>
     /// <param name="message">The user message.</param>
     /// <param name="recentMessages">The recent conversation messages.</param>
+    /// <param name="activeCriteria">The active criteria.</param>
     /// <returns>The context package.</returns>
     private static ContextPackage CreateContextPackage(
         string requestId,
         string message,
-        IReadOnlyList<ConversationMessageRecord> recentMessages)
+        IReadOnlyList<ConversationMessageRecord> recentMessages,
+        IReadOnlyList<Criterion> activeCriteria)
     {
         return new ContextPackage
         {
             RequestId = requestId,
             UserRequest = message,
+            ActiveCriteria = activeCriteria
+                .Select(criterion => $"{criterion.Title}: {criterion.Description}")
+                .ToList(),
             RecentTurns = recentMessages
                 .Select(recentMessage => $"{recentMessage.Role}: {recentMessage.Content}")
                 .ToList()
