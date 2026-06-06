@@ -41,6 +41,8 @@ public static class Program
             CliModelsSetUpdatesProviderSettings,
             CliCriteriaAddListUpdateDeactivateRemove,
             CliChatInjectsActiveCriteria,
+            CliStateShowSetAddRemove,
+            CliChatInjectsProjectState,
             JsonOptionsPreserveKoreanText,
             CliWithoutOptionsPrintsFullUsage
         ];
@@ -180,6 +182,22 @@ public static class Program
             AssertContains(usage, "llmide criteria remove <project-name> <criterion-id>");
             AssertContains(usage, "llmide criteria activate <project-name> <criterion-id>");
             AssertContains(usage, "llmide criteria deactivate <project-name> <criterion-id>");
+            AssertContains(usage, "llmide state show <project-name>");
+            AssertContains(usage, "llmide state set <project-name> --stage <stage>");
+            AssertContains(usage, "llmide state set <project-name> --current-task <task>");
+            AssertContains(usage, "llmide state set <project-name> --last-decision <decision>");
+            AssertContains(usage, "llmide state set <project-name> --stage <stage> --current-task <task>");
+            AssertContains(usage, "llmide state set <project-name> --stage <stage> --last-decision <decision>");
+            AssertContains(usage, "llmide state set <project-name> --current-task <task> --last-decision <decision>");
+            AssertContains(usage, "llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
+            AssertContains(usage, "llmide state add <project-name> completed <item>");
+            AssertContains(usage, "llmide state add <project-name> in-progress <item>");
+            AssertContains(usage, "llmide state add <project-name> next-action <item>");
+            AssertContains(usage, "llmide state add <project-name> blocker <item>");
+            AssertContains(usage, "llmide state remove <project-name> completed <item>");
+            AssertContains(usage, "llmide state remove <project-name> in-progress <item>");
+            AssertContains(usage, "llmide state remove <project-name> next-action <item>");
+            AssertContains(usage, "llmide state remove <project-name> blocker <item>");
             AssertContains(usage, "llmide chat <project-name> <message>");
             AssertContains(usage, "llmide chat <project-name> <message> --debug");
             AssertContains(usage, "llmide chat <project-name> <message> --no-stream");
@@ -337,7 +355,7 @@ public static class Program
             string chatOutput = output.ToString();
 
             AssertEqual(0, exitCode, "Second chat should succeed.");
-            AssertContains(chatOutput, "ok:4");
+            AssertContains(chatOutput, "ok:5");
         }
         finally
         {
@@ -369,7 +387,7 @@ public static class Program
             AssertContains(chatOutput, "\"role\": \"user\"");
             AssertContains(chatOutput, "\"content\": \"hello\"");
             AssertContains(chatOutput, "response:");
-            AssertContains(chatOutput, "ok:2");
+            AssertContains(chatOutput, "ok:3");
         }
         finally
         {
@@ -531,6 +549,97 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies that project state commands show, set, add, and remove state values.
+    /// </summary>
+    private static void CliStateShowSetAddRemove()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "StateProject"]);
+            Console.SetOut(output);
+            int setExitCode = application.Run([
+                "state",
+                "set",
+                "StateProject",
+                "--stage",
+                "phase5",
+                "--current-task",
+                "Project State 관리",
+                "--last-decision",
+                "상태는 사용자 승인으로 변경한다"]);
+
+            output.GetStringBuilder().Clear();
+            int addExitCode = application.Run(["state", "add", "StateProject", "next-action", "Phase 6 시작"]);
+            int secondAddExitCode = application.Run(["state", "add", "StateProject", "blocker", "없음"]);
+            int removeExitCode = application.Run(["state", "remove", "StateProject", "blocker", "없음"]);
+
+            output.GetStringBuilder().Clear();
+            int showExitCode = application.Run(["state", "show", "StateProject"]);
+            string stateOutput = output.ToString();
+            ProjectState state = new JsonProjectStateStore().Load(Path.Combine(workspace.Root, "StateProject"));
+
+            AssertEqual(0, setExitCode, "State set should succeed.");
+            AssertEqual(0, addExitCode, "State add should succeed.");
+            AssertEqual(0, secondAddExitCode, "Second state add should succeed.");
+            AssertEqual(0, removeExitCode, "State remove should succeed.");
+            AssertEqual(0, showExitCode, "State show should succeed.");
+            AssertEqual("phase5", state.Stage, "Stage should be updated.");
+            AssertEqual("Project State 관리", state.CurrentTask, "Current task should be updated.");
+            AssertEqual("상태는 사용자 승인으로 변경한다", state.LastDecision, "Last decision should be updated.");
+            AssertEqual(1, state.NextActions.Count, "Next action should be added.");
+            AssertEqual("Phase 6 시작", state.NextActions[0], "Next action should be stored.");
+            AssertEqual(0, state.Blockers.Count, "Blocker should be removed.");
+            AssertContains(stateOutput, "Project State 관리");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that project state is injected into chat provider requests.
+    /// </summary>
+    private static void CliChatInjectsProjectState()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "StateChatProject"]);
+            AddDefaultCriterion(application, "StateChatProject");
+            application.Run([
+                "state",
+                "set",
+                "StateChatProject",
+                "--stage",
+                "phase5",
+                "--current-task",
+                "Project State 관리"]);
+            Console.SetOut(output);
+            int chatExitCode = application.Run(["chat", "StateChatProject", "hello", "--debug"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, chatExitCode, "Chat with project state should succeed.");
+            AssertContains(chatOutput, "Use this current project state as context");
+            AssertContains(chatOutput, "Stage: phase5");
+            AssertContains(chatOutput, "Current task: Project State 관리");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
     /// Verifies that JSON serialization keeps Korean text readable.
     /// </summary>
     private static void JsonOptionsPreserveKoreanText()
@@ -565,6 +674,7 @@ public static class Program
         IProjectStore projectStore = new JsonFileProjectStore();
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
+        ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
         ChatService chatService = new ChatService(
@@ -578,7 +688,8 @@ public static class Program
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]),
-            criteriaService);
+            criteriaService,
+            projectStateService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -593,7 +704,8 @@ public static class Program
             chatService,
             providerSettingsStore,
             providerSettingsService,
-            criteriaService);
+            criteriaService,
+            projectStateService);
     }
 
     /// <summary>

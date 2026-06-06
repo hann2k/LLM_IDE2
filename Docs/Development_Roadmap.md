@@ -1328,14 +1328,16 @@ MVP는 다음 조건을 만족해야 한다.
 * Phase 2 완료: Provider 기반 대화
 * Phase 3 완료: 대화 로그 저장
 * Phase 4 완료: Criteria 관리
-* 다음 작업: Phase 5 Project State 관리
-* 이후 작업: Phase 6 Rolling Context Compression
+* Phase 5 완료: Project State 관리
+* 다음 작업: Phase 6 Rolling Context Compression
 
 ---
 
 ## 17. Codex 작업 목록
 
 ### Codex Task 005. Project State 관리 구현
+
+상태: 완료
 
 * `project-state.json` 저장소 구현
 * stage, current task, completed items, next actions, blockers 관리

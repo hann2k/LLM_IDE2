@@ -19,6 +19,8 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 * DeepSeek 모델 목록 조회 및 기본 모델 교체
 * Criteria 생성, 수정, 삭제, 활성/비활성 관리
 * 활성 Criteria 자동 주입
+* Project State 조회, 수정, 목록 항목 관리
+* Project State 자동 주입
 * 대용량 응답 스트리밍 출력
 * Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
@@ -190,6 +192,23 @@ Criteria는 프로젝트가 응답에서 지켜야 할 기준이다.
 ./llmide criteria remove MyProject <criterion-id>
 ```
 
+### Project State 관리
+
+Project State는 현재 단계, 작업, 완료 항목, 다음 작업, 차단 요소를 저장하는 프로젝트 상태 정보다.
+저장 위치는 `<ProjectRoot>/.llmide/project-state.json`이다.
+
+```bash
+./llmide state show MyProject
+./llmide state set MyProject --stage phase5 --current-task "Project State 관리"
+./llmide state set MyProject --last-decision "상태 변경은 사용자가 승인한다"
+./llmide state add MyProject completed "Phase 4 Criteria 관리 완료"
+./llmide state add MyProject next-action "Phase 6 Rolling Context Compression 시작"
+./llmide state add MyProject blocker "없음"
+./llmide state remove MyProject blocker "없음"
+```
+
+Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
+
 ### 대화 실행
 
 ```bash
@@ -198,6 +217,7 @@ Criteria는 프로젝트가 응답에서 지켜야 할 기준이다.
 
 `chat`은 활성 Criteria가 하나 이상 있어야 실행된다.
 활성 Criteria가 없으면 Provider API로 전송하지 않고 중단한다.
+활성 Criteria와 Project State는 Provider 요청의 system 메시지로 함께 전달된다.
 
 기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
 긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.

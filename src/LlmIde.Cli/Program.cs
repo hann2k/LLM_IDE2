@@ -1,6 +1,7 @@
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Conversations;
+using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using System.Text.Json;
@@ -23,6 +24,7 @@ public static class Program
         IProjectStore projectStore = new JsonFileProjectStore();
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
+        ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
@@ -37,7 +39,8 @@ public static class Program
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]),
-            criteriaService);
+            criteriaService,
+            projectStateService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -51,7 +54,8 @@ public static class Program
             chatService,
             providerSettingsStore,
             providerSettingsService,
-            criteriaService);
+            criteriaService,
+            projectStateService);
 
         return application.Run(args);
     }
@@ -98,6 +102,11 @@ public sealed class CliApplication
     private readonly CriteriaService criteriaService;
 
     /// <summary>
+    /// The project state service.
+    /// </summary>
+    private readonly ProjectStateService projectStateService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -107,6 +116,7 @@ public sealed class CliApplication
     /// <param name="providerSettingsStore">The provider settings store.</param>
     /// <param name="providerSettingsService">The provider settings service.</param>
     /// <param name="criteriaService">The criteria service.</param>
+    /// <param name="projectStateService">The project state service.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
@@ -114,7 +124,8 @@ public sealed class CliApplication
         ChatService chatService,
         IProviderSettingsStore providerSettingsStore,
         ProviderSettingsService providerSettingsService,
-        CriteriaService criteriaService)
+        CriteriaService criteriaService,
+        ProjectStateService projectStateService)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
@@ -123,6 +134,7 @@ public sealed class CliApplication
         this.providerSettingsStore = providerSettingsStore;
         this.providerSettingsService = providerSettingsService;
         this.criteriaService = criteriaService;
+        this.projectStateService = projectStateService;
     }
 
     /// <summary>
@@ -181,6 +193,11 @@ public sealed class CliApplication
         if (command == "criteria")
         {
             return RunCriteria(args);
+        }
+
+        if (command == "state")
+        {
+            return RunState(args);
         }
 
         PrintUsage();
@@ -278,14 +295,8 @@ public sealed class CliApplication
             Model = response.SentRequest?.Model ?? response.Model,
             Messages = response.SentRequest?.Messages ?? []
         };
-        JsonSerializerOptions options = new JsonSerializerOptions
-        {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
-        };
-
         Console.WriteLine("debug:");
-        Console.WriteLine(JsonSerializer.Serialize(debugView, options));
+        Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
         Console.WriteLine("response:");
     }
 
@@ -582,6 +593,185 @@ public sealed class CliApplication
         }
 
         return options;
+    }
+
+    /// <summary>
+    /// Runs the state command group.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunState(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            PrintStateUsage();
+            return 1;
+        }
+
+        string subCommand = args[1].Trim().ToLowerInvariant();
+
+        if (subCommand == "show")
+        {
+            return RunStateShow(args);
+        }
+
+        if (subCommand == "set")
+        {
+            return RunStateSet(args);
+        }
+
+        if (subCommand == "add")
+        {
+            return RunStateAdd(args);
+        }
+
+        if (subCommand == "remove")
+        {
+            return RunStateRemove(args);
+        }
+
+        PrintStateUsage();
+        return 1;
+    }
+
+    /// <summary>
+    /// Shows project state.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunStateShow(string[] args)
+    {
+        if (args.Length != 3)
+        {
+            PrintStateUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        ProjectState state = projectStateService.Get(project.Path);
+        PrintProjectState(state);
+        return 0;
+    }
+
+    /// <summary>
+    /// Updates project state scalar fields.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunStateSet(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintStateUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        ProjectStateSetOptions options = ParseProjectStateSetOptions(args.Skip(3).ToArray());
+        ProjectState state = projectStateService.Set(
+            project.Path,
+            options.Stage,
+            options.CurrentTask,
+            options.LastDecision);
+        PrintProjectState(state);
+        return 0;
+    }
+
+    /// <summary>
+    /// Adds an item to a project state list.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunStateAdd(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintStateUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        string listName = args[3].Trim().ToLowerInvariant();
+        string item = string.Join(' ', args.Skip(4));
+        projectStateService.AddItem(project.Path, listName, item);
+        Console.WriteLine($"added: {listName}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Removes an item from a project state list.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunStateRemove(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintStateUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        string listName = args[3].Trim().ToLowerInvariant();
+        string item = string.Join(' ', args.Skip(4));
+        bool removed = projectStateService.RemoveItem(project.Path, listName, item);
+        Console.WriteLine(removed ? $"removed: {listName}" : "not found");
+        return removed ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Parses project state set options.
+    /// </summary>
+    /// <param name="args">The option arguments.</param>
+    /// <returns>The parsed options.</returns>
+    private static ProjectStateSetOptions ParseProjectStateSetOptions(string[] args)
+    {
+        ProjectStateSetOptions options = new ProjectStateSetOptions();
+        int index = 0;
+
+        while (index < args.Length)
+        {
+            string option = args[index];
+
+            if (option == "--stage")
+            {
+                options.Stage = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--current-task")
+            {
+                options.CurrentTask = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--last-decision")
+            {
+                options.LastDecision = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unknown state option: {option}");
+        }
+
+        if (!options.HasAnyValue)
+        {
+            throw new InvalidOperationException("At least one state option is required.");
+        }
+
+        return options;
+    }
+
+    /// <summary>
+    /// Prints project state as JSON.
+    /// </summary>
+    /// <param name="state">The project state.</param>
+    private static void PrintProjectState(ProjectState state)
+    {
+        Console.WriteLine(JsonSerializer.Serialize(state, JsonOptions.Default));
     }
 
     /// <summary>
@@ -892,6 +1082,22 @@ public sealed class CliApplication
         Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
         Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
         Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
+        Console.WriteLine("  llmide state show <project-name>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage>");
+        Console.WriteLine("  llmide state set <project-name> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-name> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state add <project-name> completed <item>");
+        Console.WriteLine("  llmide state add <project-name> in-progress <item>");
+        Console.WriteLine("  llmide state add <project-name> next-action <item>");
+        Console.WriteLine("  llmide state add <project-name> blocker <item>");
+        Console.WriteLine("  llmide state remove <project-name> completed <item>");
+        Console.WriteLine("  llmide state remove <project-name> in-progress <item>");
+        Console.WriteLine("  llmide state remove <project-name> next-action <item>");
+        Console.WriteLine("  llmide state remove <project-name> blocker <item>");
         Console.WriteLine("  llmide chat <project-name> <message>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
         Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
@@ -938,6 +1144,30 @@ public sealed class CliApplication
         Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
         Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
         Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
+    }
+
+    /// <summary>
+    /// Prints state command usage.
+    /// </summary>
+    private static void PrintStateUsage()
+    {
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  llmide state show <project-name>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage>");
+        Console.WriteLine("  llmide state set <project-name> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-name> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state add <project-name> completed <item>");
+        Console.WriteLine("  llmide state add <project-name> in-progress <item>");
+        Console.WriteLine("  llmide state add <project-name> next-action <item>");
+        Console.WriteLine("  llmide state add <project-name> blocker <item>");
+        Console.WriteLine("  llmide state remove <project-name> completed <item>");
+        Console.WriteLine("  llmide state remove <project-name> in-progress <item>");
+        Console.WriteLine("  llmide state remove <project-name> next-action <item>");
+        Console.WriteLine("  llmide state remove <project-name> blocker <item>");
     }
 
     /// <summary>
@@ -998,4 +1228,30 @@ public sealed class CriteriaOptions
     /// Gets or sets the criterion priority.
     /// </summary>
     public string? Priority { get; set; }
+}
+
+/// <summary>
+/// Describes parsed project state set options.
+/// </summary>
+public sealed class ProjectStateSetOptions
+{
+    /// <summary>
+    /// Gets or sets the project stage.
+    /// </summary>
+    public string? Stage { get; set; }
+
+    /// <summary>
+    /// Gets or sets the current task.
+    /// </summary>
+    public string? CurrentTask { get; set; }
+
+    /// <summary>
+    /// Gets or sets the last decision.
+    /// </summary>
+    public string? LastDecision { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether any option was supplied.
+    /// </summary>
+    public bool HasAnyValue => Stage is not null || CurrentTask is not null || LastDecision is not null;
 }

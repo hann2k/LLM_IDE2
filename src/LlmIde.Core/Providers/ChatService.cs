@@ -35,22 +35,30 @@ public sealed class ChatService
     private readonly CriteriaService criteriaService;
 
     /// <summary>
+    /// The project state service.
+    /// </summary>
+    private readonly ProjectStateService projectStateService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
     /// <param name="providers">The available providers.</param>
     /// <param name="conversationLogStore">The conversation log store.</param>
     /// <param name="criteriaService">The criteria service.</param>
+    /// <param name="projectStateService">The project state service.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
         IConversationLogStore conversationLogStore,
-        CriteriaService criteriaService)
+        CriteriaService criteriaService,
+        ProjectStateService projectStateService)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
         this.criteriaService = criteriaService;
+        this.projectStateService = projectStateService;
     }
 
     /// <summary>
@@ -141,6 +149,7 @@ public sealed class ChatService
 
         IReadOnlyList<ConversationMessageRecord> recentMessages = conversationLogStore.GetRecentMessages(projectRoot, MaxRecentMessages);
         IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
+        ProjectState projectState = projectStateService.Get(projectRoot);
 
         if (activeCriteria.Count == 0)
         {
@@ -150,10 +159,10 @@ public sealed class ChatService
         ChatProviderRequest request = new ChatProviderRequest
         {
             Model = settings.Model,
-            Messages = BuildProviderMessages(recentMessages, activeCriteria, message)
+            Messages = BuildProviderMessages(recentMessages, activeCriteria, projectState, message)
         };
         string requestId = $"req_{Guid.NewGuid():N}";
-        ContextPackage contextPackage = CreateContextPackage(requestId, message, recentMessages, activeCriteria);
+        ContextPackage contextPackage = CreateContextPackage(requestId, message, recentMessages, activeCriteria, projectState);
 
         return new PreparedChatRequest(provider, settings, request, requestId, contextPackage);
     }
@@ -163,15 +172,18 @@ public sealed class ChatService
     /// </summary>
     /// <param name="recentMessages">The recent stored messages.</param>
     /// <param name="activeCriteria">The active criteria.</param>
+    /// <param name="projectState">The project state.</param>
     /// <param name="message">The current user message.</param>
     /// <returns>The provider messages.</returns>
     private static List<ChatMessage> BuildProviderMessages(
         IReadOnlyList<ConversationMessageRecord> recentMessages,
         IReadOnlyList<Criterion> activeCriteria,
+        ProjectState projectState,
         string message)
     {
         List<ChatMessage> messages = [];
         string criteriaMessage = BuildCriteriaMessage(activeCriteria);
+        string stateMessage = BuildProjectStateMessage(projectState);
 
         if (!string.IsNullOrWhiteSpace(criteriaMessage))
         {
@@ -179,6 +191,15 @@ public sealed class ChatService
             {
                 Role = "system",
                 Content = criteriaMessage
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(stateMessage))
+        {
+            messages.Add(new ChatMessage
+            {
+                Role = "system",
+                Content = stateMessage
             });
         }
 
@@ -236,6 +257,63 @@ public sealed class ChatService
         }
 
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Builds the project state system message.
+    /// </summary>
+    /// <param name="projectState">The project state.</param>
+    /// <returns>The system message content.</returns>
+    private static string BuildProjectStateMessage(ProjectState projectState)
+    {
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("Use this current project state as context:");
+        AppendStateValue(builder, "Stage", projectState.Stage);
+        AppendStateValue(builder, "Current task", projectState.CurrentTask);
+        AppendStateList(builder, "Completed items", projectState.CompletedItems);
+        AppendStateList(builder, "In-progress items", projectState.InProgressItems);
+        AppendStateList(builder, "Next actions", projectState.NextActions);
+        AppendStateList(builder, "Blockers", projectState.Blockers);
+        AppendStateValue(builder, "Last decision", projectState.LastDecision);
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Appends a scalar project state value.
+    /// </summary>
+    /// <param name="builder">The string builder.</param>
+    /// <param name="label">The state label.</param>
+    /// <param name="value">The state value.</param>
+    private static void AppendStateValue(StringBuilder builder, string label, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return;
+        }
+
+        builder.Append("- ");
+        builder.Append(label);
+        builder.Append(": ");
+        builder.AppendLine(value);
+    }
+
+    /// <summary>
+    /// Appends a project state list.
+    /// </summary>
+    /// <param name="builder">The string builder.</param>
+    /// <param name="label">The state label.</param>
+    /// <param name="items">The state items.</param>
+    private static void AppendStateList(StringBuilder builder, string label, IReadOnlyList<string> items)
+    {
+        if (items.Count == 0)
+        {
+            return;
+        }
+
+        builder.Append("- ");
+        builder.Append(label);
+        builder.Append(": ");
+        builder.AppendLine(string.Join("; ", items));
     }
 
     /// <summary>
@@ -316,17 +394,20 @@ public sealed class ChatService
     /// <param name="message">The user message.</param>
     /// <param name="recentMessages">The recent conversation messages.</param>
     /// <param name="activeCriteria">The active criteria.</param>
+    /// <param name="projectState">The project state.</param>
     /// <returns>The context package.</returns>
     private static ContextPackage CreateContextPackage(
         string requestId,
         string message,
         IReadOnlyList<ConversationMessageRecord> recentMessages,
-        IReadOnlyList<Criterion> activeCriteria)
+        IReadOnlyList<Criterion> activeCriteria,
+        ProjectState projectState)
     {
         return new ContextPackage
         {
             RequestId = requestId,
             UserRequest = message,
+            ProjectState = projectState,
             ActiveCriteria = activeCriteria
                 .Select(criterion => $"{criterion.Title}: {criterion.Description}")
                 .ToList(),
