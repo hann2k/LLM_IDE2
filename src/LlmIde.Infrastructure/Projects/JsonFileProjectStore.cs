@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmIde.Core.Providers;
 using LlmIde.Core.Projects;
+using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 
 namespace LlmIde.Infrastructure.Projects;
@@ -42,6 +43,7 @@ public sealed class JsonFileProjectStore : IProjectStore
             WriteProgress(metadataRoot, "policies", "running", string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
+            SqliteConversationLogStore.EnsureDatabase(normalizedRoot);
             WriteProgress(metadataRoot, "conversations", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
             WriteProgress(metadataRoot, "settings", "running", string.Empty);

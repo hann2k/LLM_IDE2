@@ -1,5 +1,26 @@
 # LLM IDE Project Folder Structure v0.4
 
+## 0. 개발환경
+
+개발언어 및 버전:
+
+```text
+C# / .NET 10
+Target Framework: net10.0
+```
+
+필요 라이브러리:
+
+```text
+Microsoft.Data.Sqlite 10.0.8
+```
+
+라이브러리 용도:
+
+* `Microsoft.Data.Sqlite`: 프로젝트 단위 SQLite 대화 저장소 구현
+
+---
+
 ## 1. 핵심 방향
 
 Project는 이름 기반으로 관리한다.
@@ -108,6 +129,7 @@ IDE 프로그램 하부의 프로젝트 이름 저장소:
  │   ├─ context/
  │   │   └─ context-notes.json
  │   ├─ conversations/
+ │   │   ├─ conversation.db
  │   │   ├─ messages.jsonl
  │   │   ├─ requests.jsonl
  │   │   └─ context-packages/
@@ -463,17 +485,35 @@ llmide chat MyProject "안녕"
 목표:
 
 * 모든 대화를 프로젝트에 저장한다.
+* SQLite를 프로젝트 단위 주 저장소로 사용한다.
+* JSONL/JSON 파일은 보조 기록, 디버깅, 요청 재현용으로 유지한다.
+* 다음 대화 요청에는 최근 대화 맥락을 자동으로 포함한다.
 
 구현 항목:
 
+* `.llmide/conversations/conversation.db` 생성
+* SQLite `conversation_turns` 테이블 저장
+* SQLite `conversation_messages` 테이블 저장
+* SQLite `context_packages` 테이블 저장
 * messages.jsonl 저장
 * requests.jsonl 저장
 * 요청별 Context Package 저장
+* chat 명령 실행 시 사용자 메시지 저장
+* chat 명령 응답 수신 시 assistant 메시지 저장
+* 다음 chat 명령 실행 시 SQLite에 저장된 최근 user/assistant 메시지 주입
+* 요청 재현을 위한 request_id 연결
+* SQLite 기록과 JSONL/JSON 보조 기록이 같은 request_id를 공유하도록 처리
 
 완료 기준:
 
+* 프로젝트 초기화 시 `.llmide/conversations/conversation.db`가 생성된다.
 * 사용자 메시지와 AI 응답이 저장된다.
+* 사용자 메시지와 AI 응답이 SQLite의 같은 conversation turn에 연결된다.
+* 요청별 Context Package가 SQLite와 JSON 파일 양쪽에 저장된다.
+* 두 번째 이후 대화는 이전 user/assistant 메시지를 포함해 Provider API에 요청한다.
 * 어떤 맥락으로 응답이 생성되었는지 추적 가능하다.
+* conversation_turns, conversation_messages, context_packages가 request_id로 연결된다.
+* messages.jsonl, requests.jsonl, context-packages/<request_id>.json이 서로 같은 request_id로 연결된다.
 
 ---
 

@@ -19,4 +19,14 @@ public sealed class ChatProviderResponse
     /// Gets or sets the model name.
     /// </summary>
     public string Model { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the request that was sent to the provider.
+    /// </summary>
+    public ChatProviderRequest? SentRequest { get; set; }
+
+    /// <summary>
+    /// Gets or sets the stored request identifier.
+    /// </summary>
+    public string RequestId { get; set; } = string.Empty;
 }

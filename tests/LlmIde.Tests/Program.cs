@@ -1,9 +1,11 @@
 using LlmIde.Cli;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
+using Microsoft.Data.Sqlite;
 using System.Text.Json;
 
 namespace LlmIde.Tests;
@@ -30,6 +32,9 @@ public static class Program
             CliDeleteRequiresExtraConfirmationWhenApiKeyExists,
             ProviderSettingsAreCreatedWithEmptyApiKey,
             CliChatPrintsProviderResponse,
+            CliChatStoresConversationLogs,
+            CliChatInjectsRecentMessages,
+            CliChatDebugPrintsSentRequest,
             CliWithoutOptionsPrintsFullUsage
         ];
 
@@ -57,6 +62,7 @@ public static class Program
         AssertEqual(Path.Combine(workspace.Root, "DefaultProject"), result.ProjectRoot, "Default project path should be under program root.");
         AssertFileExists(result.ProjectRoot, ".llmide/project.json");
         AssertFileExists(result.ProjectRoot, ".llmide/init-progress.json");
+        AssertFileExists(result.ProjectRoot, ".llmide/conversations/conversation.db");
         AssertFileExists(workspace.Root, "project/projects.json");
     }
 
@@ -157,6 +163,7 @@ public static class Program
             AssertContains(usage, "llmide projects rename <project-name> <new-project-name>");
             AssertContains(usage, "llmide projects move <project-name> <new-project-path>");
             AssertContains(usage, "llmide chat <project-name> <message>");
+            AssertContains(usage, "llmide chat <project-name> <message> --debug");
         }
         finally
         {
@@ -263,6 +270,90 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies that CLI chat stores messages, requests, and a context package.
+    /// </summary>
+    private static void CliChatStoresConversationLogs()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+
+        application.Run(["init", "--name", "LogProject"]);
+        int chatExitCode = application.Run(["chat", "LogProject", "hello"]);
+        string projectRoot = Path.Combine(workspace.Root, "LogProject");
+        string messagesPath = Path.Combine(projectRoot, ".llmide", "conversations", "messages.jsonl");
+        string requestsPath = Path.Combine(projectRoot, ".llmide", "conversations", "requests.jsonl");
+        string packagesPath = Path.Combine(projectRoot, ".llmide", "conversations", "context-packages");
+        string databasePath = Path.Combine(projectRoot, ".llmide", "conversations", "conversation.db");
+
+        AssertEqual(0, chatExitCode, "Chat should succeed.");
+        AssertTrue(File.Exists(databasePath), "Conversation database should be created.");
+        AssertEqual(1, CountRows(databasePath, "conversation_turns"), "One conversation turn should be stored.");
+        AssertEqual(2, CountRows(databasePath, "conversation_messages"), "User and assistant messages should be stored in SQLite.");
+        AssertEqual(1, CountRows(databasePath, "context_packages"), "One context package should be stored in SQLite.");
+        AssertEqual(2, File.ReadAllLines(messagesPath).Length, "User and assistant messages should be stored.");
+        AssertEqual(1, File.ReadAllLines(requestsPath).Length, "One request should be stored.");
+        AssertEqual(1, Directory.GetFiles(packagesPath, "*.json").Length, "One context package should be stored.");
+    }
+
+    /// <summary>
+    /// Verifies that CLI chat injects recent messages into the next provider request.
+    /// </summary>
+    private static void CliChatInjectsRecentMessages()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "MemoryProject"]);
+            application.Run(["chat", "MemoryProject", "first"]);
+            Console.SetOut(output);
+            int exitCode = application.Run(["chat", "MemoryProject", "second"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, exitCode, "Second chat should succeed.");
+            AssertContains(chatOutput, "ok:3");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that CLI chat debug output includes the provider request messages.
+    /// </summary>
+    private static void CliChatDebugPrintsSentRequest()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "DebugProject"]);
+            Console.SetOut(output);
+            int exitCode = application.Run(["chat", "DebugProject", "hello", "--debug"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, exitCode, "Debug chat should succeed.");
+            AssertContains(chatOutput, "debug:");
+            AssertContains(chatOutput, "\"messages\"");
+            AssertContains(chatOutput, "\"role\": \"user\"");
+            AssertContains(chatOutput, "\"content\": \"hello\"");
+            AssertContains(chatOutput, "response:");
+            AssertContains(chatOutput, "ok:1");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
     /// Creates a project initializer for tests.
     /// </summary>
     /// <param name="ideProgramRoot">The test IDE program root.</param>
@@ -288,9 +379,37 @@ public static class Program
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = new FakeChatProvider()
-            });
+            },
+            new CompositeConversationLogStore(
+            [
+                new JsonlConversationLogStore(),
+                new SqliteConversationLogStore()
+            ]));
 
         return new CliApplication(projectStore, initializer, registry, chatService, new JsonProviderSettingsStore());
+    }
+
+    /// <summary>
+    /// Counts rows in a known SQLite table.
+    /// </summary>
+    /// <param name="databasePath">The SQLite database path.</param>
+    /// <param name="tableName">The known table name.</param>
+    /// <returns>The row count.</returns>
+    private static int CountRows(string databasePath, string tableName)
+    {
+        using SqliteConnection connection = new SqliteConnection($"Data Source={databasePath}");
+        connection.Open();
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = tableName switch
+        {
+            "conversation_turns" => "select count(*) from conversation_turns;",
+            "conversation_messages" => "select count(*) from conversation_messages;",
+            "context_packages" => "select count(*) from context_packages;",
+            _ => throw new InvalidOperationException($"Unexpected table: {tableName}")
+        };
+
+        object? result = command.ExecuteScalar();
+        return Convert.ToInt32(result);
     }
 
     /// <summary>
@@ -430,7 +549,7 @@ public sealed class FakeChatProvider : IChatProvider
     {
         return Task.FromResult(new ChatProviderResponse
         {
-            Content = "ok",
+            Content = $"ok:{request.Messages.Count}",
             Provider = settings.Name,
             Model = settings.Model
         });

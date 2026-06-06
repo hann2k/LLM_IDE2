@@ -15,4 +15,13 @@ public static class JsonOptions
         WriteIndented = true,
         PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
     };
+
+    /// <summary>
+    /// Gets compact JSON serializer options for JSONL records.
+    /// </summary>
+    public static JsonSerializerOptions Compact { get; } = new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+    };
 }

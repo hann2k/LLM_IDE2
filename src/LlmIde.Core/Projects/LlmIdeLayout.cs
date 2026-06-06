@@ -56,6 +56,11 @@ public static class LlmIdeLayout
     public const string ConversationsDirectoryName = "conversations";
 
     /// <summary>
+    /// Gets the conversation database file name.
+    /// </summary>
+    public const string ConversationDatabaseFileName = "conversation.db";
+
+    /// <summary>
     /// Gets the messages log file name.
     /// </summary>
     public const string MessagesFileName = "messages.jsonl";

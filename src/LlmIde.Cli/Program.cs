@@ -1,7 +1,9 @@
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
+using System.Text.Json;
 
 namespace LlmIde.Cli;
 
@@ -27,7 +29,12 @@ public static class Program
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = new DeepSeekChatProvider(new HttpClient())
-            });
+            },
+            new CompositeConversationLogStore(
+            [
+                new JsonlConversationLogStore(),
+                new SqliteConversationLogStore()
+            ]));
         CliApplication application = new CliApplication(
             projectStore,
             projectInitializer,
@@ -173,14 +180,51 @@ public sealed class CliApplication
         }
 
         string projectName = args[1];
-        string message = string.Join(' ', args.Skip(2));
+        bool debug = args.Contains("--debug", StringComparer.Ordinal);
+        string message = string.Join(' ', args.Skip(2).Where(arg => !string.Equals(arg, "--debug", StringComparison.Ordinal)));
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            PrintChatUsage();
+            return 1;
+        }
+
         ProjectRegistryEntry project = projectRegistryService.GetRequired(projectName);
         ChatProviderResponse response = chatService.SendAsync(project.Path, message, CancellationToken.None)
             .GetAwaiter()
             .GetResult();
 
+        if (debug)
+        {
+            PrintChatDebug(response);
+        }
+
         Console.WriteLine(response.Content);
         return 0;
+    }
+
+    /// <summary>
+    /// Prints the provider request used by a chat command.
+    /// </summary>
+    /// <param name="response">The chat response.</param>
+    private static void PrintChatDebug(ChatProviderResponse response)
+    {
+        ChatDebugView debugView = new ChatDebugView
+        {
+            RequestId = response.RequestId,
+            Provider = response.Provider,
+            Model = response.SentRequest?.Model ?? response.Model,
+            Messages = response.SentRequest?.Messages ?? []
+        };
+        JsonSerializerOptions options = new JsonSerializerOptions
+        {
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
+        };
+
+        Console.WriteLine("debug:");
+        Console.WriteLine(JsonSerializer.Serialize(debugView, options));
+        Console.WriteLine("response:");
     }
 
     /// <summary>
@@ -481,6 +525,7 @@ public sealed class CliApplication
         Console.WriteLine("  llmide projects rename <project-name> <new-project-name>");
         Console.WriteLine("  llmide projects move <project-name> <new-project-path>");
         Console.WriteLine("  llmide chat <project-name> <message>");
+        Console.WriteLine("  llmide chat <project-name> <message> --debug");
     }
 
     /// <summary>
@@ -505,5 +550,32 @@ public sealed class CliApplication
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  llmide chat <project-name> <message>");
+        Console.WriteLine("  llmide chat <project-name> <message> --debug");
     }
+}
+
+/// <summary>
+/// Describes the chat debug output.
+/// </summary>
+public sealed class ChatDebugView
+{
+    /// <summary>
+    /// Gets or sets the request identifier.
+    /// </summary>
+    public string RequestId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the provider name.
+    /// </summary>
+    public string Provider { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the model name.
+    /// </summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the sent messages.
+    /// </summary>
+    public List<ChatMessage> Messages { get; set; } = [];
 }
