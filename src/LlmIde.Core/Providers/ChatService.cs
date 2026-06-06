@@ -1,5 +1,4 @@
 using LlmIde.Core.Conversations;
-using LlmIde.Core.Projects;
 using System.Text;
 
 namespace LlmIde.Core.Providers;
@@ -25,14 +24,9 @@ public sealed class ChatService
     private readonly IConversationLogStore conversationLogStore;
 
     /// <summary>
-    /// The criteria service.
+    /// The context builder.
     /// </summary>
-    private readonly CriteriaService criteriaService;
-
-    /// <summary>
-    /// The project state service.
-    /// </summary>
-    private readonly ProjectStateService projectStateService;
+    private readonly ContextBuilder contextBuilder;
 
     /// <summary>
     /// The rolling context store.
@@ -45,22 +39,19 @@ public sealed class ChatService
     /// <param name="providerSettingsStore">The provider settings store.</param>
     /// <param name="providers">The available providers.</param>
     /// <param name="conversationLogStore">The conversation log store.</param>
-    /// <param name="criteriaService">The criteria service.</param>
-    /// <param name="projectStateService">The project state service.</param>
+    /// <param name="contextBuilder">The context builder.</param>
     /// <param name="rollingContextStore">The rolling context store.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
         IConversationLogStore conversationLogStore,
-        CriteriaService criteriaService,
-        ProjectStateService projectStateService,
+        ContextBuilder contextBuilder,
         IRollingContextStore rollingContextStore)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
-        this.criteriaService = criteriaService;
-        this.projectStateService = projectStateService;
+        this.contextBuilder = contextBuilder;
         this.rollingContextStore = rollingContextStore;
     }
 
@@ -70,11 +61,17 @@ public sealed class ChatService
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="message">The user message.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="onChatResponseReady">Callback invoked before compression starts.</param>
+    /// <param name="onCompressionRequestReady">Callback invoked before compression is sent.</param>
+    /// <param name="onCompressionChunk">Callback invoked for every streamed compression chunk.</param>
     /// <returns>The provider response.</returns>
     public async Task<ChatProviderResponse> SendAsync(
         string projectRoot,
         string message,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<ChatProviderResponse>? onChatResponseReady = null,
+        Action<ChatProviderResponse>? onCompressionRequestReady = null,
+        Action<string>? onCompressionChunk = null)
     {
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message);
         StoreRequestStart(projectRoot, preparedRequest, message);
@@ -86,7 +83,17 @@ public sealed class ChatService
         response.RequestId = preparedRequest.RequestId;
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
-        await CompressAfterChatAsync(projectRoot, preparedRequest, message, response.Content, cancellationToken);
+        onChatResponseReady?.Invoke(response);
+        ApplyCompressionResult(
+            response,
+            await CompressAfterChatAsync(
+                projectRoot,
+                preparedRequest,
+                message,
+                response.Content,
+                cancellationToken,
+                onCompressionRequestReady,
+                onCompressionChunk));
 
         return response;
     }
@@ -99,13 +106,17 @@ public sealed class ChatService
     /// <param name="onRequestReady">Callback invoked after the request is prepared.</param>
     /// <param name="onChunk">Callback invoked for every streamed response chunk.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="onCompressionRequestReady">Callback invoked before compression is sent.</param>
+    /// <param name="onCompressionChunk">Callback invoked for every streamed compression chunk.</param>
     /// <returns>The completed provider response.</returns>
     public async Task<ChatProviderResponse> StreamAsync(
         string projectRoot,
         string message,
         Action<ChatProviderResponse>? onRequestReady,
         Action<string> onChunk,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<ChatProviderResponse>? onCompressionRequestReady = null,
+        Action<string>? onCompressionChunk = null)
     {
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message);
         StoreRequestStart(projectRoot, preparedRequest, message);
@@ -132,7 +143,16 @@ public sealed class ChatService
         };
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
-        await CompressAfterChatAsync(projectRoot, preparedRequest, message, response.Content, cancellationToken);
+        ApplyCompressionResult(
+            response,
+            await CompressAfterChatAsync(
+                projectRoot,
+                preparedRequest,
+                message,
+                response.Content,
+                cancellationToken,
+                onCompressionRequestReady,
+                onCompressionChunk));
         return response;
     }
 
@@ -152,194 +172,16 @@ public sealed class ChatService
             throw new InvalidOperationException($"Provider is not available: {settings.Name}");
         }
 
-        rollingContextStore.EnsureInitialized(projectRoot);
-        RollingContextSummary? rollingContext = rollingContextStore.LoadCurrent(projectRoot);
-        IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
-        ProjectState projectState = projectStateService.Get(projectRoot);
-
-        if (activeCriteria.Count == 0)
-        {
-            throw new InvalidOperationException("No active criteria. Add or activate at least one criterion before chat.");
-        }
+        string requestId = $"req_{Guid.NewGuid():N}";
+        ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message);
 
         ChatProviderRequest request = new ChatProviderRequest
         {
             Model = settings.Model,
-            Messages = BuildProviderMessages(activeCriteria, projectState, rollingContext, message)
+            Messages = context.Messages
         };
-        string requestId = $"req_{Guid.NewGuid():N}";
-        ContextPackage contextPackage = CreateContextPackage(requestId, message, activeCriteria, projectState, rollingContext);
 
-        return new PreparedChatRequest(provider, settings, request, requestId, contextPackage);
-    }
-
-    /// <summary>
-    /// Builds the provider messages for a chat request.
-    /// </summary>
-    /// <param name="activeCriteria">The active criteria.</param>
-    /// <param name="projectState">The project state.</param>
-    /// <param name="rollingContext">The rolling context summary.</param>
-    /// <param name="message">The current user message.</param>
-    /// <returns>The provider messages.</returns>
-    private static List<ChatMessage> BuildProviderMessages(
-        IReadOnlyList<Criterion> activeCriteria,
-        ProjectState projectState,
-        RollingContextSummary? rollingContext,
-        string message)
-    {
-        List<ChatMessage> messages = [];
-        string criteriaMessage = BuildCriteriaMessage(activeCriteria);
-        string stateMessage = BuildProjectStateMessage(projectState);
-        string rollingContextMessage = BuildRollingContextMessage(rollingContext);
-
-        if (!string.IsNullOrWhiteSpace(criteriaMessage))
-        {
-            messages.Add(new ChatMessage
-            {
-                Role = "system",
-                Content = criteriaMessage
-            });
-        }
-
-        if (!string.IsNullOrWhiteSpace(stateMessage))
-        {
-            messages.Add(new ChatMessage
-            {
-                Role = "system",
-                Content = stateMessage
-            });
-        }
-
-        if (!string.IsNullOrWhiteSpace(rollingContextMessage))
-        {
-            messages.Add(new ChatMessage
-            {
-                Role = "system",
-                Content = rollingContextMessage
-            });
-        }
-
-        messages.Add(new ChatMessage
-        {
-            Role = "user",
-            Content = message
-        });
-
-        return messages;
-    }
-
-    /// <summary>
-    /// Builds the criteria system message.
-    /// </summary>
-    /// <param name="activeCriteria">The active criteria.</param>
-    /// <returns>The system message content.</returns>
-    private static string BuildCriteriaMessage(IReadOnlyList<Criterion> activeCriteria)
-    {
-        if (activeCriteria.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Follow these active project criteria for this response:");
-
-        foreach (Criterion criterion in activeCriteria)
-        {
-            builder.Append("- ");
-            builder.Append(criterion.Title);
-
-            if (!string.IsNullOrWhiteSpace(criterion.Priority))
-            {
-                builder.Append(" [");
-                builder.Append(criterion.Priority);
-                builder.Append(']');
-            }
-
-            if (!string.IsNullOrWhiteSpace(criterion.Description))
-            {
-                builder.Append(": ");
-                builder.Append(criterion.Description);
-            }
-
-            builder.AppendLine();
-        }
-
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Builds the rolling context system message.
-    /// </summary>
-    /// <param name="rollingContext">The rolling context summary.</param>
-    /// <returns>The system message content.</returns>
-    private static string BuildRollingContextMessage(RollingContextSummary? rollingContext)
-    {
-        if (rollingContext is null || string.IsNullOrWhiteSpace(rollingContext.Content))
-        {
-            return string.Empty;
-        }
-
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Use this compressed prior conversation context:");
-        builder.AppendLine(rollingContext.Content);
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Builds the project state system message.
-    /// </summary>
-    /// <param name="projectState">The project state.</param>
-    /// <returns>The system message content.</returns>
-    private static string BuildProjectStateMessage(ProjectState projectState)
-    {
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Use this current project state as context:");
-        AppendStateValue(builder, "Stage", projectState.Stage);
-        AppendStateValue(builder, "Current task", projectState.CurrentTask);
-        AppendStateList(builder, "Completed items", projectState.CompletedItems);
-        AppendStateList(builder, "In-progress items", projectState.InProgressItems);
-        AppendStateList(builder, "Next actions", projectState.NextActions);
-        AppendStateList(builder, "Blockers", projectState.Blockers);
-        AppendStateValue(builder, "Last decision", projectState.LastDecision);
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Appends a scalar project state value.
-    /// </summary>
-    /// <param name="builder">The string builder.</param>
-    /// <param name="label">The state label.</param>
-    /// <param name="value">The state value.</param>
-    private static void AppendStateValue(StringBuilder builder, string label, string value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return;
-        }
-
-        builder.Append("- ");
-        builder.Append(label);
-        builder.Append(": ");
-        builder.AppendLine(value);
-    }
-
-    /// <summary>
-    /// Appends a project state list.
-    /// </summary>
-    /// <param name="builder">The string builder.</param>
-    /// <param name="label">The state label.</param>
-    /// <param name="items">The state items.</param>
-    private static void AppendStateList(StringBuilder builder, string label, IReadOnlyList<string> items)
-    {
-        if (items.Count == 0)
-        {
-            return;
-        }
-
-        builder.Append("- ");
-        builder.Append(label);
-        builder.Append(": ");
-        builder.AppendLine(string.Join("; ", items));
+        return new PreparedChatRequest(provider, settings, request, requestId, context.ContextPackage);
     }
 
     /// <summary>
@@ -362,7 +204,7 @@ public sealed class ChatService
             ContextPackagePath = contextPackagePath,
             UsedRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId,
             RollingContextPath = preparedRequest.ContextPackage.RollingContextPath,
-            RecentTurnCount = 0,
+            RecentTurnCount = preparedRequest.ContextPackage.RecentTurnCount,
             CompressionRequestId = preparedRequest.CompressionRequestId,
             CompressionStatus = "pending",
             CreatedAt = createdAt
@@ -388,46 +230,58 @@ public sealed class ChatService
     /// <param name="userMessage">The current user message.</param>
     /// <param name="assistantMessage">The assistant response.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    private async Task CompressAfterChatAsync(
+    /// <param name="onCompressionRequestReady">Callback invoked before compression is sent.</param>
+    /// <param name="onCompressionChunk">Callback invoked for every streamed compression chunk.</param>
+    private async Task<CompressionResult> CompressAfterChatAsync(
         string projectRoot,
         PreparedChatRequest preparedRequest,
         string userMessage,
         string assistantMessage,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        Action<ChatProviderResponse>? onCompressionRequestReady,
+        Action<string>? onCompressionChunk)
     {
         string previousRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId;
+        string compressionRule = rollingContextStore.LoadCompressionRule(projectRoot);
+        string compressionPrompt = BuildCompressionPrompt(projectRoot, preparedRequest, userMessage, assistantMessage);
+        ChatProviderRequest compressionRequest = new ChatProviderRequest
+        {
+            Model = preparedRequest.Request.Model,
+            Messages =
+            [
+                new ChatMessage
+                {
+                    Role = "system",
+                    Content = compressionRule
+                },
+                new ChatMessage
+                {
+                    Role = "user",
+                    Content = compressionPrompt
+                }
+            ]
+        };
+        string compressionContextPath = conversationLogStore.SaveContextPackage(
+            projectRoot,
+            CreateCompressionContextPackage(
+                preparedRequest.CompressionRequestId,
+                compressionRule,
+                compressionPrompt,
+                preparedRequest.ContextPackage.RollingContextSummary));
+        onCompressionRequestReady?.Invoke(CreateCompressionPreviewResponse(preparedRequest, compressionRequest));
 
         try
         {
-            ChatProviderRequest compressionRequest = new ChatProviderRequest
-            {
-                Model = preparedRequest.Request.Model,
-                Messages =
-                [
-                    new ChatMessage
-                    {
-                        Role = "system",
-                        Content = rollingContextStore.LoadCompressionRule(projectRoot)
-                    },
-                    new ChatMessage
-                    {
-                        Role = "user",
-                        Content = BuildCompressionPrompt(
-                            preparedRequest.ContextPackage.RollingContextSummary,
-                            userMessage,
-                            assistantMessage)
-                    }
-                ]
-            };
-            ChatProviderResponse compressionResponse = await preparedRequest.Provider.SendAsync(
+            string compressionContent = await SendCompressionAsync(
+                preparedRequest,
                 compressionRequest,
-                preparedRequest.Settings,
-                cancellationToken);
+                cancellationToken,
+                onCompressionChunk);
             RollingContextSummary summary = rollingContextStore.SaveCompleted(
                 projectRoot,
                 preparedRequest.RequestId,
                 string.IsNullOrWhiteSpace(previousRollingContextId) ? null : previousRollingContextId,
-                compressionResponse.Content,
+                compressionContent,
                 preparedRequest.Settings.Name,
                 preparedRequest.Request.Model);
 
@@ -438,12 +292,18 @@ public sealed class ChatService
                 SourceChatRequestId = preparedRequest.RequestId,
                 Provider = preparedRequest.Settings.Name,
                 Model = preparedRequest.Request.Model,
-                ContextPackagePath = summary.ContentPath,
+                ContextPackagePath = compressionContextPath,
                 UsedRollingContextId = previousRollingContextId,
                 RollingContextPath = summary.ContentPath,
                 Status = "completed",
                 CreatedAt = summary.CreatedAt
             });
+            return new CompressionResult(
+                preparedRequest.CompressionRequestId,
+                compressionRequest,
+                compressionContent,
+                "completed",
+                string.Empty);
         }
         catch (Exception ex)
         {
@@ -462,30 +322,94 @@ public sealed class ChatService
                 SourceChatRequestId = preparedRequest.RequestId,
                 Provider = preparedRequest.Settings.Name,
                 Model = preparedRequest.Request.Model,
-                ContextPackagePath = failedSummary.ContentPath,
+                ContextPackagePath = compressionContextPath,
                 UsedRollingContextId = previousRollingContextId,
                 Status = "failed",
                 Error = ex.Message,
                 CreatedAt = failedSummary.CreatedAt
             });
+            return new CompressionResult(
+                preparedRequest.CompressionRequestId,
+                compressionRequest,
+                string.Empty,
+                "failed",
+                ex.Message);
         }
+    }
+
+    /// <summary>
+    /// Sends compression either as a streaming request or a normal request.
+    /// </summary>
+    /// <param name="preparedRequest">The prepared chat request.</param>
+    /// <param name="compressionRequest">The compression provider request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <param name="onCompressionChunk">Callback invoked for streamed compression chunks.</param>
+    /// <returns>The full compression content.</returns>
+    private static async Task<string> SendCompressionAsync(
+        PreparedChatRequest preparedRequest,
+        ChatProviderRequest compressionRequest,
+        CancellationToken cancellationToken,
+        Action<string>? onCompressionChunk)
+    {
+        if (onCompressionChunk is null)
+        {
+            ChatProviderResponse compressionResponse = await preparedRequest.Provider.SendAsync(
+                compressionRequest,
+                preparedRequest.Settings,
+                cancellationToken);
+            return compressionResponse.Content;
+        }
+
+        StringBuilder content = new StringBuilder();
+
+        await foreach (string chunk in preparedRequest.Provider.StreamAsync(
+            compressionRequest,
+            preparedRequest.Settings,
+            cancellationToken))
+        {
+            content.Append(chunk);
+            onCompressionChunk(chunk);
+        }
+
+        return content.ToString();
+    }
+
+    /// <summary>
+    /// Applies compression debug information to a response.
+    /// </summary>
+    /// <param name="response">The chat response.</param>
+    /// <param name="compressionResult">The compression result.</param>
+    private static void ApplyCompressionResult(ChatProviderResponse response, CompressionResult compressionResult)
+    {
+        response.CompressionRequestId = compressionResult.RequestId;
+        response.CompressionRequest = compressionResult.Request;
+        response.CompressionContent = compressionResult.Content;
+        response.CompressionStatus = compressionResult.Status;
+        response.CompressionError = compressionResult.Error;
     }
 
     /// <summary>
     /// Builds the compression prompt.
     /// </summary>
-    /// <param name="previousSummary">The previous rolling summary.</param>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="userMessage">The current user message.</param>
     /// <param name="assistantMessage">The current assistant message.</param>
     /// <returns>The compression prompt.</returns>
-    private static string BuildCompressionPrompt(
-        string previousSummary,
+    private string BuildCompressionPrompt(
+        string projectRoot,
+        PreparedChatRequest preparedRequest,
         string userMessage,
         string assistantMessage)
     {
+        if (string.IsNullOrWhiteSpace(preparedRequest.ContextPackage.RollingContextSummary))
+        {
+            return BuildBootstrapCompressionPrompt(projectRoot);
+        }
+
         StringBuilder builder = new StringBuilder();
         builder.AppendLine("[Previous Rolling Context Summary]");
-        builder.AppendLine(string.IsNullOrWhiteSpace(previousSummary) ? "(none)" : previousSummary);
+        builder.AppendLine(preparedRequest.ContextPackage.RollingContextSummary);
         builder.AppendLine();
         builder.AppendLine("[Current User Message]");
         builder.AppendLine(userMessage);
@@ -496,6 +420,61 @@ public sealed class ChatService
         builder.AppendLine("[Task]");
         builder.AppendLine("위 내용을 병합하여 다음 요청에 사용할 Rolling Context Summary를 갱신하라.");
         return builder.ToString();
+    }
+
+    /// <summary>
+    /// Builds the first compression prompt from the accumulated raw conversation log.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The bootstrap compression prompt.</returns>
+    private string BuildBootstrapCompressionPrompt(string projectRoot)
+    {
+        IReadOnlyList<ConversationMessageRecord> messages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("[Raw Conversation Log]");
+
+        foreach (ConversationMessageRecord message in messages)
+        {
+            builder.Append('[');
+            builder.Append(message.CreatedAt.ToString("O"));
+            builder.Append("] ");
+            builder.Append(message.Role);
+            builder.Append(": ");
+            builder.AppendLine(message.Content);
+            builder.AppendLine();
+        }
+
+        builder.AppendLine("[Task]");
+        builder.AppendLine("위 전체 원본 대화 로그를 다음 요청에 사용할 Rolling Context Summary로 압축하라.");
+        return builder.ToString();
+    }
+
+    /// <summary>
+    /// Creates a context package for a compression request.
+    /// </summary>
+    /// <param name="requestId">The compression request identifier.</param>
+    /// <param name="compressionRule">The compression rule.</param>
+    /// <param name="compressionPrompt">The compression prompt.</param>
+    /// <param name="previousSummary">The previous rolling summary.</param>
+    /// <returns>The compression context package.</returns>
+    private static ContextPackage CreateCompressionContextPackage(
+        string requestId,
+        string compressionRule,
+        string compressionPrompt,
+        string previousSummary)
+    {
+        return new ContextPackage
+        {
+            RequestId = requestId,
+            SystemRule = compressionRule,
+            RollingContextSummary = previousSummary,
+            UserRequest = compressionPrompt,
+            AttachedMessages =
+            [
+                $"system: {compressionRule}",
+                $"user: {compressionPrompt}"
+            ]
+        };
     }
 
     /// <summary>
@@ -538,32 +517,22 @@ public sealed class ChatService
     }
 
     /// <summary>
-    /// Creates a context package for the current Phase 3 request.
+    /// Creates a response object for compression request debug output.
     /// </summary>
-    /// <param name="requestId">The request identifier.</param>
-    /// <param name="message">The user message.</param>
-    /// <param name="activeCriteria">The active criteria.</param>
-    /// <param name="projectState">The project state.</param>
-    /// <param name="rollingContext">The rolling context summary.</param>
-    /// <returns>The context package.</returns>
-    private static ContextPackage CreateContextPackage(
-        string requestId,
-        string message,
-        IReadOnlyList<Criterion> activeCriteria,
-        ProjectState projectState,
-        RollingContextSummary? rollingContext)
+    /// <param name="preparedRequest">The prepared chat request.</param>
+    /// <param name="compressionRequest">The compression provider request.</param>
+    /// <returns>The compression preview response.</returns>
+    private static ChatProviderResponse CreateCompressionPreviewResponse(
+        PreparedChatRequest preparedRequest,
+        ChatProviderRequest compressionRequest)
     {
-        return new ContextPackage
+        return new ChatProviderResponse
         {
-            RequestId = requestId,
-            UserRequest = message,
-            ProjectState = projectState,
-            UsedRollingContextId = rollingContext?.RollingContextId ?? string.Empty,
-            RollingContextPath = rollingContext?.ContentPath ?? string.Empty,
-            RollingContextSummary = rollingContext?.Content ?? string.Empty,
-            ActiveCriteria = activeCriteria
-                .Select(criterion => $"{criterion.Title}: {criterion.Description}")
-                .ToList()
+            Provider = preparedRequest.Settings.Name,
+            Model = compressionRequest.Model,
+            CompressionRequestId = preparedRequest.CompressionRequestId,
+            CompressionRequest = compressionRequest,
+            CompressionStatus = "streaming"
         };
     }
 
@@ -605,4 +574,19 @@ public sealed class ChatService
         /// </summary>
         public string CompressionRequestId { get; } = $"req_{Guid.NewGuid():N}";
     }
+
+    /// <summary>
+    /// Represents a completed compression attempt.
+    /// </summary>
+    /// <param name="RequestId">The compression request identifier.</param>
+    /// <param name="Request">The compression provider request.</param>
+    /// <param name="Content">The compression response content.</param>
+    /// <param name="Status">The compression status.</param>
+    /// <param name="Error">The compression error.</param>
+    private sealed record CompressionResult(
+        string RequestId,
+        ChatProviderRequest Request,
+        string Content,
+        string Status,
+        string Error);
 }

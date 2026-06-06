@@ -66,6 +66,11 @@ public sealed class ContextPackage
     public List<string> RecentTurns { get; set; } = [];
 
     /// <summary>
+    /// Gets or sets the recent turn count used for this request.
+    /// </summary>
+    public int RecentTurnCount { get; set; }
+
+    /// <summary>
     /// Gets or sets the user request.
     /// </summary>
     public string UserRequest { get; set; } = string.Empty;

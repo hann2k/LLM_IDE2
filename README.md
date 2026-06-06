@@ -23,6 +23,7 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 * Project State 자동 주입
 * Rolling Context Summary 생성 및 저장
 * 이전 대화 원문 대신 압축 맥락을 다음 요청에 주입
+* Context Builder 기반 요청 맥락 조립
 * 대용량 응답 스트리밍 출력
 * Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
@@ -230,6 +231,8 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 
 같은 프로젝트에서 대화를 이어가면 chat 응답 이후 Rolling Context Summary가 생성된다.
 다음 요청에는 이전 대화 원문 전체가 아니라 압축된 `current.md`와 현재 발화가 포함된다.
+System Rule, 활성 Criteria, Project State, Rolling Context Summary는 Context Builder가 조립한다.
+Rolling Context Summary가 아직 없으면, 첫 compression은 누적 원본 대화 로그 전체를 압축 대상으로 사용한다.
 
 ```bash
 ./llmide chat MyProject "세계에서 가장 높은 산은?"
@@ -253,6 +256,8 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 ```
 
 debug 출력에는 `request_id`, provider, model, messages가 표시된다.
+chat 응답 이후 실행되는 compression 요청은 `compression_debug`로 별도 출력된다.
+스트리밍 chat에서 `--debug`를 사용하면 compression 요청 본문을 먼저 출력하고, compression 응답은 `compression_response` 아래에 chunk 단위로 출력한다.
 한국어는 사람이 읽을 수 있는 형태로 출력된다.
 
 ## 주의사항

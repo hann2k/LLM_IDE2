@@ -1,4 +1,5 @@
 using LlmIde.Cli;
+using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Conversations;
@@ -37,6 +38,7 @@ public static class Program
             CliChatInjectsRollingSummary,
             CliChatDebugPrintsSentRequest,
             CliChatStopsWithoutActiveCriteria,
+            CliChatInjectsSystemRule,
             CliModelsListPrintsAvailableModels,
             CliModelsSetUpdatesProviderSettings,
             CliCriteriaAddListUpdateDeactivateRemove,
@@ -332,11 +334,11 @@ public static class Program
         AssertTrue(File.Exists(databasePath), "Conversation database should be created.");
         AssertEqual(2, CountRows(databasePath, "conversation_turns"), "Chat and compression requests should be stored.");
         AssertEqual(2, CountRows(databasePath, "conversation_messages"), "User and assistant messages should be stored in SQLite.");
-        AssertEqual(1, CountRows(databasePath, "context_packages"), "One context package should be stored in SQLite.");
+        AssertEqual(2, CountRows(databasePath, "context_packages"), "Chat and compression context packages should be stored in SQLite.");
         AssertEqual(1, CountRows(databasePath, "rolling_context_summaries"), "One rolling context summary should be stored in SQLite.");
         AssertEqual(2, File.ReadAllLines(messagesPath).Length, "User and assistant messages should be stored.");
         AssertEqual(2, File.ReadAllLines(requestsPath).Length, "Chat and compression requests should be stored.");
-        AssertEqual(1, Directory.GetFiles(packagesPath, "*.json").Length, "One context package should be stored.");
+        AssertEqual(2, Directory.GetFiles(packagesPath, "*.json").Length, "Chat and compression context packages should be stored.");
         AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
         AssertEqual("ok:2", File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md")), "Current rolling context should be updated.");
     }
@@ -396,6 +398,10 @@ public static class Program
             AssertContains(chatOutput, "\"role\": \"user\"");
             AssertContains(chatOutput, "\"content\": \"hello\"");
             AssertContains(chatOutput, "response:");
+            AssertContains(chatOutput, "compression_debug:");
+            AssertContains(chatOutput, "compression_response:");
+            AssertContains(chatOutput, "compression_status: completed");
+            AssertContains(chatOutput, "[Raw Conversation Log]");
             AssertContains(chatOutput, "ok:3");
         }
         finally
@@ -421,6 +427,36 @@ public static class Program
         AssertEqual(1, exitCode, "Chat without active criteria should fail.");
         AssertEqual(0, File.ReadAllLines(messagesPath).Length, "No message should be stored when criteria are missing.");
         AssertEqual(0, File.ReadAllLines(requestsPath).Length, "No request should be stored when criteria are missing.");
+    }
+
+    /// <summary>
+    /// Verifies that the project system rule is injected into chat provider requests.
+    /// </summary>
+    private static void CliChatInjectsSystemRule()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "SystemRuleProject"]);
+            AddDefaultCriterion(application, "SystemRuleProject");
+            File.WriteAllText(
+                Path.Combine(workspace.Root, "SystemRuleProject", ".llmide", "policies", "system-rule.md"),
+                "System says: always preserve user approval boundaries.");
+            Console.SetOut(output);
+            int chatExitCode = application.Run(["chat", "SystemRuleProject", "hello", "--debug"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, chatExitCode, "Chat with system rule should succeed.");
+            AssertContains(chatOutput, "System says: always preserve user approval boundaries.");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
     }
 
     /// <summary>
@@ -684,6 +720,12 @@ public static class Program
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        ContextBuilder contextBuilder = new ContextBuilder(
+            criteriaService,
+            projectStateService,
+            rollingContextStore,
+            new FileSystemRuleStore());
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
         ChatService chatService = new ChatService(
@@ -697,9 +739,8 @@ public static class Program
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]),
-            criteriaService,
-            projectStateService,
-            new FileRollingContextStore());
+            contextBuilder,
+            rollingContextStore);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>

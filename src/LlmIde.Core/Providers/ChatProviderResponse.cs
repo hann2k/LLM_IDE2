@@ -29,4 +29,29 @@ public sealed class ChatProviderResponse
     /// Gets or sets the stored request identifier.
     /// </summary>
     public string RequestId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression request identifier.
+    /// </summary>
+    public string CompressionRequestId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression request sent after chat.
+    /// </summary>
+    public ChatProviderRequest? CompressionRequest { get; set; }
+
+    /// <summary>
+    /// Gets or sets the compression response content.
+    /// </summary>
+    public string CompressionContent { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression status.
+    /// </summary>
+    public string CompressionStatus { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression error.
+    /// </summary>
+    public string CompressionError { get; set; } = string.Empty;
 }

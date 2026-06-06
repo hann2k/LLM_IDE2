@@ -1,3 +1,4 @@
+using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Conversations;
@@ -25,6 +26,12 @@ public static class Program
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        ContextBuilder contextBuilder = new ContextBuilder(
+            criteriaService,
+            projectStateService,
+            rollingContextStore,
+            new FileSystemRuleStore());
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
@@ -39,9 +46,8 @@ public static class Program
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]),
-            criteriaService,
-            projectStateService,
-            new FileRollingContextStore());
+            contextBuilder,
+            rollingContextStore);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -249,26 +255,46 @@ public sealed class CliApplication
 
         if (noStream)
         {
-            ChatProviderResponse response = chatService.SendAsync(project.Path, message, CancellationToken.None)
+            ChatProviderResponse response = chatService.SendAsync(
+                project.Path,
+                message,
+                CancellationToken.None,
+                debug ? PrintChatDebugWithResponse : null,
+                debug ? PrintCompressionDebugStart : null,
+                debug ? Console.Write : null)
                 .GetAwaiter()
                 .GetResult();
 
             if (debug)
             {
-                PrintChatDebug(response);
+                PrintCompressionDebugEnd(response);
+            }
+            else
+            {
+                Console.WriteLine(response.Content);
             }
 
-            Console.WriteLine(response.Content);
             return 0;
         }
 
-        chatService.StreamAsync(
+        ChatProviderResponse streamedResponse = chatService.StreamAsync(
             project.Path,
             message,
             debug ? PrintChatDebug : null,
             Console.Write,
-            CancellationToken.None).GetAwaiter().GetResult();
-        Console.WriteLine();
+            CancellationToken.None,
+            debug ? PrintCompressionDebugStart : null,
+            debug ? Console.Write : null).GetAwaiter().GetResult();
+
+        if (debug)
+        {
+            PrintCompressionDebugEnd(streamedResponse);
+        }
+        else
+        {
+            Console.WriteLine();
+        }
+
         return 0;
     }
 
@@ -299,6 +325,89 @@ public sealed class CliApplication
         Console.WriteLine("debug:");
         Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
         Console.WriteLine("response:");
+    }
+
+    /// <summary>
+    /// Prints chat debug data and the completed non-streamed chat response.
+    /// </summary>
+    /// <param name="response">The chat response.</param>
+    private static void PrintChatDebugWithResponse(ChatProviderResponse response)
+    {
+        PrintChatDebug(response);
+        Console.WriteLine(response.Content);
+    }
+
+    /// <summary>
+    /// Prints the compression provider request used after a chat command.
+    /// </summary>
+    /// <param name="response">The chat response.</param>
+    private static void PrintCompressionDebug(ChatProviderResponse response)
+    {
+        if (response.CompressionRequest is null)
+        {
+            return;
+        }
+
+        CompressionDebugView debugView = new CompressionDebugView
+        {
+            RequestId = response.CompressionRequestId,
+            Status = response.CompressionStatus,
+            Error = response.CompressionError,
+            Model = response.CompressionRequest.Model,
+            Messages = response.CompressionRequest.Messages,
+            Response = response.CompressionContent
+        };
+
+        Console.WriteLine("compression_debug:");
+        Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
+    }
+
+    /// <summary>
+    /// Prints the compression provider request before streaming compression starts.
+    /// </summary>
+    /// <param name="response">The compression preview response.</param>
+    private static void PrintCompressionDebugStart(ChatProviderResponse response)
+    {
+        if (response.CompressionRequest is null)
+        {
+            return;
+        }
+
+        CompressionDebugView debugView = new CompressionDebugView
+        {
+            RequestId = response.CompressionRequestId,
+            Status = response.CompressionStatus,
+            Error = response.CompressionError,
+            Model = response.CompressionRequest.Model,
+            Messages = response.CompressionRequest.Messages,
+            Response = string.Empty
+        };
+
+        Console.WriteLine();
+        Console.WriteLine("compression_debug:");
+        Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
+        Console.WriteLine("compression_response:");
+    }
+
+    /// <summary>
+    /// Prints the compression result after streamed compression finishes.
+    /// </summary>
+    /// <param name="response">The completed chat response.</param>
+    private static void PrintCompressionDebugEnd(ChatProviderResponse response)
+    {
+        if (response.CompressionRequest is null)
+        {
+            Console.WriteLine();
+            return;
+        }
+
+        Console.WriteLine();
+        Console.WriteLine($"compression_status: {response.CompressionStatus}");
+
+        if (!string.IsNullOrWhiteSpace(response.CompressionError))
+        {
+            Console.WriteLine($"compression_error: {response.CompressionError}");
+        }
     }
 
     /// <summary>
@@ -1208,6 +1317,42 @@ public sealed class ChatDebugView
     /// Gets or sets the sent messages.
     /// </summary>
     public List<ChatMessage> Messages { get; set; } = [];
+}
+
+/// <summary>
+/// Describes the compression debug output.
+/// </summary>
+public sealed class CompressionDebugView
+{
+    /// <summary>
+    /// Gets or sets the request identifier.
+    /// </summary>
+    public string RequestId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression status.
+    /// </summary>
+    public string Status { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the compression error.
+    /// </summary>
+    public string Error { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the model name.
+    /// </summary>
+    public string Model { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the sent messages.
+    /// </summary>
+    public List<ChatMessage> Messages { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the compression response.
+    /// </summary>
+    public string Response { get; set; } = string.Empty;
 }
 
 /// <summary>

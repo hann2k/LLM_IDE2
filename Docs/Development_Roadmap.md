@@ -607,8 +607,8 @@ API 요청에 포함되는 맥락 구조:
   "context_management_strategy": "summary_plus_window",
   "include_rolling_context_summary": true,
   "rolling_context_path": "conversations/rolling-context/current.md",
-  "recent_turn_count": 3,
-  "max_recent_turn_chars": 12000,
+  "recent_turn_count": 0,
+  "max_recent_turn_chars": 0,
   "max_rolling_context_chars": 24000,
   "compression_enabled": true,
   "compression_provider": "deepseek",
@@ -1049,7 +1049,9 @@ llmide criteria remove MyProject <criterion-id>
 * `context-policy.json` 압축 정책 확장
 * SQLite `rolling_context_summaries` 테이블 추가
 * chat 응답 이후 Compression Request 실행
+* Rolling Context Summary가 없는 최초 compression에서는 누적 Raw Conversation Log 전체를 압축
 * 이전 Summary와 현재 user/assistant 대화를 병합
+* debug 모드에서는 Compression Request 입력을 먼저 출력하고 Compression 응답을 스트리밍으로 출력
 * 새 Summary를 `history/`에 저장
 * `current.md` 갱신
 * 기존 Summary를 `superseded` 상태로 기록
@@ -1062,6 +1064,8 @@ llmide criteria remove MyProject <criterion-id>
 * 다음 chat 요청에 `current.md`가 포함된다.
 * 원본 대화 로그는 삭제되거나 덮어써지지 않는다.
 * Compression Request가 일반 chat request와 구분되어 기록된다.
+* Compression Request의 실제 provider messages를 debug와 context package로 확인할 수 있다.
+* 스트리밍 chat debug에서 Compression 응답 진행 상태를 chunk 단위로 확인할 수 있다.
 * Compression 실패 시 사용자 응답은 정상 유지된다.
 * Compression 실패 시 기존 Summary가 유지된다.
 
@@ -1072,7 +1076,7 @@ llmide criteria remove MyProject <criterion-id>
 목표:
 
 * 요청에 필요한 맥락을 조립한다.
-* Summary + Window 전략을 적용한다.
+* 압축된 Rolling Context Summary와 현재 발화 중심의 요청 조립을 적용한다.
 
 구현 항목:
 
@@ -1080,9 +1084,9 @@ llmide criteria remove MyProject <criterion-id>
 * Active Criteria 주입
 * Project State 주입
 * Rolling Context Summary 주입
-* Recent Window 주입
-* Manual Attachments 주입
-* Artifact 주입
+* Recent Window는 현재 MVP에서 `0`으로 기록
+* Manual Attachments 필드 예약
+* Artifact 필드 예약
 * Context Package 생성
 * 요청별 사용된 `rolling_context_id` 기록
 * 최근 대화 포함 개수와 문자 수 제한 적용
@@ -1092,7 +1096,7 @@ llmide criteria remove MyProject <criterion-id>
 * 요청마다 Context Package가 생성된다.
 * 동일한 요청을 재현할 수 있다.
 * 과거 전체 대화 원문은 요청에 포함되지 않는다.
-* Rolling Context Summary와 Recent Window가 함께 주입된다.
+* Rolling Context Summary와 현재 사용자 발화가 함께 주입된다.
 * Context Package에서 어떤 Summary와 최근 대화가 사용되었는지 확인할 수 있다.
 
 ---
@@ -1330,7 +1334,8 @@ MVP는 다음 조건을 만족해야 한다.
 * Phase 4 완료: Criteria 관리
 * Phase 5 완료: Project State 관리
 * Phase 6 완료: Rolling Context Compression
-* 다음 작업: Phase 7 Context Builder v1
+* Phase 7 완료: Context Builder v1
+* 다음 작업: Phase 8 Artifact 저장
 
 ---
 
@@ -1382,8 +1387,10 @@ MVP는 다음 조건을 만족해야 한다.
 
 ### Codex Task 010. Context Builder v1에서 Rolling Summary + Recent Window 주입
 
+상태: 완료
+
 * Rolling Context Summary 포함
-* Recent Window 포함
+* Recent Window는 MVP에서 0으로 기록
 * 전체 과거 원문 제외
 * Context Package에 사용된 맥락 기록
 
