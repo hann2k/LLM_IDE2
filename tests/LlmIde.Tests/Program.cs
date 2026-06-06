@@ -2,11 +2,10 @@ using LlmIde.Cli;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Conversations;
-using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
-using System.Text.Json;
+using System.Runtime.CompilerServices;
 
 namespace LlmIde.Tests;
 
@@ -35,6 +34,8 @@ public static class Program
             CliChatStoresConversationLogs,
             CliChatInjectsRecentMessages,
             CliChatDebugPrintsSentRequest,
+            CliModelsListPrintsAvailableModels,
+            CliModelsSetUpdatesProviderSettings,
             CliWithoutOptionsPrintsFullUsage
         ];
 
@@ -162,8 +163,12 @@ public static class Program
             AssertContains(usage, "llmide projects delete <project-name> --confirm <project-name> --confirm-api-key-delete");
             AssertContains(usage, "llmide projects rename <project-name> <new-project-name>");
             AssertContains(usage, "llmide projects move <project-name> <new-project-path>");
+            AssertContains(usage, "llmide models list <project-name>");
+            AssertContains(usage, "llmide models set <project-name> <model>");
             AssertContains(usage, "llmide chat <project-name> <message>");
             AssertContains(usage, "llmide chat <project-name> <message> --debug");
+            AssertContains(usage, "llmide chat <project-name> <message> --no-stream");
+            AssertContains(usage, "llmide chat <project-name> <message> --debug --no-stream");
         }
         finally
         {
@@ -354,6 +359,49 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies that CLI models list prints available provider models.
+    /// </summary>
+    private static void CliModelsListPrintsAvailableModels()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "ModelsProject"]);
+            Console.SetOut(output);
+            int exitCode = application.Run(["models", "list", "ModelsProject"]);
+            string modelsOutput = output.ToString();
+
+            AssertEqual(0, exitCode, "Models list should succeed.");
+            AssertContains(modelsOutput, "deepseek-chat");
+            AssertContains(modelsOutput, "deepseek-reasoner");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies that CLI models set updates provider settings.
+    /// </summary>
+    private static void CliModelsSetUpdatesProviderSettings()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+
+        application.Run(["init", "--name", "ModelSetProject"]);
+        int exitCode = application.Run(["models", "set", "ModelSetProject", "deepseek-reasoner"]);
+        ProviderSettingsDocument settings = new JsonProviderSettingsStore().Load(Path.Combine(workspace.Root, "ModelSetProject"));
+
+        AssertEqual(0, exitCode, "Models set should succeed.");
+        AssertEqual("deepseek-reasoner", settings.Providers[0].Model, "Provider model should be updated.");
+    }
+
+    /// <summary>
     /// Creates a project initializer for tests.
     /// </summary>
     /// <param name="ideProgramRoot">The test IDE program root.</param>
@@ -372,10 +420,11 @@ public static class Program
     private static CliApplication CreateCliApplication(string ideProgramRoot)
     {
         IProjectStore projectStore = new JsonFileProjectStore();
+        IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
         ChatService chatService = new ChatService(
-            new JsonProviderSettingsStore(),
+            providerSettingsStore,
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = new FakeChatProvider()
@@ -385,8 +434,20 @@ public static class Program
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]));
+        ProviderSettingsService providerSettingsService = new ProviderSettingsService(
+            providerSettingsStore,
+            new Dictionary<string, IModelProvider>
+            {
+                ["deepseek"] = new FakeModelProvider()
+            });
 
-        return new CliApplication(projectStore, initializer, registry, chatService, new JsonProviderSettingsStore());
+        return new CliApplication(
+            projectStore,
+            initializer,
+            registry,
+            chatService,
+            providerSettingsStore,
+            providerSettingsService);
     }
 
     /// <summary>
@@ -419,11 +480,10 @@ public static class Program
     /// <param name="apiKey">The API key.</param>
     private static void WriteApiKey(string projectRoot, string apiKey)
     {
-        string providersPath = Path.Combine(projectRoot, ".llmide", "settings", "providers.json");
-        ProviderSettingsDocument settings = new JsonProviderSettingsStore().Load(projectRoot);
+        JsonProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
         settings.Providers[0].ApiKey = apiKey;
-        string json = JsonSerializer.Serialize(settings, JsonOptions.Default);
-        File.WriteAllText(providersPath, json);
+        providerSettingsStore.Save(projectRoot, settings);
     }
 
     /// <summary>
@@ -553,6 +613,54 @@ public sealed class FakeChatProvider : IChatProvider
             Provider = settings.Name,
             Model = settings.Model
         });
+    }
+
+    /// <summary>
+    /// Streams a fake chat response.
+    /// </summary>
+    /// <param name="request">The provider request.</param>
+    /// <param name="settings">The provider settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The fake response chunks.</returns>
+    public async IAsyncEnumerable<string> StreamAsync(
+        ChatProviderRequest request,
+        ProviderSettings settings,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+        await Task.Yield();
+        yield return $"ok:{request.Messages.Count}";
+    }
+}
+
+/// <summary>
+/// Provides fake provider models for CLI tests.
+/// </summary>
+public sealed class FakeModelProvider : IModelProvider
+{
+    /// <summary>
+    /// Lists fake provider models.
+    /// </summary>
+    /// <param name="settings">The provider settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The available fake models.</returns>
+    public Task<IReadOnlyList<ProviderModel>> ListModelsAsync(
+        ProviderSettings settings,
+        CancellationToken cancellationToken)
+    {
+        IReadOnlyList<ProviderModel> models =
+        [
+            new ProviderModel
+            {
+                Id = "deepseek-chat"
+            },
+            new ProviderModel
+            {
+                Id = "deepseek-reasoner"
+            }
+        ];
+
+        return Task.FromResult(models);
     }
 }
 

@@ -22,25 +22,33 @@ public static class Program
         string ideProgramRoot = AppContext.BaseDirectory;
         IProjectStore projectStore = new JsonFileProjectStore();
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
             {
-                ["deepseek"] = new DeepSeekChatProvider(new HttpClient())
+                ["deepseek"] = deepSeekProvider
             },
             new CompositeConversationLogStore(
             [
                 new JsonlConversationLogStore(),
                 new SqliteConversationLogStore()
             ]));
+        ProviderSettingsService providerSettingsService = new ProviderSettingsService(
+            providerSettingsStore,
+            new Dictionary<string, IModelProvider>
+            {
+                ["deepseek"] = deepSeekProvider
+            });
         CliApplication application = new CliApplication(
             projectStore,
             projectInitializer,
             projectRegistryService,
             chatService,
-            providerSettingsStore);
+            providerSettingsStore,
+            providerSettingsService);
 
         return application.Run(args);
     }
@@ -77,6 +85,11 @@ public sealed class CliApplication
     private readonly IProviderSettingsStore providerSettingsStore;
 
     /// <summary>
+    /// The provider settings service.
+    /// </summary>
+    private readonly ProviderSettingsService providerSettingsService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -84,18 +97,21 @@ public sealed class CliApplication
     /// <param name="projectRegistryService">The project registry service.</param>
     /// <param name="chatService">The chat service.</param>
     /// <param name="providerSettingsStore">The provider settings store.</param>
+    /// <param name="providerSettingsService">The provider settings service.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
         ProjectRegistryService projectRegistryService,
         ChatService chatService,
-        IProviderSettingsStore providerSettingsStore)
+        IProviderSettingsStore providerSettingsStore,
+        ProviderSettingsService providerSettingsService)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
         this.projectRegistryService = projectRegistryService;
         this.chatService = chatService;
         this.providerSettingsStore = providerSettingsStore;
+        this.providerSettingsService = providerSettingsService;
     }
 
     /// <summary>
@@ -146,6 +162,11 @@ public sealed class CliApplication
             return RunChat(args);
         }
 
+        if (command == "models")
+        {
+            return RunModels(args);
+        }
+
         PrintUsage();
         return 1;
     }
@@ -181,7 +202,8 @@ public sealed class CliApplication
 
         string projectName = args[1];
         bool debug = args.Contains("--debug", StringComparer.Ordinal);
-        string message = string.Join(' ', args.Skip(2).Where(arg => !string.Equals(arg, "--debug", StringComparison.Ordinal)));
+        bool noStream = args.Contains("--no-stream", StringComparer.Ordinal);
+        string message = string.Join(' ', args.Skip(2).Where(IsChatMessagePart));
 
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -190,17 +212,41 @@ public sealed class CliApplication
         }
 
         ProjectRegistryEntry project = projectRegistryService.GetRequired(projectName);
-        ChatProviderResponse response = chatService.SendAsync(project.Path, message, CancellationToken.None)
-            .GetAwaiter()
-            .GetResult();
 
-        if (debug)
+        if (noStream)
         {
-            PrintChatDebug(response);
+            ChatProviderResponse response = chatService.SendAsync(project.Path, message, CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+
+            if (debug)
+            {
+                PrintChatDebug(response);
+            }
+
+            Console.WriteLine(response.Content);
+            return 0;
         }
 
-        Console.WriteLine(response.Content);
+        chatService.StreamAsync(
+            project.Path,
+            message,
+            debug ? PrintChatDebug : null,
+            Console.Write,
+            CancellationToken.None).GetAwaiter().GetResult();
+        Console.WriteLine();
         return 0;
+    }
+
+    /// <summary>
+    /// Determines whether an argument belongs to the user chat message.
+    /// </summary>
+    /// <param name="arg">The argument.</param>
+    /// <returns>True when the argument is part of the user message.</returns>
+    private static bool IsChatMessagePart(string arg)
+    {
+        return !string.Equals(arg, "--debug", StringComparison.Ordinal)
+            && !string.Equals(arg, "--no-stream", StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -225,6 +271,80 @@ public sealed class CliApplication
         Console.WriteLine("debug:");
         Console.WriteLine(JsonSerializer.Serialize(debugView, options));
         Console.WriteLine("response:");
+    }
+
+    /// <summary>
+    /// Runs the models command group.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunModels(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            PrintModelsUsage();
+            return 1;
+        }
+
+        string subCommand = args[1].Trim().ToLowerInvariant();
+
+        if (subCommand == "list")
+        {
+            return RunModelsList(args);
+        }
+
+        if (subCommand == "set")
+        {
+            return RunModelsSet(args);
+        }
+
+        PrintModelsUsage();
+        return 1;
+    }
+
+    /// <summary>
+    /// Lists available models for a project's default provider.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunModelsList(string[] args)
+    {
+        if (args.Length != 3)
+        {
+            PrintModelsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        IReadOnlyList<ProviderModel> models = providerSettingsService.ListModelsAsync(project.Path, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        foreach (ProviderModel model in models)
+        {
+            Console.WriteLine(model.Id);
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Sets the default model for a project's default provider.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunModelsSet(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintModelsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        providerSettingsService.SetDefaultModel(project.Path, args[3]);
+        Console.WriteLine($"model: {args[3]}");
+        return 0;
     }
 
     /// <summary>
@@ -524,8 +644,12 @@ public sealed class CliApplication
         Console.WriteLine("  llmide projects delete <project-name> --confirm <project-name> --confirm-api-key-delete");
         Console.WriteLine("  llmide projects rename <project-name> <new-project-name>");
         Console.WriteLine("  llmide projects move <project-name> <new-project-path>");
+        Console.WriteLine("  llmide models list <project-name>");
+        Console.WriteLine("  llmide models set <project-name> <model>");
         Console.WriteLine("  llmide chat <project-name> <message>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
+        Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
+        Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
     }
 
     /// <summary>
@@ -544,6 +668,16 @@ public sealed class CliApplication
     }
 
     /// <summary>
+    /// Prints models command usage.
+    /// </summary>
+    private static void PrintModelsUsage()
+    {
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  llmide models list <project-name>");
+        Console.WriteLine("  llmide models set <project-name> <model>");
+    }
+
+    /// <summary>
     /// Prints chat command usage.
     /// </summary>
     private static void PrintChatUsage()
@@ -551,6 +685,8 @@ public sealed class CliApplication
         Console.WriteLine("Usage:");
         Console.WriteLine("  llmide chat <project-name> <message>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
+        Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
+        Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
     }
 }
 

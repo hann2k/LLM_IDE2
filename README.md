@@ -16,6 +16,9 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 * 프로젝트 단위 SQLite 대화 저장소
 * JSONL/JSON 보조 대화 로그
 * 최근 대화 맥락 자동 주입
+* DeepSeek 모델 목록 조회 및 기본 모델 교체
+* 대용량 응답 스트리밍 출력
+* Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
 
 프로젝트는 이름을 키로 관리한다.
@@ -155,11 +158,30 @@ dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
 DeepSeek API Key를 별도로 발급받은 뒤 `api_key`에 입력해야 대화 기능을 사용할 수 있다.
 API Key가 들어간 파일은 개인 로컬 데이터이므로 커밋하지 않는다.
 
+### 모델 목록 조회와 교체
+
+DeepSeek API에서 현재 사용할 수 있는 모델 목록을 조회한다.
+이 명령은 프로젝트의 `providers.json`에 입력된 API Key를 사용한다.
+
+```bash
+./llmide models list MyProject
+```
+
+프로젝트 기본 모델을 교체한다.
+변경된 모델은 `<ProjectRoot>/.llmide/settings/providers.json`에 저장된다.
+
+```bash
+./llmide models set MyProject deepseek-reasoner
+```
+
 ### 대화 실행
 
 ```bash
 ./llmide chat MyProject "안녕"
 ```
+
+기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
+긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.
 
 같은 프로젝트에서 대화를 이어가면 최근 대화 맥락이 다음 요청에 자동으로 포함된다.
 
@@ -169,12 +191,19 @@ API Key가 들어간 파일은 개인 로컬 데이터이므로 커밋하지 않
 ./llmide chat MyProject "그 산의 높이는?"
 ```
 
+스트리밍을 끄고 전체 응답을 받은 뒤 출력하려면 `--no-stream`을 사용한다.
+
+```bash
+./llmide chat MyProject "표와 코드 예제를 보여줘" --no-stream
+```
+
 ### Debug 출력
 
 실제로 Provider API에 전달되는 데이터를 확인하려면 `--debug` 옵션을 사용한다.
 
 ```bash
 ./llmide chat MyProject "그 산의 높이는?" --debug
+./llmide chat MyProject "그 산의 높이는?" --debug --no-stream
 ```
 
 debug 출력에는 `request_id`, provider, model, messages가 표시된다.

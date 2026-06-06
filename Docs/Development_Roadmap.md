@@ -462,21 +462,31 @@ llmide projects move MyProject /Users/me/Projects/NewPath
 * DeepSeek Provider 구현
 * API Key 관리
 * API Key 기본값은 빈 문자열로 생성
+* Provider 모델 목록 조회
+* 프로젝트 기본 모델 교체
 * 요청/응답 처리
+* 대용량 응답 스트리밍 출력
+* Markdown 표와 코드 블록 원문 출력
 * CLI 채팅 명령 구현
 
 예시:
 
 ```bash
 llmide chat MyProject "안녕"
+llmide models list MyProject
+llmide models set MyProject deepseek-reasoner
 ```
 
 완료 기준:
 
 * 프로젝트 생성 시 `.llmide/settings/providers.json`에 DeepSeek 설정이 생성된다.
 * DeepSeek API Key 값은 빈 문자열로 생성된다.
+* DeepSeek API에서 사용 가능한 모델 목록을 조회할 수 있다.
+* 프로젝트 기본 모델을 CLI에서 교체할 수 있다.
 * 사용자 메시지를 전송할 수 있다.
 * AI 응답을 받을 수 있다.
+* 긴 응답은 도착하는 대로 CLI에 출력된다.
+* 표와 코드 블록은 Markdown 원문 형식으로 출력된다.
 
 ---
 

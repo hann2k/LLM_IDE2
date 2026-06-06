@@ -17,11 +17,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <returns>The provider settings document.</returns>
     public ProviderSettingsDocument Load(string projectRoot)
     {
-        string settingsPath = Path.Combine(
-            Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.SettingsDirectoryName,
-            LlmIdeLayout.ProvidersFileName);
+        string settingsPath = GetSettingsPath(projectRoot);
 
         if (!File.Exists(settingsPath))
         {
@@ -37,5 +33,31 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
         }
 
         return settings;
+    }
+
+    /// <summary>
+    /// Saves provider settings for a project.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="settings">The provider settings document.</param>
+    public void Save(string projectRoot, ProviderSettingsDocument settings)
+    {
+        string settingsPath = GetSettingsPath(projectRoot);
+        string json = JsonSerializer.Serialize(settings, JsonOptions.Default);
+        File.WriteAllText(settingsPath, json);
+    }
+
+    /// <summary>
+    /// Gets the provider settings path.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The provider settings path.</returns>
+    private static string GetSettingsPath(string projectRoot)
+    {
+        return Path.Combine(
+            Path.GetFullPath(projectRoot),
+            LlmIdeLayout.MetadataDirectoryName,
+            LlmIdeLayout.SettingsDirectoryName,
+            LlmIdeLayout.ProvidersFileName);
     }
 }

@@ -16,4 +16,16 @@ public interface IChatProvider
         ChatProviderRequest request,
         ProviderSettings settings,
         CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Streams a chat response.
+    /// </summary>
+    /// <param name="request">The provider request.</param>
+    /// <param name="settings">The provider settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The streamed response chunks.</returns>
+    IAsyncEnumerable<string> StreamAsync(
+        ChatProviderRequest request,
+        ProviderSettings settings,
+        CancellationToken cancellationToken);
 }
