@@ -58,7 +58,7 @@ public sealed class ProviderSettingsService
     {
         if (string.IsNullOrWhiteSpace(model))
         {
-            throw new InvalidOperationException("Model is required.");
+            throw new InvalidOperationException("모델은 필수입니다.");
         }
 
         ProviderSettingsDocument settingsDocument = providerSettingsStore.Load(projectRoot);

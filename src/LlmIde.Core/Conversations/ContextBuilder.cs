@@ -31,6 +31,11 @@ public sealed class ContextBuilder
     private readonly ISystemRuleStore systemRuleStore;
 
     /// <summary>
+    /// The artifact rule store.
+    /// </summary>
+    private readonly IArtifactRuleStore artifactRuleStore;
+
+    /// <summary>
     /// The artifact service.
     /// </summary>
     private readonly ArtifactService artifactService;
@@ -42,18 +47,21 @@ public sealed class ContextBuilder
     /// <param name="projectStateService">The project state service.</param>
     /// <param name="rollingContextStore">The rolling context store.</param>
     /// <param name="systemRuleStore">The system rule store.</param>
+    /// <param name="artifactRuleStore">The artifact rule store.</param>
     /// <param name="artifactService">The artifact service.</param>
     public ContextBuilder(
         CriteriaService criteriaService,
         ProjectStateService projectStateService,
         IRollingContextStore rollingContextStore,
         ISystemRuleStore systemRuleStore,
+        IArtifactRuleStore artifactRuleStore,
         ArtifactService artifactService)
     {
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
         this.rollingContextStore = rollingContextStore;
         this.systemRuleStore = systemRuleStore;
+        this.artifactRuleStore = artifactRuleStore;
         this.artifactService = artifactService;
     }
 
@@ -74,19 +82,21 @@ public sealed class ContextBuilder
         rollingContextStore.EnsureInitialized(projectRoot);
 
         string systemRule = systemRuleStore.Load(projectRoot);
+        string artifactRule = artifactRuleStore.Load(projectRoot);
         IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
         ProjectState projectState = projectStateService.Get(projectRoot);
         RollingContextSummary? rollingContext = rollingContextStore.LoadCurrent(projectRoot);
 
         if (activeCriteria.Count == 0)
         {
-            throw new InvalidOperationException("No active criteria. Add or activate at least one criterion before chat.");
+            throw new InvalidOperationException("활성 기준이 없습니다. 대화 전에 기준을 하나 이상 추가하거나 활성화하세요.");
         }
 
         ContextPackage contextPackage = CreateContextPackage(
             requestId,
             message,
             systemRule,
+            artifactRule,
             activeCriteria,
             projectState,
             rollingContext,
@@ -111,7 +121,7 @@ public sealed class ContextBuilder
         AppendSystemMessage(messages, BuildCriteriaMessage(contextPackage.ActiveCriteria));
         AppendSystemMessage(messages, BuildProjectStateMessage((ProjectState)contextPackage.ProjectState));
         AppendSystemMessage(messages, BuildRollingContextMessage(contextPackage.RollingContextSummary));
-        AppendSystemMessage(messages, BuildArtifactInstructionMessage());
+        AppendSystemMessage(messages, contextPackage.ArtifactRule);
         AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts));
 
         messages.Add(new ChatMessage
@@ -121,22 +131,6 @@ public sealed class ContextBuilder
         });
 
         return messages;
-    }
-
-    /// <summary>
-    /// Builds the artifact tagging instruction.
-    /// </summary>
-    /// <returns>The artifact tagging system message.</returns>
-    private static string BuildArtifactInstructionMessage()
-    {
-        return """
-            When your response contains reusable important content, wrap that content in explicit artifact tags.
-            Use this format:
-            <artifact type="markdown" title="Short title" path="optional/target/path">
-            artifact content
-            </artifact>
-            Only tag content that is useful as a reusable project artifact. Do not claim that tagged content was saved.
-            """;
     }
 
     /// <summary>
@@ -152,7 +146,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Use these user-attached artifacts as context:");
+        builder.AppendLine("사용자가 첨부한 다음 산출물을 맥락으로 사용한다.");
 
         foreach (string artifact in attachedArtifacts)
         {
@@ -195,7 +189,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Follow these active project criteria for this response:");
+        builder.AppendLine("이번 응답에서는 다음 활성 프로젝트 기준을 따른다.");
 
         foreach (string criterion in activeCriteria)
         {
@@ -214,14 +208,14 @@ public sealed class ContextBuilder
     private static string BuildProjectStateMessage(ProjectState projectState)
     {
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Use this current project state as context:");
-        AppendStateValue(builder, "Stage", projectState.Stage);
-        AppendStateValue(builder, "Current task", projectState.CurrentTask);
-        AppendStateList(builder, "Completed items", projectState.CompletedItems);
-        AppendStateList(builder, "In-progress items", projectState.InProgressItems);
-        AppendStateList(builder, "Next actions", projectState.NextActions);
-        AppendStateList(builder, "Blockers", projectState.Blockers);
-        AppendStateValue(builder, "Last decision", projectState.LastDecision);
+        builder.AppendLine("현재 프로젝트 상태를 맥락으로 사용한다.");
+        AppendStateValue(builder, "단계", projectState.Stage);
+        AppendStateValue(builder, "현재 작업", projectState.CurrentTask);
+        AppendStateList(builder, "완료 항목", projectState.CompletedItems);
+        AppendStateList(builder, "진행 중 항목", projectState.InProgressItems);
+        AppendStateList(builder, "다음 작업", projectState.NextActions);
+        AppendStateList(builder, "차단 요소", projectState.Blockers);
+        AppendStateValue(builder, "마지막 결정", projectState.LastDecision);
         return builder.ToString();
     }
 
@@ -238,7 +232,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("Use this compressed prior conversation context:");
+        builder.AppendLine("압축된 이전 대화 맥락을 사용한다.");
         builder.AppendLine(rollingContextSummary);
         return builder.ToString();
     }
@@ -296,6 +290,7 @@ public sealed class ContextBuilder
         string requestId,
         string message,
         string systemRule,
+        string artifactRule,
         IReadOnlyList<Criterion> activeCriteria,
         ProjectState projectState,
         RollingContextSummary? rollingContext,
@@ -305,6 +300,7 @@ public sealed class ContextBuilder
         {
             RequestId = requestId,
             SystemRule = systemRule,
+            ArtifactRule = artifactRule,
             UserRequest = message,
             ProjectState = projectState,
             UsedRollingContextId = rollingContext?.RollingContextId ?? string.Empty,
@@ -332,16 +328,16 @@ public sealed class ContextBuilder
             Artifact artifact = artifactService.Get(projectRoot, artifactId);
             string content = artifactService.ReadContent(projectRoot, artifact);
             StringBuilder builder = new StringBuilder();
-            builder.AppendLine($"[Artifact: {artifact.ArtifactId}]");
-            builder.AppendLine($"Title: {artifact.Title}");
-            builder.AppendLine($"Type: {artifact.Type}");
+            builder.AppendLine($"[산출물: {artifact.ArtifactId}]");
+            builder.AppendLine($"제목: {artifact.Title}");
+            builder.AppendLine($"유형: {artifact.Type}");
 
             if (!string.IsNullOrWhiteSpace(artifact.TargetPath))
             {
-                builder.AppendLine($"Path: {artifact.TargetPath}");
+                builder.AppendLine($"경로: {artifact.TargetPath}");
             }
 
-            builder.AppendLine("Content:");
+            builder.AppendLine("내용:");
             builder.AppendLine(content);
             attachedArtifacts.Add(builder.ToString());
         }

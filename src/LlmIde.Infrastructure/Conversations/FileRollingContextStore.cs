@@ -12,39 +12,18 @@ namespace LlmIde.Infrastructure.Conversations;
 public sealed class FileRollingContextStore : IRollingContextStore
 {
     /// <summary>
-    /// The default compression rule.
+    /// The IDE program root containing policy templates.
     /// </summary>
-    private const string DefaultCompressionRule = """
-        # Compression Rule
+    private readonly string programRoot;
 
-        너는 대화 맥락 압축기다.
-
-        목표:
-        - 다음 요청에 필요한 과거 맥락만 보존한다.
-        - 기존 Rolling Context Summary와 현재 user/assistant 대화를 병합한다.
-        - 중복은 제거한다.
-        - 원문에 없는 내용을 추가하지 않는다.
-        - 추정하지 않는다.
-        - 불확실한 내용은 확정 사실처럼 쓰지 않는다.
-
-        반드시 보존할 항목:
-        - 프로젝트 정체성
-        - 현재 진행 상태
-        - 확정 결정
-        - 활성 제약
-        - 중요한 기술 세부사항
-        - 미해결 질문
-        - 사용자가 명시한 선호
-        - 앞으로 착각하면 안 되는 내용
-
-        제거할 항목:
-        - 단순 인사
-        - 반복 설명
-        - 해결된 사소한 논의
-        - 장기 맥락에 불필요한 문장
-
-        출력 형식은 Markdown으로 한다.
-        """;
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileRollingContextStore"/> class.
+    /// </summary>
+    /// <param name="programRoot">The IDE program root.</param>
+    public FileRollingContextStore(string? programRoot = null)
+    {
+        this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
+    }
 
     /// <summary>
     /// Ensures rolling context files and directories exist.
@@ -57,7 +36,9 @@ public sealed class FileRollingContextStore : IRollingContextStore
         Directory.CreateDirectory(GetHistoryDirectory(projectRoot));
         EnsureTextFile(GetCurrentPath(projectRoot), string.Empty);
         EnsureTextFile(GetIndexPath(projectRoot), string.Empty);
-        EnsureRequiredTextFile(GetCompressionRulePath(projectRoot), DefaultCompressionRule);
+        EnsureRequiredTextFile(
+            GetCompressionRulePath(projectRoot),
+            LoadProgramPolicyTemplate(LlmIdeLayout.CompressionRuleFileName));
         EnsureContextPolicy(projectRoot);
         EnsureRollingContextTable(projectRoot);
     }
@@ -220,7 +201,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// Ensures the context policy file contains Phase 6 defaults when it is empty.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
-    private static void EnsureContextPolicy(string projectRoot)
+    private void EnsureContextPolicy(string projectRoot)
     {
         string path = Path.Combine(
             GetMetadataDirectory(projectRoot),
@@ -237,6 +218,15 @@ public sealed class FileRollingContextStore : IRollingContextStore
             }
         }
 
+        File.WriteAllText(path, LoadProgramPolicyTemplate(LlmIdeLayout.ContextPolicyFileName, CreateDefaultContextPolicyJson()));
+    }
+
+    /// <summary>
+    /// Creates the default context policy JSON.
+    /// </summary>
+    /// <returns>The default context policy JSON.</returns>
+    private static string CreateDefaultContextPolicyJson()
+    {
         Dictionary<string, object> policy = new Dictionary<string, object>
         {
             ["context_management_strategy"] = "summary_plus_window",
@@ -252,7 +242,30 @@ public sealed class FileRollingContextStore : IRollingContextStore
             ["compression_failure_strategy"] = "keep_previous",
             ["rag_enabled"] = false
         };
-        File.WriteAllText(path, JsonSerializer.Serialize(policy, JsonOptions.Default));
+
+        return JsonSerializer.Serialize(policy, JsonOptions.Default);
+    }
+
+    /// <summary>
+    /// Loads a policy template from the program policies directory.
+    /// </summary>
+    /// <param name="fileName">The policy file name.</param>
+    /// <returns>The policy template content.</returns>
+    private string LoadProgramPolicyTemplate(string fileName)
+    {
+        return LoadProgramPolicyTemplate(fileName, string.Empty);
+    }
+
+    /// <summary>
+    /// Loads a policy template from the program policies directory.
+    /// </summary>
+    /// <param name="fileName">The policy file name.</param>
+    /// <param name="fallback">The fallback content.</param>
+    /// <returns>The policy template content.</returns>
+    private string LoadProgramPolicyTemplate(string fileName, string fallback)
+    {
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, fileName);
+        return File.Exists(path) ? File.ReadAllText(path) : fallback;
     }
 
     /// <summary>

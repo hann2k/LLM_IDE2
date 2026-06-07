@@ -16,6 +16,11 @@ public sealed class ContextPackage
     public string SystemRule { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the artifact tagging rule.
+    /// </summary>
+    public string ArtifactRule { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets active criteria.
     /// </summary>
     public List<string> ActiveCriteria { get; set; } = [];

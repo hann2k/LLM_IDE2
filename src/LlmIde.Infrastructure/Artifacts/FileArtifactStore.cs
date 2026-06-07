@@ -23,7 +23,7 @@ public sealed class FileArtifactStore : IArtifactStore
     {
         return LoadIndex(projectRoot).FirstOrDefault(artifact =>
             string.Equals(artifact.ArtifactId, artifactId, StringComparison.Ordinal))
-            ?? throw new InvalidOperationException($"Artifact was not found: {artifactId}");
+            ?? throw new InvalidOperationException($"산출물을 찾을 수 없습니다: {artifactId}");
     }
 
     /// <inheritdoc />
@@ -67,7 +67,7 @@ public sealed class FileArtifactStore : IArtifactStore
 
         if (index < 0)
         {
-            throw new InvalidOperationException($"Artifact was not found: {artifactId}");
+            throw new InvalidOperationException($"산출물을 찾을 수 없습니다: {artifactId}");
         }
 
         Artifact artifact = artifacts[index];
@@ -96,7 +96,7 @@ public sealed class FileArtifactStore : IArtifactStore
         List<Artifact> artifacts = LoadIndex(projectRoot);
         Artifact artifact = artifacts.FirstOrDefault(item =>
             string.Equals(item.ArtifactId, artifactId, StringComparison.Ordinal))
-            ?? throw new InvalidOperationException($"Artifact was not found: {artifactId}");
+            ?? throw new InvalidOperationException($"산출물을 찾을 수 없습니다: {artifactId}");
 
         artifacts.Remove(artifact);
         DeleteContentIfExists(projectRoot, artifact.ContentPath);

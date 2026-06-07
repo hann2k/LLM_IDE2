@@ -5,6 +5,10 @@
     <ProjectReference Include="..\LlmIde.Infrastructure\LlmIde.Infrastructure.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\policies\**\*" Link="policies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>llmide</AssemblyName>

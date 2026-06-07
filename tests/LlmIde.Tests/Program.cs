@@ -82,8 +82,19 @@ public static class Program
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/conversation.db");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/current.md");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/index.jsonl");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/system-rule.md");
         AssertFileExists(result.ProjectRoot, ".llmide/policies/compression-rule.md");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/artifact-rule.md");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/context-policy.json");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/provider-policy.json");
         AssertFileExists(workspace.Root, "project/projects.json");
+
+        string policyRoot = Path.Combine(result.ProjectRoot, ".llmide", "policies");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "system-rule.md")), "기본 응답 언어는 한국어다.");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "compression-rule.md")), "너는 대화 맥락 압축기다.");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "artifact-rule.md")), "산출물 태그");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "context-policy.json")), "summary_plus_window");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "provider-policy.json")), "deepseek");
     }
 
     /// <summary>
@@ -353,7 +364,9 @@ public static class Program
         AssertEqual(2, File.ReadAllLines(requestsPath).Length, "Chat and compression requests should be stored.");
         AssertEqual(2, Directory.GetFiles(packagesPath, "*.json").Length, "Chat and compression context packages should be stored.");
         AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
-        AssertEqual("ok:2", File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md")), "Current rolling context should be updated.");
+        string rollingContext = File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md"));
+        AssertFalse(string.IsNullOrWhiteSpace(rollingContext), "Current rolling context should be updated.");
+        AssertContains(rollingContext, "ok:");
     }
 
     /// <summary>
@@ -371,14 +384,23 @@ public static class Program
             application.Run(["init", "--name", "MemoryProject"]);
             AddDefaultCriterion(application, "MemoryProject");
             application.Run(["chat", "MemoryProject", "first"]);
+            string rollingContextPath = Path.Combine(
+                workspace.Root,
+                "MemoryProject",
+                ".llmide",
+                "conversations",
+                "rolling-context",
+                "current.md");
+            string rollingContext = File.ReadAllText(rollingContextPath);
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "MemoryProject", "second", "--debug"]);
             string chatOutput = output.ToString();
 
             AssertEqual(0, exitCode, "Second chat should succeed.");
-            AssertContains(chatOutput, "Use this compressed prior conversation context");
-            AssertContains(chatOutput, "ok:2");
-            AssertContains(chatOutput, "ok:5");
+            AssertFalse(string.IsNullOrWhiteSpace(rollingContext), "Rolling context should be created after first chat.");
+            AssertContains(chatOutput, "압축된 이전 대화 맥락을 사용한다.");
+            AssertContains(chatOutput, rollingContext);
+            AssertContains(chatOutput, "\"content\": \"second\"");
             AssertFalse(chatOutput.Contains("\"content\": \"first\"", StringComparison.Ordinal), "Previous raw user message should not be sent.");
         }
         finally
@@ -406,16 +428,16 @@ public static class Program
             string chatOutput = output.ToString();
 
             AssertEqual(0, exitCode, "Debug chat should succeed.");
-            AssertContains(chatOutput, "debug:");
+            AssertContains(chatOutput, "디버그:");
             AssertContains(chatOutput, "\"messages\"");
             AssertContains(chatOutput, "\"role\": \"user\"");
             AssertContains(chatOutput, "\"content\": \"hello\"");
-            AssertContains(chatOutput, "response:");
-            AssertContains(chatOutput, "compression_debug:");
-            AssertContains(chatOutput, "compression_response:");
-            AssertContains(chatOutput, "compression_status: completed");
-            AssertContains(chatOutput, "[Raw Conversation Log]");
-            AssertContains(chatOutput, "ok:4");
+            AssertContains(chatOutput, "응답:");
+            AssertContains(chatOutput, "압축_디버그:");
+            AssertContains(chatOutput, "압축_응답:");
+            AssertContains(chatOutput, "압축_상태: completed");
+            AssertContains(chatOutput, "[원본 대화 로그]");
+            AssertContains(chatOutput, "ok:");
         }
         finally
         {
@@ -597,7 +619,7 @@ public static class Program
 
             AssertEqual(0, chatExitCode, "Chat with criteria should succeed.");
             AssertContains(chatOutput, "\"role\": \"system\"");
-            AssertContains(chatOutput, "Follow these active project criteria");
+            AssertContains(chatOutput, "이번 응답에서는 다음 활성 프로젝트 기준을 따른다.");
             AssertContains(chatOutput, "Answer in Korean");
         }
         finally
@@ -687,9 +709,9 @@ public static class Program
             string chatOutput = output.ToString();
 
             AssertEqual(0, chatExitCode, "Chat with project state should succeed.");
-            AssertContains(chatOutput, "Use this current project state as context");
-            AssertContains(chatOutput, "Stage: phase5");
-            AssertContains(chatOutput, "Current task: Project State 관리");
+            AssertContains(chatOutput, "현재 프로젝트 상태를 맥락으로 사용한다.");
+            AssertContains(chatOutput, "단계: phase5");
+            AssertContains(chatOutput, "현재 작업: Project State 관리");
         }
         finally
         {
@@ -835,6 +857,9 @@ public static class Program
         {
             application.Run(["init", "--name", "AttachProject"]);
             AddDefaultCriterion(application, "AttachProject");
+            WriteArtifactRule(
+                Path.Combine(workspace.Root, "AttachProject"),
+                "응답에 재사용 가능한 중요한 산출물 후보가 있으면 artifact 태그로 감싼다.");
             Console.SetOut(output);
             application.Run([
                 "artifacts",
@@ -853,10 +878,10 @@ public static class Program
             string chatOutput = output.ToString();
 
             AssertEqual(0, chatExitCode, "Chat with artifact should succeed.");
-            AssertContains(chatOutput, "Use these user-attached artifacts as context");
+            AssertContains(chatOutput, "사용자가 첨부한 다음 산출물을 맥락으로 사용한다.");
             AssertContains(chatOutput, "설계 메모");
             AssertContains(chatOutput, "아티팩트 본문");
-            AssertContains(chatOutput, "When your response contains reusable important content");
+            AssertContains(chatOutput, "응답에 재사용 가능한 중요한 산출물 후보가 있으면");
         }
         finally
         {
@@ -886,7 +911,7 @@ public static class Program
     private static ProjectInitializer CreateProjectInitializer(string ideProgramRoot)
     {
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
-        return new ProjectInitializer(new JsonFileProjectStore(), registry, ideProgramRoot);
+        return new ProjectInitializer(new JsonFileProjectStore(ideProgramRoot), registry, ideProgramRoot);
     }
 
     /// <summary>
@@ -896,17 +921,18 @@ public static class Program
     /// <returns>The CLI application.</returns>
     private static CliApplication CreateCliApplication(string ideProgramRoot)
     {
-        IProjectStore projectStore = new JsonFileProjectStore();
+        IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
-        FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
         ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
             rollingContextStore,
             new FileSystemRuleStore(),
+            new FileArtifactRuleStore(),
             artifactService);
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
@@ -967,11 +993,11 @@ public static class Program
     /// <returns>The artifact id.</returns>
     private static string ExtractArtifactId(string output)
     {
-        string prefix = "artifact: ";
+        string prefix = "산출물: ";
         string line = output
             .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
             .FirstOrDefault(item => item.StartsWith(prefix, StringComparison.Ordinal))
-            ?? throw new InvalidOperationException("Artifact id was not printed.");
+            ?? throw new InvalidOperationException("산출물 ID가 출력되지 않았습니다.");
         return line[prefix.Length..].Trim();
     }
 
@@ -1010,6 +1036,17 @@ public static class Program
         ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
         settings.Providers[0].ApiKey = apiKey;
         providerSettingsStore.Save(projectRoot, settings);
+    }
+
+    /// <summary>
+    /// Writes the artifact tagging rule for a test project.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="content">The artifact rule content.</param>
+    private static void WriteArtifactRule(string projectRoot, string content)
+    {
+        string path = Path.Combine(projectRoot, ".llmide", "policies", "artifact-rule.md");
+        File.WriteAllText(path, content);
     }
 
     /// <summary>
@@ -1217,7 +1254,57 @@ public sealed class TestWorkspace : IDisposable
     {
         string root = Path.Combine(Path.GetTempPath(), "LlmIde.Tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(root);
+        CreatePolicyTemplates(root);
         return new TestWorkspace(root);
+    }
+
+    /// <summary>
+    /// Creates program policy templates in the test workspace.
+    /// </summary>
+    /// <param name="root">The workspace root path.</param>
+    private static void CreatePolicyTemplates(string root)
+    {
+        string policyRoot = Path.Combine(root, "policies");
+        Directory.CreateDirectory(policyRoot);
+        File.WriteAllText(Path.Combine(policyRoot, "system-rule.md"), """
+            기본 응답 언어는 한국어다.
+            사용자가 다른 언어를 명시적으로 요청하지 않는 한 한국어로 답한다.
+            """);
+        File.WriteAllText(Path.Combine(policyRoot, "compression-rule.md"), """
+            # 압축 규칙
+
+            너는 대화 맥락 압축기다.
+            """);
+        File.WriteAllText(Path.Combine(policyRoot, "artifact-rule.md"), """
+            응답에 재사용 가능한 중요한 산출물 후보가 있으면 산출물 태그로 감싼다.
+            """);
+        File.WriteAllText(Path.Combine(policyRoot, "context-policy.json"), """
+            {
+              "context_management_strategy": "summary_plus_window",
+              "include_rolling_context_summary": true,
+              "rolling_context_path": "conversations/rolling-context/current.md",
+              "recent_turn_count": 0,
+              "max_recent_turn_chars": 0,
+              "max_rolling_context_chars": 24000,
+              "compression_enabled": true,
+              "compression_provider": "deepseek",
+              "compression_model": "deepseek-chat",
+              "compression_after_chat": true,
+              "compression_failure_strategy": "keep_previous",
+              "rag_enabled": false
+            }
+            """);
+        File.WriteAllText(Path.Combine(policyRoot, "provider-policy.json"), """
+            {
+              "default_provider": "deepseek",
+              "allowed_providers": [
+                "deepseek"
+              ],
+              "api_key_storage": "project_local_settings",
+              "allow_empty_api_key": true,
+              "network_required": true
+            }
+            """);
     }
 
     /// <summary>

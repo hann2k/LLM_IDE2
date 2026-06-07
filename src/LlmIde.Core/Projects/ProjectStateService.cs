@@ -75,7 +75,7 @@ public sealed class ProjectStateService
     {
         if (string.IsNullOrWhiteSpace(item))
         {
-            throw new InvalidOperationException("Project state item is required.");
+            throw new InvalidOperationException("프로젝트 상태 항목은 필수입니다.");
         }
 
         ProjectState state = projectStateStore.Load(projectRoot);
@@ -126,7 +126,7 @@ public sealed class ProjectStateService
             "in-progress" => state.InProgressItems,
             "next-action" => state.NextActions,
             "blocker" => state.Blockers,
-            _ => throw new InvalidOperationException($"Unknown project state list: {listName}")
+            _ => throw new InvalidOperationException($"알 수 없는 프로젝트 상태 목록입니다: {listName}")
         };
     }
 }

@@ -1,0 +1,14 @@
+{
+  "context_management_strategy": "summary_plus_window",
+  "include_rolling_context_summary": true,
+  "rolling_context_path": "conversations/rolling-context/current.md",
+  "recent_turn_count": 0,
+  "max_recent_turn_chars": 0,
+  "max_rolling_context_chars": 24000,
+  "compression_enabled": true,
+  "compression_provider": "deepseek",
+  "compression_model": "deepseek-chat",
+  "compression_after_chat": true,
+  "compression_failure_strategy": "keep_previous",
+  "rag_enabled": false
+}

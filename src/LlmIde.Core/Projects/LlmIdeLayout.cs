@@ -46,6 +46,11 @@ public static class LlmIdeLayout
     public const string CompressionRuleFileName = "compression-rule.md";
 
     /// <summary>
+    /// Gets the artifact tagging rule file name.
+    /// </summary>
+    public const string ArtifactRuleFileName = "artifact-rule.md";
+
+    /// <summary>
     /// Gets the context policy file name.
     /// </summary>
     public const string ContextPolicyFileName = "context-policy.json";

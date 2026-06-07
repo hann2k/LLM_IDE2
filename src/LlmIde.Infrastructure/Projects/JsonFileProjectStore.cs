@@ -12,6 +12,20 @@ namespace LlmIde.Infrastructure.Projects;
 public sealed class JsonFileProjectStore : IProjectStore
 {
     /// <summary>
+    /// The IDE program root containing policy templates.
+    /// </summary>
+    private readonly string programRoot;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="JsonFileProjectStore"/> class.
+    /// </summary>
+    /// <param name="programRoot">The IDE program root.</param>
+    public JsonFileProjectStore(string? programRoot = null)
+    {
+        this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
+    }
+
+    /// <summary>
     /// Initializes a project at the supplied path.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -37,15 +51,26 @@ public sealed class JsonFileProjectStore : IProjectStore
             WriteProgress(metadataRoot, "project-state", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.CriteriaFileName), Array.Empty<Criterion>());
             WriteProgress(metadataRoot, "criteria", "running", string.Empty);
-            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName), string.Empty);
-            EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.CompressionRuleFileName), string.Empty);
-            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName), new Dictionary<string, object>());
-            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName), new Dictionary<string, object>());
+            EnsureTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.SystemRuleFileName));
+            EnsureTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.CompressionRuleFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.CompressionRuleFileName));
+            EnsureTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ArtifactRuleFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.ArtifactRuleFileName));
+            EnsureJsonTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.ContextPolicyFileName, CreateDefaultContextPolicyJson()));
+            EnsureJsonTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.ProviderPolicyFileName, CreateDefaultProviderPolicyJson()));
             WriteProgress(metadataRoot, "policies", "running", string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
             SqliteConversationLogStore.EnsureDatabase(normalizedRoot);
-            new FileRollingContextStore().EnsureInitialized(normalizedRoot);
+            new FileRollingContextStore(programRoot).EnsureInitialized(normalizedRoot);
             WriteProgress(metadataRoot, "conversations", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
             WriteProgress(metadataRoot, "settings", "running", string.Empty);
@@ -177,6 +202,53 @@ public sealed class JsonFileProjectStore : IProjectStore
     }
 
     /// <summary>
+    /// Creates the default context policy JSON.
+    /// </summary>
+    /// <returns>The default context policy JSON.</returns>
+    private static string CreateDefaultContextPolicyJson()
+    {
+        Dictionary<string, object> policy = new Dictionary<string, object>
+        {
+            ["context_management_strategy"] = "summary_plus_window",
+            ["include_rolling_context_summary"] = true,
+            ["rolling_context_path"] = string.Join(
+                '/',
+                LlmIdeLayout.ConversationsDirectoryName,
+                LlmIdeLayout.RollingContextDirectoryName,
+                LlmIdeLayout.CurrentRollingContextFileName),
+            ["recent_turn_count"] = 0,
+            ["max_recent_turn_chars"] = 0,
+            ["max_rolling_context_chars"] = 24000,
+            ["compression_enabled"] = true,
+            ["compression_provider"] = "deepseek",
+            ["compression_model"] = "deepseek-chat",
+            ["compression_after_chat"] = true,
+            ["compression_failure_strategy"] = "keep_previous",
+            ["rag_enabled"] = false
+        };
+
+        return JsonSerializer.Serialize(policy, JsonOptions.Default);
+    }
+
+    /// <summary>
+    /// Creates the default provider policy JSON.
+    /// </summary>
+    /// <returns>The default provider policy JSON.</returns>
+    private static string CreateDefaultProviderPolicyJson()
+    {
+        Dictionary<string, object> policy = new Dictionary<string, object>
+        {
+            ["default_provider"] = "deepseek",
+            ["allowed_providers"] = new[] { "deepseek" },
+            ["api_key_storage"] = "project_local_settings",
+            ["allow_empty_api_key"] = true,
+            ["network_required"] = true
+        };
+
+        return JsonSerializer.Serialize(policy, JsonOptions.Default);
+    }
+
+    /// <summary>
     /// Ensures a JSON file exists.
     /// </summary>
     /// <param name="path">The JSON file path.</param>
@@ -204,6 +276,43 @@ public sealed class JsonFileProjectStore : IProjectStore
         }
 
         File.WriteAllText(path, content);
+    }
+
+    /// <summary>
+    /// Ensures a JSON text file exists.
+    /// </summary>
+    /// <param name="path">The JSON file path.</param>
+    /// <param name="content">The JSON text to write when the file is missing.</param>
+    private static void EnsureJsonTextFile(string path, string content)
+    {
+        if (File.Exists(path))
+        {
+            return;
+        }
+
+        File.WriteAllText(path, content);
+    }
+
+    /// <summary>
+    /// Loads a policy template from the program policies directory.
+    /// </summary>
+    /// <param name="fileName">The policy file name.</param>
+    /// <returns>The policy template content.</returns>
+    private string LoadProgramPolicyTemplate(string fileName)
+    {
+        return LoadProgramPolicyTemplate(fileName, string.Empty);
+    }
+
+    /// <summary>
+    /// Loads a policy template from the program policies directory.
+    /// </summary>
+    /// <param name="fileName">The policy file name.</param>
+    /// <param name="fallback">The fallback content.</param>
+    /// <returns>The policy template content.</returns>
+    private string LoadProgramPolicyTemplate(string fileName, string fallback)
+    {
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, fileName);
+        return File.Exists(path) ? File.ReadAllText(path) : fallback;
     }
 
     /// <summary>

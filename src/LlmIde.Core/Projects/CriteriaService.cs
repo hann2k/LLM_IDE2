@@ -31,7 +31,7 @@ public sealed class CriteriaService
     {
         if (string.IsNullOrWhiteSpace(title))
         {
-            throw new InvalidOperationException("Criterion title is required.");
+            throw new InvalidOperationException("기준 제목은 필수입니다.");
         }
 
         List<Criterion> criteria = criteriaStore.Load(projectRoot).ToList();

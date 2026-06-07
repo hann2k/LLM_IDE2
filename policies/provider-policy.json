@@ -1,0 +1,9 @@
+{
+  "default_provider": "deepseek",
+  "allowed_providers": [
+    "deepseek"
+  ],
+  "api_key_storage": "project_local_settings",
+  "allow_empty_api_key": true,
+  "network_required": true
+}

@@ -425,17 +425,17 @@ public sealed class ChatService
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("[Previous Rolling Context Summary]");
+        builder.AppendLine("[이전 롤링 맥락 요약]");
         builder.AppendLine(preparedRequest.ContextPackage.RollingContextSummary);
         builder.AppendLine();
-        builder.AppendLine("[Current User Message]");
+        builder.AppendLine("[현재 사용자 메시지]");
         builder.AppendLine(userMessage);
         builder.AppendLine();
-        builder.AppendLine("[Current Assistant Response]");
+        builder.AppendLine("[현재 AI 응답]");
         builder.AppendLine(assistantMessage);
         builder.AppendLine();
-        builder.AppendLine("[Task]");
-        builder.AppendLine("위 내용을 병합하여 다음 요청에 사용할 Rolling Context Summary를 갱신하라.");
+        builder.AppendLine("[작업]");
+        builder.AppendLine("위 내용을 병합하여 다음 요청에 사용할 롤링 맥락 요약을 갱신하라.");
         return builder.ToString();
     }
 
@@ -448,7 +448,7 @@ public sealed class ChatService
     {
         IReadOnlyList<ConversationMessageRecord> messages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("[Raw Conversation Log]");
+        builder.AppendLine("[원본 대화 로그]");
 
         foreach (ConversationMessageRecord message in messages)
         {
@@ -461,8 +461,8 @@ public sealed class ChatService
             builder.AppendLine();
         }
 
-        builder.AppendLine("[Task]");
-        builder.AppendLine("위 전체 원본 대화 로그를 다음 요청에 사용할 Rolling Context Summary로 압축하라.");
+        builder.AppendLine("[작업]");
+        builder.AppendLine("위 전체 원본 대화 로그를 다음 요청에 사용할 롤링 맥락 요약으로 압축하라.");
         return builder.ToString();
     }
 

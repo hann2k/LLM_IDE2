@@ -176,7 +176,7 @@ public sealed class ProjectRegistryService
     {
         if (string.IsNullOrWhiteSpace(name))
         {
-            throw new InvalidOperationException("Project name is required.");
+            throw new InvalidOperationException("프로젝트 이름은 필수입니다.");
         }
 
         return name.Trim();

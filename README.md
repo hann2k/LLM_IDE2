@@ -12,18 +12,18 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 
 * 프로젝트 이름 기반 초기화 및 목록 관리
 * 프로젝트별 `.llmide` 메타데이터 폴더 생성
-* DeepSeek Provider 기반 CLI 대화
+* DeepSeek 제공자 기반 CLI 대화
 * 프로젝트 단위 SQLite 대화 저장소
 * JSONL/JSON 보조 대화 로그
 * 최근 대화 맥락 자동 주입
 * DeepSeek 모델 목록 조회 및 기본 모델 교체
-* Criteria 생성, 수정, 삭제, 활성/비활성 관리
-* 활성 Criteria 자동 주입
-* Project State 조회, 수정, 목록 항목 관리
-* Project State 자동 주입
-* Rolling Context Summary 생성 및 저장
+* 기준 생성, 수정, 삭제, 활성/비활성 관리
+* 활성 기준 자동 주입
+* 프로젝트 상태 조회, 수정, 목록 항목 관리
+* 프로젝트 상태 자동 주입
+* 롤링 맥락 요약 생성 및 저장
 * 이전 대화 원문 대신 압축 맥락을 다음 요청에 주입
-* Context Builder 기반 요청 맥락 조립
+* 맥락 빌더 기반 요청 맥락 조립
 * 대용량 응답 스트리밍 출력
 * Markdown 표와 코드 블록 원문 출력
 * CLI chat debug 출력
@@ -199,22 +199,22 @@ Criteria는 프로젝트가 응답에서 지켜야 할 기준이다.
 ./llmide criteria remove MyProject <criterion-id>
 ```
 
-### Project State 관리
+### 프로젝트 상태 관리
 
-Project State는 현재 단계, 작업, 완료 항목, 다음 작업, 차단 요소를 저장하는 프로젝트 상태 정보다.
+프로젝트 상태는 현재 단계, 작업, 완료 항목, 다음 작업, 차단 요소를 저장하는 프로젝트 상태 정보다.
 저장 위치는 `<ProjectRoot>/.llmide/project-state.json`이다.
 
 ```bash
 ./llmide state show MyProject
-./llmide state set MyProject --stage phase5 --current-task "Project State 관리"
+./llmide state set MyProject --stage phase5 --current-task "프로젝트 상태 관리"
 ./llmide state set MyProject --last-decision "상태 변경은 사용자가 승인한다"
-./llmide state add MyProject completed "Phase 4 Criteria 관리 완료"
-./llmide state add MyProject next-action "Phase 6 Rolling Context Compression 시작"
+./llmide state add MyProject completed "Phase 4 기준 관리 완료"
+./llmide state add MyProject next-action "Phase 6 롤링 맥락 압축 시작"
 ./llmide state add MyProject blocker "없음"
 ./llmide state remove MyProject blocker "없음"
 ```
 
-Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
+프로젝트 상태는 매 대화 요청마다 Provider 메시지에 포함된다.
 
 ### 대화 실행
 
@@ -222,18 +222,18 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 ./llmide chat MyProject "안녕"
 ```
 
-`chat`은 활성 Criteria가 하나 이상 있어야 실행된다.
-활성 Criteria가 없으면 Provider API로 전송하지 않고 중단한다.
-활성 Criteria와 Project State는 Provider 요청의 system 메시지로 함께 전달된다.
+`chat`은 활성 기준이 하나 이상 있어야 실행된다.
+활성 기준이 없으면 Provider API로 전송하지 않고 중단한다.
+활성 기준과 프로젝트 상태는 Provider 요청의 system 메시지로 함께 전달된다.
 
 기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
 긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.
 
-같은 프로젝트에서 대화를 이어가면 chat 응답 이후 Rolling Context Summary가 생성된다.
+같은 프로젝트에서 대화를 이어가면 chat 응답 이후 롤링 맥락 요약이 생성된다.
 다음 요청에는 이전 대화 원문 전체가 아니라 압축된 `current.md`와 현재 발화가 포함된다.
-System Rule, 활성 Criteria, Project State, Rolling Context Summary는 Context Builder가 조립한다.
-Rolling Context Summary가 아직 없으면, 첫 compression은 누적 원본 대화 로그 전체를 압축 대상으로 사용한다.
-Context Builder는 재사용 가능한 중요 응답에는 artifact 태그를 붙이라는 지시도 함께 전달한다.
+시스템 규칙, 활성 기준, 프로젝트 상태, 롤링 맥락 요약은 맥락 빌더가 조립한다.
+롤링 맥락 요약이 아직 없으면, 첫 압축은 누적 원본 대화 로그 전체를 압축 대상으로 사용한다.
+맥락 빌더는 `.llmide/policies/`의 정책 파일을 읽어 시스템 규칙, 압축 규칙, 산출물 태그 요청을 조립한다.
 
 ```bash
 ./llmide chat MyProject "세계에서 가장 높은 산은?"
@@ -247,16 +247,35 @@ Context Builder는 재사용 가능한 중요 응답에는 artifact 태그를 �
 ./llmide chat MyProject "표와 코드 예제를 보여줘" --no-stream
 ```
 
-저장된 Artifact를 요청 맥락에 첨부하려면 `--artifact`를 사용한다.
+저장된 산출물을 요청 맥락에 첨부하려면 `--artifact`를 사용한다.
 
 ```bash
 ./llmide chat MyProject "이 산출물을 요약해줘" --artifact art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### Artifact 관리
+### 산출물 관리
 
-AI 응답 안의 `<artifact>` 태그는 저장 후보일 뿐이며 자동 저장되지 않는다.
+AI 응답 안의 `<artifact>` 태그는 산출물 저장 후보일 뿐이며 자동 저장되지 않는다.
 사용자가 명령을 실행해야 `.llmide/artifacts/` 아래에 확정 저장된다.
+정책 문구는 코드 내부가 아니라 프로젝트 정책 파일에 둔다.
+신규 프로젝트 생성 시 실행 파일 옆의 기본 템플릿 전체를 프로젝트 정책 파일로 복사한다.
+
+```text
+<IdeProgramRoot>/policies/
+<ProjectRoot>/.llmide/policies/
+```
+
+예시:
+
+```md
+응답에 재사용 가능한 중요한 산출물 후보가 있으면 해당 내용을 명시적인 산출물 태그로 감싼다.
+다음 형식을 사용한다.
+<artifact type="markdown" title="짧은 제목" path="선택/대상/경로">
+산출물 내용
+</artifact>
+프로젝트에서 재사용할 가치가 있는 내용만 태그로 표시한다.
+태그가 붙은 내용은 저장 후보일 뿐이며, 저장되었다고 말하지 않는다.
+```
 
 ```bash
 ./llmide artifacts extract MyProject --content "<artifact type=\"markdown\" title=\"README 초안\"># README</artifact>"
@@ -267,7 +286,7 @@ AI 응답 안의 `<artifact>` 태그는 저장 후보일 뿐이며 자동 저장
 ./llmide artifacts remove MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
-### Debug 출력
+### 디버그 출력
 
 실제로 Provider API에 전달되는 데이터를 확인하려면 `--debug` 옵션을 사용한다.
 
@@ -276,10 +295,10 @@ AI 응답 안의 `<artifact>` 태그는 저장 후보일 뿐이며 자동 저장
 ./llmide chat MyProject "그 산의 높이는?" --debug --no-stream
 ```
 
-debug 출력에는 `request_id`, provider, model, messages가 표시된다.
-chat 응답 이후 실행되는 compression 요청은 `compression_debug`로 별도 출력된다.
-스트리밍 chat에서 `--debug`를 사용하면 compression 요청 본문을 먼저 출력하고, compression 응답은 `compression_response` 아래에 chunk 단위로 출력한다.
-응답에서 Artifact 태그 후보가 발견되면 debug 출력에 `artifact_candidates`로 표시된다.
+디버그 출력에는 `request_id`, provider, model, messages가 표시된다.
+chat 응답 이후 실행되는 압축 요청은 `compression_debug`로 별도 출력된다.
+스트리밍 chat에서 `--debug`를 사용하면 압축 요청 본문을 먼저 출력하고, 압축 응답은 `compression_response` 아래에 chunk 단위로 출력한다.
+응답에서 산출물 태그 후보가 발견되면 디버그 출력에 `artifact_candidates`로 표시된다.
 한국어는 사람이 읽을 수 있는 형태로 출력된다.
 
 ## 주의사항

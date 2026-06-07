@@ -98,17 +98,17 @@ public sealed class ArtifactService
     {
         if (string.IsNullOrWhiteSpace(candidate.Title))
         {
-            throw new InvalidOperationException("Artifact title is required.");
+            throw new InvalidOperationException("산출물 제목은 필수입니다.");
         }
 
         if (string.IsNullOrWhiteSpace(candidate.Type))
         {
-            throw new InvalidOperationException("Artifact type is required.");
+            throw new InvalidOperationException("산출물 유형은 필수입니다.");
         }
 
         if (string.IsNullOrWhiteSpace(candidate.Content))
         {
-            throw new InvalidOperationException("Artifact content is required.");
+            throw new InvalidOperationException("산출물 내용은 필수입니다.");
         }
     }
 }

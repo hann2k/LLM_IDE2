@@ -41,7 +41,7 @@ public static class ArtifactTagParser
 
             candidates.Add(new ArtifactCandidate
             {
-                Title = GetAttribute(attributes, "title", "Untitled Artifact"),
+                Title = GetAttribute(attributes, "title", "제목 없는 산출물"),
                 Type = GetAttribute(attributes, "type", "note"),
                 TargetPath = GetAttribute(attributes, "path", string.Empty),
                 Content = content

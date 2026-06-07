@@ -24,17 +24,18 @@ public static class Program
     public static int Main(string[] args)
     {
         string ideProgramRoot = AppContext.BaseDirectory;
-        IProjectStore projectStore = new JsonFileProjectStore();
+        IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
-        FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
         ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
             rollingContextStore,
             new FileSystemRuleStore(),
+            new FileArtifactRuleStore(),
             artifactService);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
@@ -177,7 +178,7 @@ public sealed class CliApplication
         }
         catch (Exception ex)
         {
-            Console.Error.WriteLine($"error: {ex.Message}");
+            Console.Error.WriteLine($"오류: {ex.Message}");
             return 1;
         }
     }
@@ -239,10 +240,10 @@ public sealed class CliApplication
     {
         ProjectInitializationRequest request = ParseInitRequest(args);
         ProjectInitializationResult result = projectInitializer.Initialize(request);
-        string action = result.Created ? "initialized" : "opened";
+        string action = result.Created ? "초기화됨" : "열림";
 
         Console.WriteLine($"{action}: {result.ProjectRoot}");
-        Console.WriteLine($"project: {result.ProjectInfo.Title}");
+        Console.WriteLine($"프로젝트: {result.ProjectInfo.Title}");
         return 0;
     }
 
@@ -346,7 +347,7 @@ public sealed class CliApplication
             {
                 if (index + 1 >= args.Length)
                 {
-                    throw new InvalidOperationException("--artifact requires an artifact id.");
+                    throw new InvalidOperationException("--artifact 옵션에는 산출물 ID가 필요합니다.");
                 }
 
                 artifactIds.Add(args[++index]);
@@ -372,9 +373,9 @@ public sealed class CliApplication
             Model = response.SentRequest?.Model ?? response.Model,
             Messages = response.SentRequest?.Messages ?? []
         };
-        Console.WriteLine("debug:");
+        Console.WriteLine("디버그:");
         Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
-        Console.WriteLine("response:");
+        Console.WriteLine("응답:");
     }
 
     /// <summary>
@@ -408,7 +409,7 @@ public sealed class CliApplication
             Response = response.CompressionContent
         };
 
-        Console.WriteLine("compression_debug:");
+        Console.WriteLine("압축_디버그:");
         Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
     }
 
@@ -434,9 +435,9 @@ public sealed class CliApplication
         };
 
         Console.WriteLine();
-        Console.WriteLine("compression_debug:");
+        Console.WriteLine("압축_디버그:");
         Console.WriteLine(JsonSerializer.Serialize(debugView, JsonOptions.Default));
-        Console.WriteLine("compression_response:");
+        Console.WriteLine("압축_응답:");
     }
 
     /// <summary>
@@ -452,11 +453,11 @@ public sealed class CliApplication
         }
 
         Console.WriteLine();
-        Console.WriteLine($"compression_status: {response.CompressionStatus}");
+        Console.WriteLine($"압축_상태: {response.CompressionStatus}");
 
         if (!string.IsNullOrWhiteSpace(response.CompressionError))
         {
-            Console.WriteLine($"compression_error: {response.CompressionError}");
+            Console.WriteLine($"압축_오류: {response.CompressionError}");
         }
     }
 
@@ -687,7 +688,7 @@ public sealed class CliApplication
 
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         bool removed = criteriaService.Remove(project.Path, args[3]);
-        Console.WriteLine(removed ? "removed" : "not found");
+        Console.WriteLine(removed ? "삭제됨" : "찾을 수 없음");
         return removed ? 0 : 1;
     }
 
@@ -706,7 +707,7 @@ public sealed class CliApplication
 
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         criteriaService.Activate(project.Path, args[3]);
-        Console.WriteLine($"activated: {args[3]}");
+        Console.WriteLine($"활성화됨: {args[3]}");
         return 0;
     }
 
@@ -725,7 +726,7 @@ public sealed class CliApplication
 
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         criteriaService.Deactivate(project.Path, args[3]);
-        Console.WriteLine($"deactivated: {args[3]}");
+        Console.WriteLine($"비활성화됨: {args[3]}");
         return 0;
     }
 
@@ -764,7 +765,7 @@ public sealed class CliApplication
                 continue;
             }
 
-            throw new InvalidOperationException($"Unknown criteria option: {option}");
+            throw new InvalidOperationException($"알 수 없는 기준 옵션입니다: {option}");
         }
 
         return options;
@@ -871,7 +872,7 @@ public sealed class CliApplication
 
         if (artifacts.Count == 0)
         {
-            Console.WriteLine("No artifacts.");
+            Console.WriteLine("산출물이 없습니다.");
             return 0;
         }
 
@@ -894,7 +895,7 @@ public sealed class CliApplication
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         Artifact artifact = artifactService.Get(project.Path, args[3]);
         Console.WriteLine(JsonSerializer.Serialize(artifact, JsonOptions.Default));
-        Console.WriteLine("content:");
+        Console.WriteLine("내용:");
         Console.WriteLine(artifactService.ReadContent(project.Path, artifact));
         return 0;
     }
@@ -910,7 +911,7 @@ public sealed class CliApplication
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         ArtifactOptions options = ParseArtifactOptions(args.Skip(3).ToArray(), requireContent: true);
         Artifact artifact = artifactService.Save(project.Path, CreateArtifactCandidate(options), options.SourceRequestId ?? string.Empty);
-        Console.WriteLine($"artifact: {artifact.ArtifactId}");
+        Console.WriteLine($"산출물: {artifact.ArtifactId}");
         return 0;
     }
 
@@ -927,7 +928,7 @@ public sealed class CliApplication
         ArtifactOptions options = ParseArtifactOptions(args.Skip(4).ToArray(), requireContent: false);
         ArtifactCandidate candidate = CreateArtifactCandidate(options, existing, artifactService.ReadContent(project.Path, existing));
         Artifact artifact = artifactService.Update(project.Path, args[3], candidate);
-        Console.WriteLine($"artifact: {artifact.ArtifactId}");
+        Console.WriteLine($"산출물: {artifact.ArtifactId}");
         return 0;
     }
 
@@ -941,7 +942,7 @@ public sealed class CliApplication
 
         ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
         artifactService.Remove(project.Path, args[3]);
-        Console.WriteLine($"removed: {args[3]}");
+        Console.WriteLine($"삭제됨: {args[3]}");
         return 0;
     }
 
@@ -1020,7 +1021,7 @@ public sealed class CliApplication
         string listName = args[3].Trim().ToLowerInvariant();
         string item = string.Join(' ', args.Skip(4));
         projectStateService.AddItem(project.Path, listName, item);
-        Console.WriteLine($"added: {listName}");
+        Console.WriteLine($"추가됨: {listName}");
         return 0;
     }
 
@@ -1041,7 +1042,7 @@ public sealed class CliApplication
         string listName = args[3].Trim().ToLowerInvariant();
         string item = string.Join(' ', args.Skip(4));
         bool removed = projectStateService.RemoveItem(project.Path, listName, item);
-        Console.WriteLine(removed ? $"removed: {listName}" : "not found");
+        Console.WriteLine(removed ? $"삭제됨: {listName}" : "찾을 수 없음");
         return removed ? 0 : 1;
     }
 
@@ -1080,12 +1081,12 @@ public sealed class CliApplication
                 continue;
             }
 
-            throw new InvalidOperationException($"Unknown state option: {option}");
+            throw new InvalidOperationException($"알 수 없는 상태 옵션입니다: {option}");
         }
 
         if (!options.HasAnyValue)
         {
-            throw new InvalidOperationException("At least one state option is required.");
+            throw new InvalidOperationException("상태 옵션을 하나 이상 지정해야 합니다.");
         }
 
         return options;
@@ -1152,12 +1153,12 @@ public sealed class CliApplication
                 continue;
             }
 
-            throw new InvalidOperationException($"Unknown artifact option: {option}");
+            throw new InvalidOperationException($"알 수 없는 산출물 옵션입니다: {option}");
         }
 
         if (requireContent && string.IsNullOrWhiteSpace(options.Content))
         {
-            throw new InvalidOperationException("Artifact content is required. Use --content or --file.");
+            throw new InvalidOperationException("산출물 내용이 필요합니다. --content 또는 --file을 사용하세요.");
         }
 
         return options;
@@ -1241,7 +1242,7 @@ public sealed class CliApplication
 
         if (projects.Count == 0)
         {
-            Console.WriteLine("No projects.");
+            Console.WriteLine("프로젝트가 없습니다.");
             return 0;
         }
 
@@ -1282,12 +1283,12 @@ public sealed class CliApplication
 
         if (!projectStore.IsInitialized(normalizedPath))
         {
-            Console.Error.WriteLine($"error: not an initialized LLM IDE project: {normalizedPath}");
+            Console.Error.WriteLine($"오류: 초기화된 LLM IDE 프로젝트가 아닙니다: {normalizedPath}");
             return 1;
         }
 
         projectStore.ReadProjectInfo(normalizedPath);
-        Console.WriteLine($"opened: {normalizedPath}");
+        Console.WriteLine($"열림: {normalizedPath}");
         return 0;
     }
 
@@ -1305,7 +1306,7 @@ public sealed class CliApplication
         }
 
         bool removed = projectRegistryService.Remove(args[2]);
-        Console.WriteLine(removed ? "removed" : "not found");
+        Console.WriteLine(removed ? "삭제됨" : "찾을 수 없음");
         return removed ? 0 : 1;
     }
 
@@ -1344,7 +1345,7 @@ public sealed class CliApplication
     {
         if (args[3] != "--confirm")
         {
-            throw new InvalidOperationException("Delete requires: --confirm <project-name>");
+            throw new InvalidOperationException("삭제하려면 --confirm <project-name> 확인 인자가 필요합니다.");
         }
 
         if (!string.Equals(args[4], project.Name, StringComparison.Ordinal))
@@ -1383,7 +1384,7 @@ public sealed class CliApplication
         }
 
         projectRegistryService.Rename(args[2], args[3]);
-        Console.WriteLine($"renamed: {args[2]} -> {args[3]}");
+        Console.WriteLine($"이름 변경됨: {args[2]} -> {args[3]}");
         return 0;
     }
 
@@ -1401,7 +1402,7 @@ public sealed class CliApplication
         }
 
         projectRegistryService.Move(args[2], args[3]);
-        Console.WriteLine($"moved: {args[2]} -> {Path.GetFullPath(args[3])}");
+        Console.WriteLine($"이동됨: {args[2]} -> {Path.GetFullPath(args[3])}");
         return 0;
     }
 
@@ -1434,7 +1435,7 @@ public sealed class CliApplication
                 continue;
             }
 
-            throw new InvalidOperationException($"Unknown init option: {option}");
+            throw new InvalidOperationException($"알 수 없는 초기화 옵션입니다: {option}");
         }
 
         return request;
@@ -1464,7 +1465,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide init");
         Console.WriteLine("  llmide init --name <project-name>");
         Console.WriteLine("  llmide init --path <project-path>");
@@ -1526,7 +1527,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintProjectsUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide projects list");
         Console.WriteLine("  llmide projects open <project-name>");
         Console.WriteLine("  llmide projects remove <project-name>");
@@ -1541,7 +1542,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintModelsUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide models list <project-name>");
         Console.WriteLine("  llmide models set <project-name> <model>");
     }
@@ -1551,7 +1552,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintCriteriaUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide criteria list <project-name>");
         Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description>");
         Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
@@ -1568,7 +1569,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintStateUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide state show <project-name>");
         Console.WriteLine("  llmide state set <project-name> --stage <stage>");
         Console.WriteLine("  llmide state set <project-name> --current-task <task>");
@@ -1592,7 +1593,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintChatUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide chat <project-name> <message>");
         Console.WriteLine("  llmide chat <project-name> <message> --artifact <artifact-id>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
@@ -1605,7 +1606,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintArtifactsUsage()
     {
-        Console.WriteLine("Usage:");
+        Console.WriteLine("사용법:");
         Console.WriteLine("  llmide artifacts list <project-name>");
         Console.WriteLine("  llmide artifacts show <project-name> <artifact-id>");
         Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
