@@ -1106,19 +1106,50 @@ llmide criteria remove MyProject <criterion-id>
 목표:
 
 * 중요한 응답을 재사용 가능한 산출물로 저장한다.
+* AI 응답 중 보존 가치가 있는 내용을 명시 태그 기반 Artifact 후보로 분리한다.
+* C# 코드는 자연어 의미를 추측하지 않고, 명시 태그가 붙은 영역만 추출한다.
+
+설계 원칙:
+
+* chat 요청에는 "답변 중 중요한 산출물 후보에는 Artifact 태그를 붙이라"는 지시를 포함한다.
+* Artifact 태그 형식은 구현 시점에 결정하되, MVP에서는 사람이 읽을 수 있고 파싱이 단순한 형식을 우선한다.
+* 태그가 붙은 내용은 저장 후보일 뿐이며, 사용자 승인 없이 확정 저장하지 않는다.
+* 원본 chat 응답은 그대로 대화 로그에 남긴다.
+* Artifact 저장은 Agent Boundary Principle을 따른다.
 
 구현 항목:
 
-* Artifact 생성
-* Artifact 수정
-* Artifact 목록 조회
-* Artifact 첨부
-* CLI 관리 명령 구현
+* Artifact 태그 지시를 Context Builder 또는 System Rule 계층에 포함 - 구현 완료
+* Artifact 태그 파서 구현 - 구현 완료
+* Artifact 후보 추출 - 구현 완료
+* Artifact 생성 - 구현 완료
+* Artifact 수정 - 구현 완료
+* Artifact 목록 조회 - 구현 완료
+* Artifact 첨부 - 구현 완료
+* CLI 관리 명령 구현 - 구현 완료
+
+CLI 명령:
+
+```bash
+llmide artifacts list <project-name>
+llmide artifacts show <project-name> <artifact-id>
+llmide artifacts add <project-name> --title <title> --type <type> --content <content>
+llmide artifacts add <project-name> --title <title> --type <type> --file <file-path>
+llmide artifacts update <project-name> <artifact-id> --title <title>
+llmide artifacts update <project-name> <artifact-id> --content <content>
+llmide artifacts remove <project-name> <artifact-id>
+llmide artifacts extract <project-name> --content <response-text>
+llmide chat <project-name> <message> --artifact <artifact-id>
+```
 
 완료 기준:
 
+* AI가 중요한 응답 영역에 Artifact 태그를 붙일 수 있다.
+* CLI가 태그가 붙은 Artifact 후보를 추출할 수 있다.
 * 응답을 Artifact로 저장할 수 있다.
 * Artifact를 이후 요청에 첨부할 수 있다.
+* 태그가 없는 일반 응답은 Artifact로 자동 분류하지 않는다.
+* 사용자 승인 없이 Artifact를 확정 저장하지 않는다.
 
 ---
 
@@ -1335,7 +1366,8 @@ MVP는 다음 조건을 만족해야 한다.
 * Phase 5 완료: Project State 관리
 * Phase 6 완료: Rolling Context Compression
 * Phase 7 완료: Context Builder v1
-* 다음 작업: Phase 8 Artifact 저장
+* Phase 8 완료: Artifact 저장
+* 다음 작업: Phase 9 Context Notes
 
 ---
 

@@ -1,3 +1,5 @@
+using LlmIde.Core.Artifacts;
+
 namespace LlmIde.Core.Providers;
 
 /// <summary>
@@ -54,4 +56,9 @@ public sealed class ChatProviderResponse
     /// Gets or sets the compression error.
     /// </summary>
     public string CompressionError { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets artifact candidates extracted from the response.
+    /// </summary>
+    public List<ArtifactCandidate> ArtifactCandidates { get; set; } = [];
 }

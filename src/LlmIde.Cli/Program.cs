@@ -1,6 +1,8 @@
+using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
@@ -27,11 +29,13 @@ public static class Program
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore());
+            new FileSystemRuleStore(),
+            artifactService);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
@@ -47,7 +51,8 @@ public static class Program
                 new SqliteConversationLogStore()
             ]),
             contextBuilder,
-            rollingContextStore);
+            rollingContextStore,
+            artifactService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -62,7 +67,8 @@ public static class Program
             providerSettingsStore,
             providerSettingsService,
             criteriaService,
-            projectStateService);
+            projectStateService,
+            artifactService);
 
         return application.Run(args);
     }
@@ -114,6 +120,11 @@ public sealed class CliApplication
     private readonly ProjectStateService projectStateService;
 
     /// <summary>
+    /// The artifact service.
+    /// </summary>
+    private readonly ArtifactService artifactService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -124,6 +135,7 @@ public sealed class CliApplication
     /// <param name="providerSettingsService">The provider settings service.</param>
     /// <param name="criteriaService">The criteria service.</param>
     /// <param name="projectStateService">The project state service.</param>
+    /// <param name="artifactService">The artifact service.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
@@ -132,7 +144,8 @@ public sealed class CliApplication
         IProviderSettingsStore providerSettingsStore,
         ProviderSettingsService providerSettingsService,
         CriteriaService criteriaService,
-        ProjectStateService projectStateService)
+        ProjectStateService projectStateService,
+        ArtifactService artifactService)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
@@ -142,6 +155,7 @@ public sealed class CliApplication
         this.providerSettingsService = providerSettingsService;
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
+        this.artifactService = artifactService;
     }
 
     /// <summary>
@@ -207,6 +221,11 @@ public sealed class CliApplication
             return RunState(args);
         }
 
+        if (command == "artifacts")
+        {
+            return RunArtifacts(args);
+        }
+
         PrintUsage();
         return 1;
     }
@@ -243,7 +262,8 @@ public sealed class CliApplication
         string projectName = args[1];
         bool debug = args.Contains("--debug", StringComparer.Ordinal);
         bool noStream = args.Contains("--no-stream", StringComparer.Ordinal);
-        string message = string.Join(' ', args.Skip(2).Where(IsChatMessagePart));
+        ParsedChatArguments chatArguments = ParseChatArguments(args);
+        string message = chatArguments.Message;
 
         if (string.IsNullOrWhiteSpace(message))
         {
@@ -259,6 +279,7 @@ public sealed class CliApplication
                 project.Path,
                 message,
                 CancellationToken.None,
+                chatArguments.ArtifactIds,
                 debug ? PrintChatDebugWithResponse : null,
                 debug ? PrintCompressionDebugStart : null,
                 debug ? Console.Write : null)
@@ -268,6 +289,7 @@ public sealed class CliApplication
             if (debug)
             {
                 PrintCompressionDebugEnd(response);
+                PrintArtifactCandidates(response);
             }
             else
             {
@@ -283,12 +305,14 @@ public sealed class CliApplication
             debug ? PrintChatDebug : null,
             Console.Write,
             CancellationToken.None,
+            chatArguments.ArtifactIds,
             debug ? PrintCompressionDebugStart : null,
             debug ? Console.Write : null).GetAwaiter().GetResult();
 
         if (debug)
         {
             PrintCompressionDebugEnd(streamedResponse);
+            PrintArtifactCandidates(streamedResponse);
         }
         else
         {
@@ -303,10 +327,36 @@ public sealed class CliApplication
     /// </summary>
     /// <param name="arg">The argument.</param>
     /// <returns>True when the argument is part of the user message.</returns>
-    private static bool IsChatMessagePart(string arg)
+    private static ParsedChatArguments ParseChatArguments(string[] args)
     {
-        return !string.Equals(arg, "--debug", StringComparison.Ordinal)
-            && !string.Equals(arg, "--no-stream", StringComparison.Ordinal);
+        List<string> messageParts = [];
+        List<string> artifactIds = [];
+
+        for (int index = 2; index < args.Length; index++)
+        {
+            string arg = args[index];
+
+            if (string.Equals(arg, "--debug", StringComparison.Ordinal)
+                || string.Equals(arg, "--no-stream", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            if (string.Equals(arg, "--artifact", StringComparison.Ordinal))
+            {
+                if (index + 1 >= args.Length)
+                {
+                    throw new InvalidOperationException("--artifact requires an artifact id.");
+                }
+
+                artifactIds.Add(args[++index]);
+                continue;
+            }
+
+            messageParts.Add(arg);
+        }
+
+        return new ParsedChatArguments(string.Join(' ', messageParts), artifactIds);
     }
 
     /// <summary>
@@ -408,6 +458,21 @@ public sealed class CliApplication
         {
             Console.WriteLine($"compression_error: {response.CompressionError}");
         }
+    }
+
+    /// <summary>
+    /// Prints artifact candidates found in the chat response.
+    /// </summary>
+    /// <param name="response">The completed chat response.</param>
+    private static void PrintArtifactCandidates(ChatProviderResponse response)
+    {
+        if (response.ArtifactCandidates.Count == 0)
+        {
+            return;
+        }
+
+        Console.WriteLine("artifact_candidates:");
+        Console.WriteLine(JsonSerializer.Serialize(response.ArtifactCandidates, JsonOptions.Default));
     }
 
     /// <summary>
@@ -745,6 +810,157 @@ public sealed class CliApplication
     }
 
     /// <summary>
+    /// Runs the artifacts command group.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunArtifacts(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        string subCommand = args[1].Trim().ToLowerInvariant();
+
+        if (subCommand == "list")
+        {
+            return RunArtifactsList(args);
+        }
+
+        if (subCommand == "show")
+        {
+            return RunArtifactsShow(args);
+        }
+
+        if (subCommand == "add")
+        {
+            return RunArtifactsAdd(args);
+        }
+
+        if (subCommand == "update")
+        {
+            return RunArtifactsUpdate(args);
+        }
+
+        if (subCommand == "remove")
+        {
+            return RunArtifactsRemove(args);
+        }
+
+        if (subCommand == "extract")
+        {
+            return RunArtifactsExtract(args);
+        }
+
+        PrintArtifactsUsage();
+        return 1;
+    }
+
+    private int RunArtifactsList(string[] args)
+    {
+        if (args.Length != 3)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        IReadOnlyList<Artifact> artifacts = artifactService.List(project.Path);
+
+        if (artifacts.Count == 0)
+        {
+            Console.WriteLine("No artifacts.");
+            return 0;
+        }
+
+        foreach (Artifact artifact in artifacts)
+        {
+            Console.WriteLine($"{artifact.ArtifactId}  {artifact.Type}  {artifact.Title}  {artifact.ContentPath}");
+        }
+
+        return 0;
+    }
+
+    private int RunArtifactsShow(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        Artifact artifact = artifactService.Get(project.Path, args[3]);
+        Console.WriteLine(JsonSerializer.Serialize(artifact, JsonOptions.Default));
+        Console.WriteLine("content:");
+        Console.WriteLine(artifactService.ReadContent(project.Path, artifact));
+        return 0;
+    }
+
+    private int RunArtifactsAdd(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        ArtifactOptions options = ParseArtifactOptions(args.Skip(3).ToArray(), requireContent: true);
+        Artifact artifact = artifactService.Save(project.Path, CreateArtifactCandidate(options), options.SourceRequestId ?? string.Empty);
+        Console.WriteLine($"artifact: {artifact.ArtifactId}");
+        return 0;
+    }
+
+    private int RunArtifactsUpdate(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        Artifact existing = artifactService.Get(project.Path, args[3]);
+        ArtifactOptions options = ParseArtifactOptions(args.Skip(4).ToArray(), requireContent: false);
+        ArtifactCandidate candidate = CreateArtifactCandidate(options, existing, artifactService.ReadContent(project.Path, existing));
+        Artifact artifact = artifactService.Update(project.Path, args[3], candidate);
+        Console.WriteLine($"artifact: {artifact.ArtifactId}");
+        return 0;
+    }
+
+    private int RunArtifactsRemove(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(args[2]);
+        artifactService.Remove(project.Path, args[3]);
+        Console.WriteLine($"removed: {args[3]}");
+        return 0;
+    }
+
+    private int RunArtifactsExtract(string[] args)
+    {
+        if (args.Length < 5)
+        {
+            PrintArtifactsUsage();
+            return 1;
+        }
+
+        projectRegistryService.GetRequired(args[2]);
+        ArtifactOptions options = ParseArtifactOptions(args.Skip(3).ToArray(), requireContent: true);
+        IReadOnlyList<ArtifactCandidate> candidates = artifactService.ExtractCandidates(options.Content ?? string.Empty);
+        Console.WriteLine(JsonSerializer.Serialize(candidates, JsonOptions.Default));
+        return 0;
+    }
+
+    /// <summary>
     /// Shows project state.
     /// </summary>
     /// <param name="args">The command-line arguments.</param>
@@ -882,6 +1098,88 @@ public sealed class CliApplication
     private static void PrintProjectState(ProjectState state)
     {
         Console.WriteLine(JsonSerializer.Serialize(state, JsonOptions.Default));
+    }
+
+    private static ArtifactOptions ParseArtifactOptions(string[] args, bool requireContent)
+    {
+        ArtifactOptions options = new ArtifactOptions();
+        int index = 0;
+
+        while (index < args.Length)
+        {
+            string option = args[index];
+
+            if (option == "--title")
+            {
+                options.Title = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--type")
+            {
+                options.Type = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--path")
+            {
+                options.TargetPath = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--content")
+            {
+                options.Content = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--file")
+            {
+                string filePath = ReadOptionValue(args, index, option);
+                options.Content = File.ReadAllText(filePath);
+                index += 2;
+                continue;
+            }
+
+            if (option == "--source-request")
+            {
+                options.SourceRequestId = ReadOptionValue(args, index, option);
+                index += 2;
+                continue;
+            }
+
+            throw new InvalidOperationException($"Unknown artifact option: {option}");
+        }
+
+        if (requireContent && string.IsNullOrWhiteSpace(options.Content))
+        {
+            throw new InvalidOperationException("Artifact content is required. Use --content or --file.");
+        }
+
+        return options;
+    }
+
+    private static ArtifactCandidate CreateArtifactCandidate(ArtifactOptions options)
+    {
+        return CreateArtifactCandidate(options, null, string.Empty);
+    }
+
+    private static ArtifactCandidate CreateArtifactCandidate(
+        ArtifactOptions options,
+        Artifact? existing,
+        string existingContent)
+    {
+        return new ArtifactCandidate
+        {
+            Title = options.Title ?? existing?.Title ?? string.Empty,
+            Type = options.Type ?? existing?.Type ?? string.Empty,
+            TargetPath = options.TargetPath ?? existing?.TargetPath ?? string.Empty,
+            Content = options.Content ?? existingContent
+        };
     }
 
     /// <summary>
@@ -1208,7 +1506,16 @@ public sealed class CliApplication
         Console.WriteLine("  llmide state remove <project-name> in-progress <item>");
         Console.WriteLine("  llmide state remove <project-name> next-action <item>");
         Console.WriteLine("  llmide state remove <project-name> blocker <item>");
+        Console.WriteLine("  llmide artifacts list <project-name>");
+        Console.WriteLine("  llmide artifacts show <project-name> <artifact-id>");
+        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
+        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --file <file-path>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --title <title>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --content <content>");
+        Console.WriteLine("  llmide artifacts remove <project-name> <artifact-id>");
+        Console.WriteLine("  llmide artifacts extract <project-name> --content <response-text>");
         Console.WriteLine("  llmide chat <project-name> <message>");
+        Console.WriteLine("  llmide chat <project-name> <message> --artifact <artifact-id>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
         Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
         Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
@@ -1287,9 +1594,30 @@ public sealed class CliApplication
     {
         Console.WriteLine("Usage:");
         Console.WriteLine("  llmide chat <project-name> <message>");
+        Console.WriteLine("  llmide chat <project-name> <message> --artifact <artifact-id>");
         Console.WriteLine("  llmide chat <project-name> <message> --debug");
         Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
         Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
+    }
+
+    /// <summary>
+    /// Prints artifacts command usage.
+    /// </summary>
+    private static void PrintArtifactsUsage()
+    {
+        Console.WriteLine("Usage:");
+        Console.WriteLine("  llmide artifacts list <project-name>");
+        Console.WriteLine("  llmide artifacts show <project-name> <artifact-id>");
+        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
+        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --file <file-path>");
+        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --path <target-path> --content <content>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --title <title>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --type <type>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --path <target-path>");
+        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --content <content>");
+        Console.WriteLine("  llmide artifacts remove <project-name> <artifact-id>");
+        Console.WriteLine("  llmide artifacts extract <project-name> --content <response-text>");
+        Console.WriteLine("  llmide artifacts extract <project-name> --file <response-file>");
     }
 }
 
@@ -1353,6 +1681,44 @@ public sealed class CompressionDebugView
     /// Gets or sets the compression response.
     /// </summary>
     public string Response { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Describes parsed chat command arguments.
+/// </summary>
+/// <param name="Message">The user message.</param>
+/// <param name="ArtifactIds">The artifact identifiers to attach.</param>
+public sealed record ParsedChatArguments(string Message, IReadOnlyList<string> ArtifactIds);
+
+/// <summary>
+/// Describes parsed artifact command options.
+/// </summary>
+public sealed class ArtifactOptions
+{
+    /// <summary>
+    /// Gets or sets the artifact title.
+    /// </summary>
+    public string? Title { get; set; }
+
+    /// <summary>
+    /// Gets or sets the artifact type.
+    /// </summary>
+    public string? Type { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional intended target path.
+    /// </summary>
+    public string? TargetPath { get; set; }
+
+    /// <summary>
+    /// Gets or sets the artifact content.
+    /// </summary>
+    public string? Content { get; set; }
+
+    /// <summary>
+    /// Gets or sets the optional source request identifier.
+    /// </summary>
+    public string? SourceRequestId { get; set; }
 }
 
 /// <summary>

@@ -1,3 +1,4 @@
+using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using System.Text;
 
@@ -34,6 +35,11 @@ public sealed class ChatService
     private readonly IRollingContextStore rollingContextStore;
 
     /// <summary>
+    /// The artifact service.
+    /// </summary>
+    private readonly ArtifactService artifactService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
@@ -41,18 +47,21 @@ public sealed class ChatService
     /// <param name="conversationLogStore">The conversation log store.</param>
     /// <param name="contextBuilder">The context builder.</param>
     /// <param name="rollingContextStore">The rolling context store.</param>
+    /// <param name="artifactService">The artifact service.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
         IConversationLogStore conversationLogStore,
         ContextBuilder contextBuilder,
-        IRollingContextStore rollingContextStore)
+        IRollingContextStore rollingContextStore,
+        ArtifactService artifactService)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
         this.contextBuilder = contextBuilder;
         this.rollingContextStore = rollingContextStore;
+        this.artifactService = artifactService;
     }
 
     /// <summary>
@@ -69,11 +78,12 @@ public sealed class ChatService
         string projectRoot,
         string message,
         CancellationToken cancellationToken,
+        IReadOnlyList<string>? artifactIds = null,
         Action<ChatProviderResponse>? onChatResponseReady = null,
         Action<ChatProviderResponse>? onCompressionRequestReady = null,
         Action<string>? onCompressionChunk = null)
     {
-        PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message);
+        PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         ChatProviderResponse response = await preparedRequest.Provider.SendAsync(
             preparedRequest.Request,
@@ -81,6 +91,7 @@ public sealed class ChatService
             cancellationToken);
         response.SentRequest = preparedRequest.Request;
         response.RequestId = preparedRequest.RequestId;
+        response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
         onChatResponseReady?.Invoke(response);
@@ -115,10 +126,11 @@ public sealed class ChatService
         Action<ChatProviderResponse>? onRequestReady,
         Action<string> onChunk,
         CancellationToken cancellationToken,
+        IReadOnlyList<string>? artifactIds = null,
         Action<ChatProviderResponse>? onCompressionRequestReady = null,
         Action<string>? onCompressionChunk = null)
     {
-        PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message);
+        PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         onRequestReady?.Invoke(CreatePreviewResponse(preparedRequest));
 
@@ -139,7 +151,8 @@ public sealed class ChatService
             Provider = preparedRequest.Settings.Name,
             Model = preparedRequest.Request.Model,
             SentRequest = preparedRequest.Request,
-            RequestId = preparedRequest.RequestId
+            RequestId = preparedRequest.RequestId,
+            ArtifactCandidates = artifactService.ExtractCandidates(content.ToString()).ToList()
         };
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
@@ -161,8 +174,12 @@ public sealed class ChatService
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="message">The user message.</param>
+    /// <param name="artifactIds">The artifact identifiers to attach.</param>
     /// <returns>The prepared request.</returns>
-    private PreparedChatRequest PrepareRequest(string projectRoot, string message)
+    private PreparedChatRequest PrepareRequest(
+        string projectRoot,
+        string message,
+        IReadOnlyList<string> artifactIds)
     {
         ProviderSettingsDocument settingsDocument = providerSettingsStore.Load(projectRoot);
         ProviderSettings settings = GetDefaultProviderSettings(settingsDocument);
@@ -173,7 +190,7 @@ public sealed class ChatService
         }
 
         string requestId = $"req_{Guid.NewGuid():N}";
-        ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message);
+        ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message, artifactIds);
 
         ChatProviderRequest request = new ChatProviderRequest
         {

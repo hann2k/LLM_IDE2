@@ -1,6 +1,11 @@
 기본 언어는 한국어다. 영어를 병행해도 되나, 영어 사용 전 한국어를 반드시 먼저 쓰고 영어를 사용한다.
 
 개발방향: `/Docs/Development_Roadmap.md` 의 내용에 맞춰 개발한다.
+현재는 다음 파일로 분리되었다. 아래 파일들의 내용에 맞춰 개발한다.
+1.Product_Principles.md
+2.Architecture_Baseline.md
+3.Development_Roadmap.md
+4.Change_Decision_Log.md
 코딩스타일: `/Docs/Code_Convention.md` 의 내용에 맞춰 작성한다.
 
 로드맵 작성: ChatGPT Web세션

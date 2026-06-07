@@ -233,6 +233,7 @@ Project State는 매 대화 요청마다 Provider 메시지에 포함된다.
 다음 요청에는 이전 대화 원문 전체가 아니라 압축된 `current.md`와 현재 발화가 포함된다.
 System Rule, 활성 Criteria, Project State, Rolling Context Summary는 Context Builder가 조립한다.
 Rolling Context Summary가 아직 없으면, 첫 compression은 누적 원본 대화 로그 전체를 압축 대상으로 사용한다.
+Context Builder는 재사용 가능한 중요 응답에는 artifact 태그를 붙이라는 지시도 함께 전달한다.
 
 ```bash
 ./llmide chat MyProject "세계에서 가장 높은 산은?"
@@ -244,6 +245,26 @@ Rolling Context Summary가 아직 없으면, 첫 compression은 누적 원본 �
 
 ```bash
 ./llmide chat MyProject "표와 코드 예제를 보여줘" --no-stream
+```
+
+저장된 Artifact를 요청 맥락에 첨부하려면 `--artifact`를 사용한다.
+
+```bash
+./llmide chat MyProject "이 산출물을 요약해줘" --artifact art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+### Artifact 관리
+
+AI 응답 안의 `<artifact>` 태그는 저장 후보일 뿐이며 자동 저장되지 않는다.
+사용자가 명령을 실행해야 `.llmide/artifacts/` 아래에 확정 저장된다.
+
+```bash
+./llmide artifacts extract MyProject --content "<artifact type=\"markdown\" title=\"README 초안\"># README</artifact>"
+./llmide artifacts add MyProject --title "README 초안" --type markdown --content "# README"
+./llmide artifacts list MyProject
+./llmide artifacts show MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+./llmide artifacts update MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx --content "# Updated"
+./llmide artifacts remove MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Debug 출력
@@ -258,6 +279,7 @@ Rolling Context Summary가 아직 없으면, 첫 compression은 누적 원본 �
 debug 출력에는 `request_id`, provider, model, messages가 표시된다.
 chat 응답 이후 실행되는 compression 요청은 `compression_debug`로 별도 출력된다.
 스트리밍 chat에서 `--debug`를 사용하면 compression 요청 본문을 먼저 출력하고, compression 응답은 `compression_response` 아래에 chunk 단위로 출력한다.
+응답에서 Artifact 태그 후보가 발견되면 debug 출력에 `artifact_candidates`로 표시된다.
 한국어는 사람이 읽을 수 있는 형태로 출력된다.
 
 ## 주의사항

@@ -1,3 +1,4 @@
+using LlmIde.Core.Artifacts;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using System.Text;
@@ -30,22 +31,30 @@ public sealed class ContextBuilder
     private readonly ISystemRuleStore systemRuleStore;
 
     /// <summary>
+    /// The artifact service.
+    /// </summary>
+    private readonly ArtifactService artifactService;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ContextBuilder"/> class.
     /// </summary>
     /// <param name="criteriaService">The criteria service.</param>
     /// <param name="projectStateService">The project state service.</param>
     /// <param name="rollingContextStore">The rolling context store.</param>
     /// <param name="systemRuleStore">The system rule store.</param>
+    /// <param name="artifactService">The artifact service.</param>
     public ContextBuilder(
         CriteriaService criteriaService,
         ProjectStateService projectStateService,
         IRollingContextStore rollingContextStore,
-        ISystemRuleStore systemRuleStore)
+        ISystemRuleStore systemRuleStore,
+        ArtifactService artifactService)
     {
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
         this.rollingContextStore = rollingContextStore;
         this.systemRuleStore = systemRuleStore;
+        this.artifactService = artifactService;
     }
 
     /// <summary>
@@ -54,8 +63,13 @@ public sealed class ContextBuilder
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="requestId">The request identifier.</param>
     /// <param name="message">The current user message.</param>
+    /// <param name="artifactIds">The artifact identifiers to attach.</param>
     /// <returns>The built context.</returns>
-    public ContextBuildResult Build(string projectRoot, string requestId, string message)
+    public ContextBuildResult Build(
+        string projectRoot,
+        string requestId,
+        string message,
+        IReadOnlyList<string>? artifactIds = null)
     {
         rollingContextStore.EnsureInitialized(projectRoot);
 
@@ -75,7 +89,8 @@ public sealed class ContextBuilder
             systemRule,
             activeCriteria,
             projectState,
-            rollingContext);
+            rollingContext,
+            LoadAttachedArtifacts(projectRoot, artifactIds ?? []));
 
         return new ContextBuildResult
         {
@@ -96,6 +111,8 @@ public sealed class ContextBuilder
         AppendSystemMessage(messages, BuildCriteriaMessage(contextPackage.ActiveCriteria));
         AppendSystemMessage(messages, BuildProjectStateMessage((ProjectState)contextPackage.ProjectState));
         AppendSystemMessage(messages, BuildRollingContextMessage(contextPackage.RollingContextSummary));
+        AppendSystemMessage(messages, BuildArtifactInstructionMessage());
+        AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts));
 
         messages.Add(new ChatMessage
         {
@@ -104,6 +121,46 @@ public sealed class ContextBuilder
         });
 
         return messages;
+    }
+
+    /// <summary>
+    /// Builds the artifact tagging instruction.
+    /// </summary>
+    /// <returns>The artifact tagging system message.</returns>
+    private static string BuildArtifactInstructionMessage()
+    {
+        return """
+            When your response contains reusable important content, wrap that content in explicit artifact tags.
+            Use this format:
+            <artifact type="markdown" title="Short title" path="optional/target/path">
+            artifact content
+            </artifact>
+            Only tag content that is useful as a reusable project artifact. Do not claim that tagged content was saved.
+            """;
+    }
+
+    /// <summary>
+    /// Builds the attached artifacts system message.
+    /// </summary>
+    /// <param name="attachedArtifacts">The attached artifacts.</param>
+    /// <returns>The attached artifacts system message.</returns>
+    private static string BuildAttachedArtifactsMessage(IReadOnlyList<string> attachedArtifacts)
+    {
+        if (attachedArtifacts.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("Use these user-attached artifacts as context:");
+
+        foreach (string artifact in attachedArtifacts)
+        {
+            builder.AppendLine(artifact);
+            builder.AppendLine();
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>
@@ -233,6 +290,7 @@ public sealed class ContextBuilder
     /// <param name="activeCriteria">The active criteria.</param>
     /// <param name="projectState">The project state.</param>
     /// <param name="rollingContext">The rolling context summary.</param>
+    /// <param name="attachedArtifacts">The attached artifacts.</param>
     /// <returns>The context package.</returns>
     private static ContextPackage CreateContextPackage(
         string requestId,
@@ -240,7 +298,8 @@ public sealed class ContextBuilder
         string systemRule,
         IReadOnlyList<Criterion> activeCriteria,
         ProjectState projectState,
-        RollingContextSummary? rollingContext)
+        RollingContextSummary? rollingContext,
+        IReadOnlyList<string> attachedArtifacts)
     {
         return new ContextPackage
         {
@@ -252,10 +311,42 @@ public sealed class ContextBuilder
             RollingContextPath = rollingContext?.ContentPath ?? string.Empty,
             RollingContextSummary = rollingContext?.Content ?? string.Empty,
             RecentTurnCount = 0,
+            AttachedArtifacts = attachedArtifacts.ToList(),
             ActiveCriteria = activeCriteria
                 .Select(FormatCriterion)
                 .ToList()
         };
+    }
+
+    private IReadOnlyList<string> LoadAttachedArtifacts(string projectRoot, IReadOnlyList<string> artifactIds)
+    {
+        if (artifactIds.Count == 0)
+        {
+            return [];
+        }
+
+        List<string> attachedArtifacts = [];
+
+        foreach (string artifactId in artifactIds)
+        {
+            Artifact artifact = artifactService.Get(projectRoot, artifactId);
+            string content = artifactService.ReadContent(projectRoot, artifact);
+            StringBuilder builder = new StringBuilder();
+            builder.AppendLine($"[Artifact: {artifact.ArtifactId}]");
+            builder.AppendLine($"Title: {artifact.Title}");
+            builder.AppendLine($"Type: {artifact.Type}");
+
+            if (!string.IsNullOrWhiteSpace(artifact.TargetPath))
+            {
+                builder.AppendLine($"Path: {artifact.TargetPath}");
+            }
+
+            builder.AppendLine("Content:");
+            builder.AppendLine(content);
+            attachedArtifacts.Add(builder.ToString());
+        }
+
+        return attachedArtifacts;
     }
 
     /// <summary>

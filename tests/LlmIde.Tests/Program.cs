@@ -1,7 +1,9 @@
 using LlmIde.Cli;
+using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
@@ -45,6 +47,10 @@ public static class Program
             CliChatInjectsActiveCriteria,
             CliStateShowSetAddRemove,
             CliChatInjectsProjectState,
+            ArtifactTagParserExtractsCandidates,
+            CliArtifactsAddListShowUpdateRemove,
+            CliArtifactsExtractPrintsCandidates,
+            CliChatAttachesArtifact,
             JsonOptionsPreserveKoreanText,
             CliWithoutOptionsPrintsFullUsage
         ];
@@ -203,7 +209,14 @@ public static class Program
             AssertContains(usage, "llmide state remove <project-name> in-progress <item>");
             AssertContains(usage, "llmide state remove <project-name> next-action <item>");
             AssertContains(usage, "llmide state remove <project-name> blocker <item>");
+            AssertContains(usage, "llmide artifacts list <project-name>");
+            AssertContains(usage, "llmide artifacts show <project-name> <artifact-id>");
+            AssertContains(usage, "llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
+            AssertContains(usage, "llmide artifacts update <project-name> <artifact-id> --content <content>");
+            AssertContains(usage, "llmide artifacts remove <project-name> <artifact-id>");
+            AssertContains(usage, "llmide artifacts extract <project-name> --content <response-text>");
             AssertContains(usage, "llmide chat <project-name> <message>");
+            AssertContains(usage, "llmide chat <project-name> <message> --artifact <artifact-id>");
             AssertContains(usage, "llmide chat <project-name> <message> --debug");
             AssertContains(usage, "llmide chat <project-name> <message> --no-stream");
             AssertContains(usage, "llmide chat <project-name> <message> --debug --no-stream");
@@ -365,7 +378,7 @@ public static class Program
             AssertEqual(0, exitCode, "Second chat should succeed.");
             AssertContains(chatOutput, "Use this compressed prior conversation context");
             AssertContains(chatOutput, "ok:2");
-            AssertContains(chatOutput, "ok:4");
+            AssertContains(chatOutput, "ok:5");
             AssertFalse(chatOutput.Contains("\"content\": \"first\"", StringComparison.Ordinal), "Previous raw user message should not be sent.");
         }
         finally
@@ -402,7 +415,7 @@ public static class Program
             AssertContains(chatOutput, "compression_response:");
             AssertContains(chatOutput, "compression_status: completed");
             AssertContains(chatOutput, "[Raw Conversation Log]");
-            AssertContains(chatOutput, "ok:3");
+            AssertContains(chatOutput, "ok:4");
         }
         finally
         {
@@ -685,6 +698,173 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies that explicit artifact tags are extracted.
+    /// </summary>
+    private static void ArtifactTagParserExtractsCandidates()
+    {
+        string response = """
+            일반 답변입니다.
+            <artifact type="markdown" title="README 초안" path="README.md">
+            # README 초안
+
+            프로젝트 설명입니다.
+            </artifact>
+            """;
+
+        IReadOnlyList<ArtifactCandidate> candidates = ArtifactTagParser.Extract(response);
+
+        AssertEqual(1, candidates.Count, "One artifact candidate should be extracted.");
+        AssertEqual("README 초안", candidates[0].Title, "Artifact title should be parsed.");
+        AssertEqual("markdown", candidates[0].Type, "Artifact type should be parsed.");
+        AssertEqual("README.md", candidates[0].TargetPath, "Artifact target path should be parsed.");
+        AssertContains(candidates[0].Content, "프로젝트 설명입니다.");
+    }
+
+    /// <summary>
+    /// Verifies artifact CLI storage commands.
+    /// </summary>
+    private static void CliArtifactsAddListShowUpdateRemove()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "ArtifactProject"]);
+            Console.SetOut(output);
+            int addExitCode = application.Run([
+                "artifacts",
+                "add",
+                "ArtifactProject",
+                "--title",
+                "README 초안",
+                "--type",
+                "markdown",
+                "--path",
+                "README.md",
+                "--content",
+                "# README"]);
+            string artifactId = ExtractArtifactId(output.ToString());
+
+            output.GetStringBuilder().Clear();
+            int listExitCode = application.Run(["artifacts", "list", "ArtifactProject"]);
+            string listOutput = output.ToString();
+
+            output.GetStringBuilder().Clear();
+            int showExitCode = application.Run(["artifacts", "show", "ArtifactProject", artifactId]);
+            string showOutput = output.ToString();
+
+            output.GetStringBuilder().Clear();
+            int updateExitCode = application.Run([
+                "artifacts",
+                "update",
+                "ArtifactProject",
+                artifactId,
+                "--title",
+                "수정된 README",
+                "--content",
+                "# Updated"]);
+
+            output.GetStringBuilder().Clear();
+            int removeExitCode = application.Run(["artifacts", "remove", "ArtifactProject", artifactId]);
+
+            AssertEqual(0, addExitCode, "Artifact add should succeed.");
+            AssertEqual(0, listExitCode, "Artifact list should succeed.");
+            AssertEqual(0, showExitCode, "Artifact show should succeed.");
+            AssertEqual(0, updateExitCode, "Artifact update should succeed.");
+            AssertEqual(0, removeExitCode, "Artifact remove should succeed.");
+            AssertContains(listOutput, artifactId);
+            AssertContains(showOutput, "# README");
+
+            string projectRoot = Path.Combine(workspace.Root, "ArtifactProject");
+            string indexPath = Path.Combine(projectRoot, ".llmide", "artifacts", "artifacts.index.json");
+            string indexJson = File.ReadAllText(indexPath);
+            AssertFalse(indexJson.Contains(artifactId, StringComparison.Ordinal), "Removed artifact should be removed from index.");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies artifact candidate extraction through CLI.
+    /// </summary>
+    private static void CliArtifactsExtractPrintsCandidates()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "ExtractProject"]);
+            Console.SetOut(output);
+            int exitCode = application.Run([
+                "artifacts",
+                "extract",
+                "ExtractProject",
+                "--content",
+                "<artifact type=\"note\" title=\"메모\">중요 내용</artifact>"]);
+            string extractOutput = output.ToString();
+
+            AssertEqual(0, exitCode, "Artifact extract should succeed.");
+            AssertContains(extractOutput, "메모");
+            AssertContains(extractOutput, "중요 내용");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
+    /// Verifies stored artifacts can be attached to chat context.
+    /// </summary>
+    private static void CliChatAttachesArtifact()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        CliApplication application = CreateCliApplication(workspace.Root);
+        StringWriter output = new StringWriter();
+        TextWriter originalOutput = Console.Out;
+
+        try
+        {
+            application.Run(["init", "--name", "AttachProject"]);
+            AddDefaultCriterion(application, "AttachProject");
+            Console.SetOut(output);
+            application.Run([
+                "artifacts",
+                "add",
+                "AttachProject",
+                "--title",
+                "설계 메모",
+                "--type",
+                "markdown",
+                "--content",
+                "아티팩트 본문"]);
+            string artifactId = ExtractArtifactId(output.ToString());
+
+            output.GetStringBuilder().Clear();
+            int chatExitCode = application.Run(["chat", "AttachProject", "요약해줘", "--artifact", artifactId, "--debug"]);
+            string chatOutput = output.ToString();
+
+            AssertEqual(0, chatExitCode, "Chat with artifact should succeed.");
+            AssertContains(chatOutput, "Use these user-attached artifacts as context");
+            AssertContains(chatOutput, "설계 메모");
+            AssertContains(chatOutput, "아티팩트 본문");
+            AssertContains(chatOutput, "When your response contains reusable important content");
+        }
+        finally
+        {
+            Console.SetOut(originalOutput);
+        }
+    }
+
+    /// <summary>
     /// Verifies that JSON serialization keeps Korean text readable.
     /// </summary>
     private static void JsonOptionsPreserveKoreanText()
@@ -721,11 +901,13 @@ public static class Program
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore();
+        ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore());
+            new FileSystemRuleStore(),
+            artifactService);
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
         ChatService chatService = new ChatService(
@@ -740,7 +922,8 @@ public static class Program
                 new SqliteConversationLogStore()
             ]),
             contextBuilder,
-            rollingContextStore);
+            rollingContextStore,
+            artifactService);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -756,7 +939,8 @@ public static class Program
             providerSettingsStore,
             providerSettingsService,
             criteriaService,
-            projectStateService);
+            projectStateService,
+            artifactService);
     }
 
     /// <summary>
@@ -774,6 +958,21 @@ public static class Program
             "Default",
             "--description",
             "Use project criteria"]);
+    }
+
+    /// <summary>
+    /// Extracts an artifact id from CLI output.
+    /// </summary>
+    /// <param name="output">The CLI output.</param>
+    /// <returns>The artifact id.</returns>
+    private static string ExtractArtifactId(string output)
+    {
+        string prefix = "artifact: ";
+        string line = output
+            .Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries)
+            .FirstOrDefault(item => item.StartsWith(prefix, StringComparison.Ordinal))
+            ?? throw new InvalidOperationException("Artifact id was not printed.");
+        return line[prefix.Length..].Trim();
     }
 
     /// <summary>
