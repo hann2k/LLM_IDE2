@@ -7,6 +7,7 @@ using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
+using Microsoft.Data.Sqlite;
 using System.Text.Json;
 
 namespace LlmIde.Cli;
@@ -1334,6 +1335,7 @@ public sealed class CliApplication
 
         if (Directory.Exists(project.Path))
         {
+            SqliteConnection.ClearAllPools();
             Directory.Delete(project.Path, true);
         }
 

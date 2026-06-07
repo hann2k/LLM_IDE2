@@ -3,6 +3,7 @@
     <Project Path="src/LlmIde.Cli/LlmIde.Cli.csproj" />
     <Project Path="src/LlmIde.Core/LlmIde.Core.csproj" />
     <Project Path="src/LlmIde.Infrastructure/LlmIde.Infrastructure.csproj" />
+    <Project Path="src/LlmIde.Wpf/LlmIde.Wpf.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LlmIde.Tests/LlmIde.Tests.csproj" />

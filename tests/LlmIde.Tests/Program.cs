@@ -1362,6 +1362,8 @@ public sealed class TestWorkspace : IDisposable
     /// </summary>
     public void Dispose()
     {
+        SqliteConnection.ClearAllPools();
+
         if (Directory.Exists(Root))
         {
             Directory.Delete(Root, true);
