@@ -110,7 +110,9 @@ public static class Program
 
         ProjectInitializationResult result = initializer.Initialize(new ProjectInitializationRequest
         {
-            Name = "Alpha",
+            PId = "Alpha",
+            Name = "알파 프로젝트",
+            HasExplicitPId = true,
             Path = projectRoot,
             HasExplicitName = true
         });
@@ -119,11 +121,16 @@ public static class Program
         IReadOnlyList<ProjectRegistryEntry> projects = registry.List();
 
         AssertEqual(Path.GetFullPath(projectRoot), result.ProjectRoot, "Project data should be stored at the requested path.");
+        AssertEqual("알파 프로젝트", result.ProjectInfo.Title, "Project metadata should store the display name.");
         AssertEqual(1, projects.Count, "Registry should contain one project.");
-        AssertEqual("Alpha", projects[0].Name, "Registry should store the project name.");
+        AssertEqual("Alpha", projects[0].PId, "Registry should store the project identifier.");
+        AssertEqual("알파 프로젝트", projects[0].Name, "Registry should store the display name.");
         AssertEqual(Path.GetFullPath(projectRoot), projects[0].Path, "Registry should store the project path.");
         AssertTrue(projects[0].CreatedAt != default, "Registry should store the creation date.");
         AssertFileExists(workspace.Root, "project/projects.json");
+        string registryJson = File.ReadAllText(Path.Combine(workspace.Root, "project", "projects.json"));
+        AssertContains(registryJson, "\"pID\": \"Alpha\"");
+        AssertContains(registryJson, "\"name\": \"알파 프로젝트\"");
         AssertDirectoryNotExists(workspace.Root, "project/Alpha");
     }
 
@@ -144,7 +151,7 @@ public static class Program
     }
 
     /// <summary>
-    /// Verifies that registry rename and move update stored project information.
+    /// Verifies that registry display name, project identifier, and path updates work.
     /// </summary>
     private static void RegistryRenameAndMoveUpdateProjectInfo()
     {
@@ -154,16 +161,18 @@ public static class Program
 
         initializer.Initialize(new ProjectInitializationRequest
         {
-            Name = "Alpha",
-            HasExplicitName = true
+            PId = "Alpha",
+            HasExplicitPId = true
         });
 
         string movedPath = Path.Combine(workspace.Root, "MovedAlpha");
-        registry.Rename("Alpha", "Beta");
+        registry.Rename("Alpha", "베타 프로젝트");
+        registry.ChangePId("Alpha", "Beta");
         registry.Move("Beta", movedPath);
 
         ProjectRegistryEntry project = registry.GetRequired("Beta");
-        AssertEqual("Beta", project.Name, "Project name should be updated.");
+        AssertEqual("Beta", project.PId, "Project identifier should be updated.");
+        AssertEqual("베타 프로젝트", project.Name, "Display name should be updated.");
         AssertEqual(Path.GetFullPath(movedPath), project.Path, "Project path should be updated.");
     }
 
@@ -185,54 +194,25 @@ public static class Program
 
             AssertEqual(0, exitCode, "Usage output should exit successfully.");
             AssertContains(usage, "llmide init");
-            AssertContains(usage, "llmide init --name <project-name>");
+            AssertContains(usage, "llmide init --pid <project-id>");
+            AssertContains(usage, "llmide init --pid <project-id> --name <project-name>");
             AssertContains(usage, "llmide init --path <project-path>");
-            AssertContains(usage, "llmide init --name <project-name> --path <project-path>");
+            AssertContains(usage, "llmide init --pid <project-id> --name <project-name> --path <project-path>");
             AssertContains(usage, "llmide projects list");
-            AssertContains(usage, "llmide projects open <project-name>");
-            AssertContains(usage, "llmide projects remove <project-name>");
-            AssertContains(usage, "llmide projects delete <project-name> --confirm <project-name>");
-            AssertContains(usage, "llmide projects delete <project-name> --confirm <project-name> --confirm-api-key-delete");
-            AssertContains(usage, "llmide projects rename <project-name> <new-project-name>");
-            AssertContains(usage, "llmide projects move <project-name> <new-project-path>");
-            AssertContains(usage, "llmide models list <project-name>");
-            AssertContains(usage, "llmide models set <project-name> <model>");
-            AssertContains(usage, "llmide criteria list <project-name>");
-            AssertContains(usage, "llmide criteria add <project-name> --title <title> --description <description>");
-            AssertContains(usage, "llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
-            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --title <title>");
-            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --description <description>");
-            AssertContains(usage, "llmide criteria update <project-name> <criterion-id> --priority <priority>");
-            AssertContains(usage, "llmide criteria remove <project-name> <criterion-id>");
-            AssertContains(usage, "llmide criteria activate <project-name> <criterion-id>");
-            AssertContains(usage, "llmide criteria deactivate <project-name> <criterion-id>");
-            AssertContains(usage, "llmide state show <project-name>");
-            AssertContains(usage, "llmide state set <project-name> --stage <stage>");
-            AssertContains(usage, "llmide state set <project-name> --current-task <task>");
-            AssertContains(usage, "llmide state set <project-name> --last-decision <decision>");
-            AssertContains(usage, "llmide state set <project-name> --stage <stage> --current-task <task>");
-            AssertContains(usage, "llmide state set <project-name> --stage <stage> --last-decision <decision>");
-            AssertContains(usage, "llmide state set <project-name> --current-task <task> --last-decision <decision>");
-            AssertContains(usage, "llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
-            AssertContains(usage, "llmide state add <project-name> completed <item>");
-            AssertContains(usage, "llmide state add <project-name> in-progress <item>");
-            AssertContains(usage, "llmide state add <project-name> next-action <item>");
-            AssertContains(usage, "llmide state add <project-name> blocker <item>");
-            AssertContains(usage, "llmide state remove <project-name> completed <item>");
-            AssertContains(usage, "llmide state remove <project-name> in-progress <item>");
-            AssertContains(usage, "llmide state remove <project-name> next-action <item>");
-            AssertContains(usage, "llmide state remove <project-name> blocker <item>");
-            AssertContains(usage, "llmide artifacts list <project-name>");
-            AssertContains(usage, "llmide artifacts show <project-name> <artifact-id>");
-            AssertContains(usage, "llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
-            AssertContains(usage, "llmide artifacts update <project-name> <artifact-id> --content <content>");
-            AssertContains(usage, "llmide artifacts remove <project-name> <artifact-id>");
-            AssertContains(usage, "llmide artifacts extract <project-name> --content <response-text>");
-            AssertContains(usage, "llmide chat <project-name> <message>");
-            AssertContains(usage, "llmide chat <project-name> <message> --artifact <artifact-id>");
-            AssertContains(usage, "llmide chat <project-name> <message> --debug");
-            AssertContains(usage, "llmide chat <project-name> <message> --no-stream");
-            AssertContains(usage, "llmide chat <project-name> <message> --debug --no-stream");
+            AssertContains(usage, "llmide projects open <project-id>");
+            AssertContains(usage, "llmide projects remove <project-id>");
+            AssertContains(usage, "llmide projects delete <project-id> --confirm <project-id>");
+            AssertContains(usage, "llmide projects delete <project-id> --confirm <project-id> --confirm-api-key-delete");
+            AssertContains(usage, "llmide projects rename <project-id> <new-project-name>");
+            AssertContains(usage, "llmide projects repid <project-id> <new-project-id>");
+            AssertContains(usage, "llmide projects move <project-id> <new-project-path>");
+            AssertContains(usage, "llmide models list <project-id>");
+            AssertContains(usage, "llmide models set <project-id> <model>");
+            AssertContains(usage, "llmide criteria list <project-id>");
+            AssertContains(usage, "llmide criteria add <project-id> --title <title> --description <description>");
+            AssertContains(usage, "llmide state show <project-id>");
+            AssertContains(usage, "llmide artifacts list <project-id>");
+            AssertContains(usage, "llmide chat <project-id> <message>");
         }
         finally
         {
@@ -248,7 +228,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        int initExitCode = application.Run(["init", "--name", "DeleteMe"]);
+        int initExitCode = application.Run(["init", "--pid", "DeleteMe"]);
         int deleteExitCode = application.Run(["projects", "delete", "DeleteMe", "--confirm", "DeleteMe"]);
         ProjectRegistryService registry = CreateProjectRegistryService(workspace.Root);
 
@@ -266,7 +246,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        int initExitCode = application.Run(["init", "--name", "KeepMe"]);
+        int initExitCode = application.Run(["init", "--pid", "KeepMe"]);
         int deleteExitCode = application.Run(["projects", "delete", "KeepMe"]);
         ProjectRegistryService registry = CreateProjectRegistryService(workspace.Root);
 
@@ -284,7 +264,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        application.Run(["init", "--name", "KeyProject"]);
+        application.Run(["init", "--pid", "KeyProject"]);
         WriteApiKey(Path.Combine(workspace.Root, "KeyProject"), "secret");
         int firstDeleteExitCode = application.Run(["projects", "delete", "KeyProject", "--confirm", "KeyProject"]);
         int secondDeleteExitCode = application.Run(["projects", "delete", "KeyProject", "--confirm", "KeyProject", "--confirm-api-key-delete"]);
@@ -324,7 +304,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "ChatProject"]);
+            application.Run(["init", "--pid", "ChatProject"]);
             AddDefaultCriterion(application, "ChatProject");
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "ChatProject", "hello"]);
@@ -347,7 +327,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        application.Run(["init", "--name", "LogProject"]);
+        application.Run(["init", "--pid", "LogProject"]);
         AddDefaultCriterion(application, "LogProject");
         int chatExitCode = application.Run(["chat", "LogProject", "hello"]);
         string projectRoot = Path.Combine(workspace.Root, "LogProject");
@@ -393,7 +373,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "MemoryProject"]);
+            application.Run(["init", "--pid", "MemoryProject"]);
             AddDefaultCriterion(application, "MemoryProject");
             application.Run(["chat", "MemoryProject", "first"]);
             string rollingContextPath = Path.Combine(
@@ -433,7 +413,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "DebugProject"]);
+            application.Run(["init", "--pid", "DebugProject"]);
             AddDefaultCriterion(application, "DebugProject");
             Console.SetOut(output);
             int exitCode = application.Run(["chat", "DebugProject", "hello", "--debug"]);
@@ -465,7 +445,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        application.Run(["init", "--name", "NoCriteriaProject"]);
+        application.Run(["init", "--pid", "NoCriteriaProject"]);
         int exitCode = application.Run(["chat", "NoCriteriaProject", "hello"]);
         string projectRoot = Path.Combine(workspace.Root, "NoCriteriaProject");
         string messagesPath = Path.Combine(projectRoot, ".llmide", "conversations", "messages.jsonl");
@@ -488,7 +468,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "SystemRuleProject"]);
+            application.Run(["init", "--pid", "SystemRuleProject"]);
             AddDefaultCriterion(application, "SystemRuleProject");
             File.WriteAllText(
                 Path.Combine(workspace.Root, "SystemRuleProject", ".llmide", "policies", "system-rule.md"),
@@ -518,7 +498,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "ModelsProject"]);
+            application.Run(["init", "--pid", "ModelsProject"]);
             Console.SetOut(output);
             int exitCode = application.Run(["models", "list", "ModelsProject"]);
             string modelsOutput = output.ToString();
@@ -541,7 +521,7 @@ public static class Program
         using TestWorkspace workspace = TestWorkspace.Create();
         CliApplication application = CreateCliApplication(workspace.Root);
 
-        application.Run(["init", "--name", "ModelSetProject"]);
+        application.Run(["init", "--pid", "ModelSetProject"]);
         int exitCode = application.Run(["models", "set", "ModelSetProject", "deepseek-reasoner"]);
         ProviderSettingsDocument settings = new JsonProviderSettingsStore().Load(Path.Combine(workspace.Root, "ModelSetProject"));
 
@@ -561,7 +541,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "CriteriaProject"]);
+            application.Run(["init", "--pid", "CriteriaProject"]);
             Console.SetOut(output);
             int addExitCode = application.Run([
                 "criteria",
@@ -616,7 +596,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "CriteriaChatProject"]);
+            application.Run(["init", "--pid", "CriteriaChatProject"]);
             application.Run([
                 "criteria",
                 "add",
@@ -652,7 +632,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "StateProject"]);
+            application.Run(["init", "--pid", "StateProject"]);
             Console.SetOut(output);
             int setExitCode = application.Run([
                 "state",
@@ -706,7 +686,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "StateChatProject"]);
+            application.Run(["init", "--pid", "StateChatProject"]);
             AddDefaultCriterion(application, "StateChatProject");
             application.Run([
                 "state",
@@ -766,7 +746,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "ArtifactProject"]);
+            application.Run(["init", "--pid", "ArtifactProject"]);
             Console.SetOut(output);
             int addExitCode = application.Run([
                 "artifacts",
@@ -835,7 +815,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "ExtractProject"]);
+            application.Run(["init", "--pid", "ExtractProject"]);
             Console.SetOut(output);
             int exitCode = application.Run([
                 "artifacts",
@@ -867,7 +847,7 @@ public static class Program
 
         try
         {
-            application.Run(["init", "--name", "AttachProject"]);
+            application.Run(["init", "--pid", "AttachProject"]);
             AddDefaultCriterion(application, "AttachProject");
             WriteArtifactRule(
                 Path.Combine(workspace.Root, "AttachProject"),

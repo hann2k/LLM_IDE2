@@ -1224,6 +1224,11 @@ public sealed class CliApplication
             return RunProjectsRename(args);
         }
 
+        if (subCommand == "repid")
+        {
+            return RunProjectsRePId(args);
+        }
+
         if (subCommand == "move")
         {
             return RunProjectsMove(args);
@@ -1250,7 +1255,7 @@ public sealed class CliApplication
         for (int index = 0; index < projects.Count; index++)
         {
             ProjectRegistryEntry project = projects[index];
-            Console.WriteLine($"{index + 1}. {project.Name}  {project.Path}  {project.CreatedAt:O}");
+            Console.WriteLine($"{index + 1}. {project.PId}  {project.Name}  {project.Path}  {project.CreatedAt:O}");
         }
 
         return 0;
@@ -1333,7 +1338,7 @@ public sealed class CliApplication
         }
 
         projectRegistryService.Remove(args[2]);
-        Console.WriteLine($"deleted: {project.Name}");
+        Console.WriteLine($"deleted: {project.PId}");
         return 0;
     }
 
@@ -1346,12 +1351,12 @@ public sealed class CliApplication
     {
         if (args[3] != "--confirm")
         {
-            throw new InvalidOperationException("삭제하려면 --confirm <project-name> 확인 인자가 필요합니다.");
+            throw new InvalidOperationException("삭제하려면 --confirm <project-id> 확인 인자가 필요합니다.");
         }
 
-        if (!string.Equals(args[4], project.Name, StringComparison.Ordinal))
+        if (!string.Equals(args[4], project.PId, StringComparison.Ordinal))
         {
-            throw new InvalidOperationException("Delete confirmation project name does not match.");
+            throw new InvalidOperationException("Delete confirmation project pID does not match.");
         }
 
         if (HasApiKey(project.Path) && !args.Contains("--confirm-api-key-delete", StringComparer.Ordinal))
@@ -1372,7 +1377,7 @@ public sealed class CliApplication
     }
 
     /// <summary>
-    /// Renames a project in the registry.
+    /// Renames the user-visible project name in the registry.
     /// </summary>
     /// <param name="args">The command-line arguments.</param>
     /// <returns>The process exit code.</returns>
@@ -1386,6 +1391,24 @@ public sealed class CliApplication
 
         projectRegistryService.Rename(args[2], args[3]);
         Console.WriteLine($"이름 변경됨: {args[2]} -> {args[3]}");
+        return 0;
+    }
+
+    /// <summary>
+    /// Changes a project identifier in the registry.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunProjectsRePId(string[] args)
+    {
+        if (args.Length != 4)
+        {
+            PrintProjectsUsage();
+            return 1;
+        }
+
+        projectRegistryService.ChangePId(args[2], args[3]);
+        Console.WriteLine($"pID 변경됨: {args[2]} -> {args[3]}");
         return 0;
     }
 
@@ -1420,6 +1443,14 @@ public sealed class CliApplication
         while (index < args.Length)
         {
             string option = args[index];
+
+            if (option == "--pid")
+            {
+                request.PId = ReadOptionValue(args, index, option);
+                request.HasExplicitPId = true;
+                index += 2;
+                continue;
+            }
 
             if (option == "--name" || option == "-n")
             {
@@ -1468,59 +1499,62 @@ public sealed class CliApplication
     {
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide init");
-        Console.WriteLine("  llmide init --name <project-name>");
+        Console.WriteLine("  llmide init --pid <project-id>");
+        Console.WriteLine("  llmide init --pid <project-id> --name <project-name>");
         Console.WriteLine("  llmide init --path <project-path>");
-        Console.WriteLine("  llmide init --name <project-name> --path <project-path>");
-        Console.WriteLine("  llmide init -n <project-name>");
+        Console.WriteLine("  llmide init --pid <project-id> --name <project-name> --path <project-path>");
+        Console.WriteLine("  llmide init --name <project-name>");
         Console.WriteLine("  llmide init -p <project-path>");
-        Console.WriteLine("  llmide init -n <project-name> -p <project-path>");
+        Console.WriteLine("  llmide init -n <project-name>");
+        Console.WriteLine("  llmide init --pid <project-id> -n <project-name> -p <project-path>");
         Console.WriteLine("  llmide projects list");
-        Console.WriteLine("  llmide projects open <project-name>");
-        Console.WriteLine("  llmide projects remove <project-name>");
-        Console.WriteLine("  llmide projects delete <project-name> --confirm <project-name>");
-        Console.WriteLine("  llmide projects delete <project-name> --confirm <project-name> --confirm-api-key-delete");
-        Console.WriteLine("  llmide projects rename <project-name> <new-project-name>");
-        Console.WriteLine("  llmide projects move <project-name> <new-project-path>");
-        Console.WriteLine("  llmide models list <project-name>");
-        Console.WriteLine("  llmide models set <project-name> <model>");
-        Console.WriteLine("  llmide criteria list <project-name>");
-        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description>");
-        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --title <title>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --description <description>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --priority <priority>");
-        Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
-        Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
-        Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
-        Console.WriteLine("  llmide state show <project-name>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage>");
-        Console.WriteLine("  llmide state set <project-name> --current-task <task>");
-        Console.WriteLine("  llmide state set <project-name> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --current-task <task> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
-        Console.WriteLine("  llmide state add <project-name> completed <item>");
-        Console.WriteLine("  llmide state add <project-name> in-progress <item>");
-        Console.WriteLine("  llmide state add <project-name> next-action <item>");
-        Console.WriteLine("  llmide state add <project-name> blocker <item>");
-        Console.WriteLine("  llmide state remove <project-name> completed <item>");
-        Console.WriteLine("  llmide state remove <project-name> in-progress <item>");
-        Console.WriteLine("  llmide state remove <project-name> next-action <item>");
-        Console.WriteLine("  llmide state remove <project-name> blocker <item>");
-        Console.WriteLine("  llmide artifacts list <project-name>");
-        Console.WriteLine("  llmide artifacts show <project-name> <artifact-id>");
-        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
-        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --file <file-path>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --title <title>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --content <content>");
-        Console.WriteLine("  llmide artifacts remove <project-name> <artifact-id>");
-        Console.WriteLine("  llmide artifacts extract <project-name> --content <response-text>");
-        Console.WriteLine("  llmide chat <project-name> <message>");
-        Console.WriteLine("  llmide chat <project-name> <message> --artifact <artifact-id>");
-        Console.WriteLine("  llmide chat <project-name> <message> --debug");
-        Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
-        Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
+        Console.WriteLine("  llmide projects open <project-id>");
+        Console.WriteLine("  llmide projects remove <project-id>");
+        Console.WriteLine("  llmide projects delete <project-id> --confirm <project-id>");
+        Console.WriteLine("  llmide projects delete <project-id> --confirm <project-id> --confirm-api-key-delete");
+        Console.WriteLine("  llmide projects rename <project-id> <new-project-name>");
+        Console.WriteLine("  llmide projects repid <project-id> <new-project-id>");
+        Console.WriteLine("  llmide projects move <project-id> <new-project-path>");
+        Console.WriteLine("  llmide models list <project-id>");
+        Console.WriteLine("  llmide models set <project-id> <model>");
+        Console.WriteLine("  llmide criteria list <project-id>");
+        Console.WriteLine("  llmide criteria add <project-id> --title <title> --description <description>");
+        Console.WriteLine("  llmide criteria add <project-id> --title <title> --description <description> --priority <priority>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --title <title>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --description <description>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --priority <priority>");
+        Console.WriteLine("  llmide criteria remove <project-id> <criterion-id>");
+        Console.WriteLine("  llmide criteria activate <project-id> <criterion-id>");
+        Console.WriteLine("  llmide criteria deactivate <project-id> <criterion-id>");
+        Console.WriteLine("  llmide state show <project-id>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage>");
+        Console.WriteLine("  llmide state set <project-id> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-id> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state add <project-id> completed <item>");
+        Console.WriteLine("  llmide state add <project-id> in-progress <item>");
+        Console.WriteLine("  llmide state add <project-id> next-action <item>");
+        Console.WriteLine("  llmide state add <project-id> blocker <item>");
+        Console.WriteLine("  llmide state remove <project-id> completed <item>");
+        Console.WriteLine("  llmide state remove <project-id> in-progress <item>");
+        Console.WriteLine("  llmide state remove <project-id> next-action <item>");
+        Console.WriteLine("  llmide state remove <project-id> blocker <item>");
+        Console.WriteLine("  llmide artifacts list <project-id>");
+        Console.WriteLine("  llmide artifacts show <project-id> <artifact-id>");
+        Console.WriteLine("  llmide artifacts add <project-id> --title <title> --type <type> --content <content>");
+        Console.WriteLine("  llmide artifacts add <project-id> --title <title> --type <type> --file <file-path>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --title <title>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --content <content>");
+        Console.WriteLine("  llmide artifacts remove <project-id> <artifact-id>");
+        Console.WriteLine("  llmide artifacts extract <project-id> --content <response-text>");
+        Console.WriteLine("  llmide chat <project-id> <message>");
+        Console.WriteLine("  llmide chat <project-id> <message> --artifact <artifact-id>");
+        Console.WriteLine("  llmide chat <project-id> <message> --debug");
+        Console.WriteLine("  llmide chat <project-id> <message> --no-stream");
+        Console.WriteLine("  llmide chat <project-id> <message> --debug --no-stream");
     }
 
     /// <summary>
@@ -1530,12 +1564,13 @@ public sealed class CliApplication
     {
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide projects list");
-        Console.WriteLine("  llmide projects open <project-name>");
-        Console.WriteLine("  llmide projects remove <project-name>");
-        Console.WriteLine("  llmide projects delete <project-name> --confirm <project-name>");
-        Console.WriteLine("  llmide projects delete <project-name> --confirm <project-name> --confirm-api-key-delete");
-        Console.WriteLine("  llmide projects rename <project-name> <new-project-name>");
-        Console.WriteLine("  llmide projects move <project-name> <new-project-path>");
+        Console.WriteLine("  llmide projects open <project-id>");
+        Console.WriteLine("  llmide projects remove <project-id>");
+        Console.WriteLine("  llmide projects delete <project-id> --confirm <project-id>");
+        Console.WriteLine("  llmide projects delete <project-id> --confirm <project-id> --confirm-api-key-delete");
+        Console.WriteLine("  llmide projects rename <project-id> <new-project-name>");
+        Console.WriteLine("  llmide projects repid <project-id> <new-project-id>");
+        Console.WriteLine("  llmide projects move <project-id> <new-project-path>");
     }
 
     /// <summary>
@@ -1544,8 +1579,8 @@ public sealed class CliApplication
     private static void PrintModelsUsage()
     {
         Console.WriteLine("사용법:");
-        Console.WriteLine("  llmide models list <project-name>");
-        Console.WriteLine("  llmide models set <project-name> <model>");
+        Console.WriteLine("  llmide models list <project-id>");
+        Console.WriteLine("  llmide models set <project-id> <model>");
     }
 
     /// <summary>
@@ -1554,15 +1589,15 @@ public sealed class CliApplication
     private static void PrintCriteriaUsage()
     {
         Console.WriteLine("사용법:");
-        Console.WriteLine("  llmide criteria list <project-name>");
-        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description>");
-        Console.WriteLine("  llmide criteria add <project-name> --title <title> --description <description> --priority <priority>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --title <title>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --description <description>");
-        Console.WriteLine("  llmide criteria update <project-name> <criterion-id> --priority <priority>");
-        Console.WriteLine("  llmide criteria remove <project-name> <criterion-id>");
-        Console.WriteLine("  llmide criteria activate <project-name> <criterion-id>");
-        Console.WriteLine("  llmide criteria deactivate <project-name> <criterion-id>");
+        Console.WriteLine("  llmide criteria list <project-id>");
+        Console.WriteLine("  llmide criteria add <project-id> --title <title> --description <description>");
+        Console.WriteLine("  llmide criteria add <project-id> --title <title> --description <description> --priority <priority>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --title <title>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --description <description>");
+        Console.WriteLine("  llmide criteria update <project-id> <criterion-id> --priority <priority>");
+        Console.WriteLine("  llmide criteria remove <project-id> <criterion-id>");
+        Console.WriteLine("  llmide criteria activate <project-id> <criterion-id>");
+        Console.WriteLine("  llmide criteria deactivate <project-id> <criterion-id>");
     }
 
     /// <summary>
@@ -1571,22 +1606,22 @@ public sealed class CliApplication
     private static void PrintStateUsage()
     {
         Console.WriteLine("사용법:");
-        Console.WriteLine("  llmide state show <project-name>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage>");
-        Console.WriteLine("  llmide state set <project-name> --current-task <task>");
-        Console.WriteLine("  llmide state set <project-name> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --current-task <task> --last-decision <decision>");
-        Console.WriteLine("  llmide state set <project-name> --stage <stage> --current-task <task> --last-decision <decision>");
-        Console.WriteLine("  llmide state add <project-name> completed <item>");
-        Console.WriteLine("  llmide state add <project-name> in-progress <item>");
-        Console.WriteLine("  llmide state add <project-name> next-action <item>");
-        Console.WriteLine("  llmide state add <project-name> blocker <item>");
-        Console.WriteLine("  llmide state remove <project-name> completed <item>");
-        Console.WriteLine("  llmide state remove <project-name> in-progress <item>");
-        Console.WriteLine("  llmide state remove <project-name> next-action <item>");
-        Console.WriteLine("  llmide state remove <project-name> blocker <item>");
+        Console.WriteLine("  llmide state show <project-id>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage>");
+        Console.WriteLine("  llmide state set <project-id> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-id> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --current-task <task>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state set <project-id> --stage <stage> --current-task <task> --last-decision <decision>");
+        Console.WriteLine("  llmide state add <project-id> completed <item>");
+        Console.WriteLine("  llmide state add <project-id> in-progress <item>");
+        Console.WriteLine("  llmide state add <project-id> next-action <item>");
+        Console.WriteLine("  llmide state add <project-id> blocker <item>");
+        Console.WriteLine("  llmide state remove <project-id> completed <item>");
+        Console.WriteLine("  llmide state remove <project-id> in-progress <item>");
+        Console.WriteLine("  llmide state remove <project-id> next-action <item>");
+        Console.WriteLine("  llmide state remove <project-id> blocker <item>");
     }
 
     /// <summary>
@@ -1595,11 +1630,11 @@ public sealed class CliApplication
     private static void PrintChatUsage()
     {
         Console.WriteLine("사용법:");
-        Console.WriteLine("  llmide chat <project-name> <message>");
-        Console.WriteLine("  llmide chat <project-name> <message> --artifact <artifact-id>");
-        Console.WriteLine("  llmide chat <project-name> <message> --debug");
-        Console.WriteLine("  llmide chat <project-name> <message> --no-stream");
-        Console.WriteLine("  llmide chat <project-name> <message> --debug --no-stream");
+        Console.WriteLine("  llmide chat <project-id> <message>");
+        Console.WriteLine("  llmide chat <project-id> <message> --artifact <artifact-id>");
+        Console.WriteLine("  llmide chat <project-id> <message> --debug");
+        Console.WriteLine("  llmide chat <project-id> <message> --no-stream");
+        Console.WriteLine("  llmide chat <project-id> <message> --debug --no-stream");
     }
 
     /// <summary>
@@ -1608,18 +1643,18 @@ public sealed class CliApplication
     private static void PrintArtifactsUsage()
     {
         Console.WriteLine("사용법:");
-        Console.WriteLine("  llmide artifacts list <project-name>");
-        Console.WriteLine("  llmide artifacts show <project-name> <artifact-id>");
-        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --content <content>");
-        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --file <file-path>");
-        Console.WriteLine("  llmide artifacts add <project-name> --title <title> --type <type> --path <target-path> --content <content>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --title <title>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --type <type>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --path <target-path>");
-        Console.WriteLine("  llmide artifacts update <project-name> <artifact-id> --content <content>");
-        Console.WriteLine("  llmide artifacts remove <project-name> <artifact-id>");
-        Console.WriteLine("  llmide artifacts extract <project-name> --content <response-text>");
-        Console.WriteLine("  llmide artifacts extract <project-name> --file <response-file>");
+        Console.WriteLine("  llmide artifacts list <project-id>");
+        Console.WriteLine("  llmide artifacts show <project-id> <artifact-id>");
+        Console.WriteLine("  llmide artifacts add <project-id> --title <title> --type <type> --content <content>");
+        Console.WriteLine("  llmide artifacts add <project-id> --title <title> --type <type> --file <file-path>");
+        Console.WriteLine("  llmide artifacts add <project-id> --title <title> --type <type> --path <target-path> --content <content>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --title <title>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --type <type>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --path <target-path>");
+        Console.WriteLine("  llmide artifacts update <project-id> <artifact-id> --content <content>");
+        Console.WriteLine("  llmide artifacts remove <project-id> <artifact-id>");
+        Console.WriteLine("  llmide artifacts extract <project-id> --content <response-text>");
+        Console.WriteLine("  llmide artifacts extract <project-id> --file <response-file>");
     }
 }
 

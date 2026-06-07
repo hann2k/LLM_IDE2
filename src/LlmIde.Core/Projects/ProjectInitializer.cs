@@ -43,23 +43,25 @@ public sealed class ProjectInitializer
     /// <returns>The initialization result.</returns>
     public ProjectInitializationResult Initialize(ProjectInitializationRequest request)
     {
-        string projectName = ProjectRegistryService.NormalizeInitializationName(request.Name);
-        bool defaultNameRequested = !request.HasExplicitName || string.IsNullOrWhiteSpace(request.Name);
+        string pId = ProjectRegistryService.NormalizeInitializationPId(request.PId);
+        string projectName = ProjectRegistryService.NormalizeInitializationDisplayName(request.Name, pId);
+        bool defaultPIdRequested = !request.HasExplicitPId || string.IsNullOrWhiteSpace(request.PId);
 
-        if (defaultNameRequested && ProjectExists(projectName))
+        if (defaultPIdRequested && ProjectExists(pId))
         {
             throw new InvalidOperationException("DefaultProject already exists.");
         }
 
-        if (ProjectExists(projectName))
+        if (ProjectExists(pId))
         {
-            throw new InvalidOperationException($"Project already exists: {projectName}");
+            throw new InvalidOperationException($"Project already exists: {pId}");
         }
 
-        string projectRoot = ResolveProjectRoot(projectName, request.Path);
+        string projectRoot = ResolveProjectRoot(pId, request.Path);
         ProjectInitializationResult result = projectStore.Initialize(projectRoot, projectName);
         projectRegistryService.Add(new ProjectRegistryEntry
         {
+            PId = pId,
             Name = projectName,
             Path = result.ProjectRoot,
             CreatedAt = result.ProjectInfo.CreatedAt
@@ -71,27 +73,27 @@ public sealed class ProjectInitializer
     /// <summary>
     /// Resolves the project root path.
     /// </summary>
-    /// <param name="projectName">The project name.</param>
+    /// <param name="pId">The project identifier.</param>
     /// <param name="requestedPath">The requested project path.</param>
     /// <returns>The project root path.</returns>
-    private string ResolveProjectRoot(string projectName, string requestedPath)
+    private string ResolveProjectRoot(string pId, string requestedPath)
     {
         if (string.IsNullOrWhiteSpace(requestedPath))
         {
-            return Path.Combine(ideProgramRoot, projectName);
+            return Path.Combine(ideProgramRoot, pId);
         }
 
         return Path.GetFullPath(requestedPath);
     }
 
     /// <summary>
-    /// Determines whether a project exists by name.
+    /// Determines whether a project exists by project identifier.
     /// </summary>
-    /// <param name="projectName">The project name.</param>
+    /// <param name="pId">The project identifier.</param>
     /// <returns>True when the project exists.</returns>
-    private bool ProjectExists(string projectName)
+    private bool ProjectExists(string pId)
     {
         return projectRegistryService.List().Any(project =>
-            string.Equals(project.Name, projectName, StringComparison.OrdinalIgnoreCase));
+            string.Equals(project.PId, pId, StringComparison.OrdinalIgnoreCase));
     }
 }

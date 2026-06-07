@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -6,7 +8,13 @@ namespace LlmIde.Core.Projects;
 public sealed class ProjectRegistryEntry
 {
     /// <summary>
-    /// Gets or sets the project name.
+    /// Gets or sets the English project identifier.
+    /// </summary>
+    [JsonPropertyName("pID")]
+    public string PId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the user-visible project name.
     /// </summary>
     public string Name { get; set; } = string.Empty;
 
