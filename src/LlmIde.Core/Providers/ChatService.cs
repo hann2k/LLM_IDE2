@@ -91,6 +91,7 @@ public sealed class ChatService
             cancellationToken);
         response.SentRequest = preparedRequest.Request;
         response.RequestId = preparedRequest.RequestId;
+        ApplyImportanceResult(projectRoot, preparedRequest, response);
         response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
@@ -152,8 +153,9 @@ public sealed class ChatService
             Model = preparedRequest.Request.Model,
             SentRequest = preparedRequest.Request,
             RequestId = preparedRequest.RequestId,
-            ArtifactCandidates = artifactService.ExtractCandidates(content.ToString()).ToList()
         };
+        ApplyImportanceResult(projectRoot, preparedRequest, response);
+        response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
         ApplyCompressionResult(
@@ -189,7 +191,9 @@ public sealed class ChatService
             throw new InvalidOperationException($"Provider is not available: {settings.Name}");
         }
 
-        string requestId = $"req_{Guid.NewGuid():N}";
+        long nextRequestSequence = conversationLogStore.GetNextRequestSequence(projectRoot);
+        string requestId = ConversationSequence.ToId(nextRequestSequence);
+        string compressionRequestId = ConversationSequence.ToId(nextRequestSequence + 1);
         ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message, artifactIds);
 
         ChatProviderRequest request = new ChatProviderRequest
@@ -198,7 +202,13 @@ public sealed class ChatService
             Messages = context.Messages
         };
 
-        return new PreparedChatRequest(provider, settings, request, requestId, context.ContextPackage);
+        return new PreparedChatRequest(
+            provider,
+            settings,
+            request,
+            requestId,
+            compressionRequestId,
+            context.ContextPackage);
     }
 
     /// <summary>
@@ -229,7 +239,7 @@ public sealed class ChatService
 
         conversationLogStore.AppendMessage(projectRoot, new ConversationMessageRecord
         {
-            MessageId = $"msg_{Guid.NewGuid():N}",
+            MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
             RequestId = preparedRequest.RequestId,
             Role = "user",
             Content = message,
@@ -406,6 +416,26 @@ public sealed class ChatService
     }
 
     /// <summary>
+    /// Applies importance metadata to the response and stored request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="preparedRequest">The prepared request.</param>
+    /// <param name="response">The provider response.</param>
+    private void ApplyImportanceResult(
+        string projectRoot,
+        PreparedChatRequest preparedRequest,
+        ChatProviderResponse response)
+    {
+        ConversationImportanceParseResult importanceResult = ConversationImportanceParser.Parse(response.Content);
+        response.Content = importanceResult.Content;
+        response.ImportanceWeight = importanceResult.ImportanceWeight;
+        conversationLogStore.UpdateRequestImportanceWeight(
+            projectRoot,
+            preparedRequest.RequestId,
+            importanceResult.ImportanceWeight);
+    }
+
+    /// <summary>
     /// Builds the compression prompt.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -507,7 +537,7 @@ public sealed class ChatService
     {
         conversationLogStore.AppendMessage(projectRoot, new ConversationMessageRecord
         {
-            MessageId = $"msg_{Guid.NewGuid():N}",
+            MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
             RequestId = preparedRequest.RequestId,
             Role = "assistant",
             Content = response.Content,
@@ -578,18 +608,16 @@ public sealed class ChatService
     /// <param name="Settings">The provider settings.</param>
     /// <param name="Request">The provider request.</param>
     /// <param name="RequestId">The request identifier.</param>
+    /// <param name="CompressionRequestId">The compression request identifier.</param>
     /// <param name="ContextPackage">The context package.</param>
     private sealed record PreparedChatRequest(
         IChatProvider Provider,
         ProviderSettings Settings,
         ChatProviderRequest Request,
         string RequestId,
+        string CompressionRequestId,
         ContextPackage ContextPackage)
     {
-        /// <summary>
-        /// Gets the compression request identifier.
-        /// </summary>
-        public string CompressionRequestId { get; } = $"req_{Guid.NewGuid():N}";
     }
 
     /// <summary>

@@ -85,6 +85,7 @@ public static class Program
         AssertFileExists(result.ProjectRoot, ".llmide/policies/system-rule.md");
         AssertFileExists(result.ProjectRoot, ".llmide/policies/compression-rule.md");
         AssertFileExists(result.ProjectRoot, ".llmide/policies/artifact-rule.md");
+        AssertFileExists(result.ProjectRoot, ".llmide/policies/importance-rule.md");
         AssertFileExists(result.ProjectRoot, ".llmide/policies/context-policy.json");
         AssertFileExists(result.ProjectRoot, ".llmide/policies/provider-policy.json");
         AssertFileExists(workspace.Root, "project/projects.json");
@@ -93,6 +94,7 @@ public static class Program
         AssertContains(File.ReadAllText(Path.Combine(policyRoot, "system-rule.md")), "기본 응답 언어는 한국어다.");
         AssertContains(File.ReadAllText(Path.Combine(policyRoot, "compression-rule.md")), "너는 대화 맥락 압축기다.");
         AssertContains(File.ReadAllText(Path.Combine(policyRoot, "artifact-rule.md")), "산출물 태그");
+        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "importance-rule.md")), "대화 중요도");
         AssertContains(File.ReadAllText(Path.Combine(policyRoot, "context-policy.json")), "summary_plus_window");
         AssertContains(File.ReadAllText(Path.Combine(policyRoot, "provider-policy.json")), "deepseek");
     }
@@ -363,6 +365,16 @@ public static class Program
         AssertEqual(2, File.ReadAllLines(messagesPath).Length, "User and assistant messages should be stored.");
         AssertEqual(2, File.ReadAllLines(requestsPath).Length, "Chat and compression requests should be stored.");
         AssertEqual(2, Directory.GetFiles(packagesPath, "*.json").Length, "Chat and compression context packages should be stored.");
+        ConversationMessageRecord[] messages = ReadJsonLines<ConversationMessageRecord>(messagesPath);
+        ConversationRequestRecord[] requests = ReadJsonLines<ConversationRequestRecord>(requestsPath);
+        AssertEqual("1", messages[0].MessageId, "First stored user message should use a readable sequence identifier.");
+        AssertEqual("2", messages[1].MessageId, "First stored assistant message should use a readable sequence identifier.");
+        AssertEqual("1", requests[0].RequestId, "First chat request should use a readable sequence identifier.");
+        AssertEqual("2", requests[1].RequestId, "First compression request should use a readable sequence identifier.");
+        AssertEqual(7, requests[0].ImportanceWeight, "Chat request should store the parsed importance weight.");
+        AssertEqual(0, requests[1].ImportanceWeight, "Compression request should not store chat importance.");
+        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/1.json");
+        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/2.json");
         AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
         string rollingContext = File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md"));
         AssertFalse(string.IsNullOrWhiteSpace(rollingContext), "Current rolling context should be updated.");
@@ -933,6 +945,7 @@ public static class Program
             rollingContextStore,
             new FileSystemRuleStore(),
             new FileArtifactRuleStore(),
+            new FileImportanceRuleStore(ideProgramRoot),
             artifactService);
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
         ProjectInitializer initializer = new ProjectInitializer(projectStore, registry, ideProgramRoot);
@@ -1023,6 +1036,36 @@ public static class Program
 
         object? result = command.ExecuteScalar();
         return Convert.ToInt32(result);
+    }
+
+    /// <summary>
+    /// Reads JSONL records from a file.
+    /// </summary>
+    /// <typeparam name="TValue">The record type.</typeparam>
+    /// <param name="path">The JSONL path.</param>
+    /// <returns>The parsed records.</returns>
+    private static TValue[] ReadJsonLines<TValue>(string path)
+    {
+        List<TValue> values = [];
+
+        foreach (string line in File.ReadAllLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            TValue? value = JsonSerializer.Deserialize<TValue>(line, JsonOptions.Compact);
+
+            if (value is null)
+            {
+                continue;
+            }
+
+            values.Add(value);
+        }
+
+        return values.ToArray();
     }
 
     /// <summary>
@@ -1170,9 +1213,10 @@ public sealed class FakeChatProvider : IChatProvider
         ProviderSettings settings,
         CancellationToken cancellationToken)
     {
+        string content = CreateContent(request);
         return Task.FromResult(new ChatProviderResponse
         {
-            Content = $"ok:{request.Messages.Count}",
+            Content = content,
             Provider = settings.Name,
             Model = settings.Model
         });
@@ -1192,7 +1236,29 @@ public sealed class FakeChatProvider : IChatProvider
     {
         cancellationToken.ThrowIfCancellationRequested();
         await Task.Yield();
-        yield return $"ok:{request.Messages.Count}";
+        yield return CreateContent(request);
+    }
+
+    /// <summary>
+    /// Creates fake response content.
+    /// </summary>
+    /// <param name="request">The provider request.</param>
+    /// <returns>The fake response content.</returns>
+    private static string CreateContent(ChatProviderRequest request)
+    {
+        string content = $"ok:{request.Messages.Count}";
+
+        foreach (ChatMessage message in request.Messages)
+        {
+            if (!message.Content.Contains("llmide_importance_weight", StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            return content + Environment.NewLine + "<llmide_importance_weight>7</llmide_importance_weight>";
+        }
+
+        return content;
     }
 }
 
@@ -1277,6 +1343,10 @@ public sealed class TestWorkspace : IDisposable
             """);
         File.WriteAllText(Path.Combine(policyRoot, "artifact-rule.md"), """
             응답에 재사용 가능한 중요한 산출물 후보가 있으면 산출물 태그로 감싼다.
+            """);
+        File.WriteAllText(Path.Combine(policyRoot, "importance-rule.md"), """
+            대화 중요도 측정 규칙
+            응답 마지막에 <llmide_importance_weight>N</llmide_importance_weight> 태그를 추가한다.
             """);
         File.WriteAllText(Path.Combine(policyRoot, "context-policy.json"), """
             {

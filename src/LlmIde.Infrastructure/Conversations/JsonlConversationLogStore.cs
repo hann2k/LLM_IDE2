@@ -30,6 +30,58 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next sequential request identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next request sequence number.</returns>
+    public long GetNextRequestSequence(string projectRoot)
+    {
+        string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
+        long maxSequence = 0;
+
+        foreach (ConversationRequestRecord request in ReadJsonLines<ConversationRequestRecord>(requestPath))
+        {
+            if (!ConversationSequence.TryParse(request.RequestId, out long sequence))
+            {
+                continue;
+            }
+
+            if (sequence > maxSequence)
+            {
+                maxSequence = sequence;
+            }
+        }
+
+        return maxSequence + 1;
+    }
+
+    /// <summary>
+    /// Gets the next sequential message identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next message sequence number.</returns>
+    public long GetNextMessageSequence(string projectRoot)
+    {
+        string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
+        long maxSequence = 0;
+
+        foreach (ConversationMessageRecord message in ReadJsonLines<ConversationMessageRecord>(messagePath))
+        {
+            if (!ConversationSequence.TryParse(message.MessageId, out long sequence))
+            {
+                continue;
+            }
+
+            if (sequence > maxSequence)
+            {
+                maxSequence = sequence;
+            }
+        }
+
+        return maxSequence + 1;
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -38,6 +90,38 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     {
         string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
         AppendJsonLine(requestPath, request);
+    }
+
+    /// <summary>
+    /// Updates the importance weight for a stored request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The request identifier.</param>
+    /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
+    public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
+    {
+        string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
+        List<ConversationRequestRecord> requests = ReadJsonLines<ConversationRequestRecord>(requestPath);
+        bool updated = false;
+
+        foreach (ConversationRequestRecord request in requests)
+        {
+            if (!string.Equals(request.RequestId, requestId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            request.ImportanceWeight = importanceWeight;
+            updated = true;
+            break;
+        }
+
+        if (!updated)
+        {
+            return;
+        }
+
+        WriteJsonLines(requestPath, requests);
     }
 
     /// <summary>
@@ -76,6 +160,41 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Reads JSONL records from a file.
+    /// </summary>
+    /// <typeparam name="TValue">The record type.</typeparam>
+    /// <param name="path">The JSONL file path.</param>
+    /// <returns>The parsed records.</returns>
+    private static List<TValue> ReadJsonLines<TValue>(string path)
+    {
+        List<TValue> values = [];
+
+        if (!File.Exists(path))
+        {
+            return values;
+        }
+
+        foreach (string line in File.ReadLines(path))
+        {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                continue;
+            }
+
+            TValue? value = JsonSerializer.Deserialize<TValue>(line, JsonOptions.Compact);
+
+            if (value is null)
+            {
+                continue;
+            }
+
+            values.Add(value);
+        }
+
+        return values;
+    }
+
+    /// <summary>
     /// Gets the conversations directory path.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -99,5 +218,23 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     {
         string json = JsonSerializer.Serialize(value, JsonOptions.Compact);
         File.AppendAllText(path, json + Environment.NewLine);
+    }
+
+    /// <summary>
+    /// Writes JSONL records to a file.
+    /// </summary>
+    /// <typeparam name="TValue">The record type.</typeparam>
+    /// <param name="path">The JSONL file path.</param>
+    /// <param name="values">The records to write.</param>
+    private static void WriteJsonLines<TValue>(string path, IReadOnlyList<TValue> values)
+    {
+        List<string> lines = [];
+
+        foreach (TValue value in values)
+        {
+            lines.Add(JsonSerializer.Serialize(value, JsonOptions.Compact));
+        }
+
+        File.WriteAllLines(path, lines);
     }
 }

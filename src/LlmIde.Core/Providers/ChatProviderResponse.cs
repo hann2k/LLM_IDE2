@@ -33,6 +33,11 @@ public sealed class ChatProviderResponse
     public string RequestId { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the conversation importance weight from 0 to 10.
+    /// </summary>
+    public int ImportanceWeight { get; set; }
+
+    /// <summary>
     /// Gets or sets the compression request identifier.
     /// </summary>
     public string CompressionRequestId { get; set; } = string.Empty;

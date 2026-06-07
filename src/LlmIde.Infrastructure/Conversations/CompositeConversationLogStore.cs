@@ -45,6 +45,50 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next sequential request identifier number from all stores.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next request sequence number.</returns>
+    public long GetNextRequestSequence(string projectRoot)
+    {
+        long nextSequence = 1;
+
+        foreach (IConversationLogStore store in stores)
+        {
+            long storeSequence = store.GetNextRequestSequence(projectRoot);
+
+            if (storeSequence > nextSequence)
+            {
+                nextSequence = storeSequence;
+            }
+        }
+
+        return nextSequence;
+    }
+
+    /// <summary>
+    /// Gets the next sequential message identifier number from all stores.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next message sequence number.</returns>
+    public long GetNextMessageSequence(string projectRoot)
+    {
+        long nextSequence = 1;
+
+        foreach (IConversationLogStore store in stores)
+        {
+            long storeSequence = store.GetNextMessageSequence(projectRoot);
+
+            if (storeSequence > nextSequence)
+            {
+                nextSequence = storeSequence;
+            }
+        }
+
+        return nextSequence;
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -54,6 +98,20 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
         foreach (IConversationLogStore store in stores)
         {
             store.AppendRequest(projectRoot, request);
+        }
+    }
+
+    /// <summary>
+    /// Updates the importance weight for a stored request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The request identifier.</param>
+    /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
+    public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
+    {
+        foreach (IConversationLogStore store in stores)
+        {
+            store.UpdateRequestImportanceWeight(projectRoot, requestId, importanceWeight);
         }
     }
 

@@ -36,6 +36,7 @@ public static class Program
             rollingContextStore,
             new FileSystemRuleStore(),
             new FileArtifactRuleStore(),
+            new FileImportanceRuleStore(ideProgramRoot),
             artifactService);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));

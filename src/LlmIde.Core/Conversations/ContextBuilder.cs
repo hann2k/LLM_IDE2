@@ -36,6 +36,11 @@ public sealed class ContextBuilder
     private readonly IArtifactRuleStore artifactRuleStore;
 
     /// <summary>
+    /// The importance rule store.
+    /// </summary>
+    private readonly IImportanceRuleStore importanceRuleStore;
+
+    /// <summary>
     /// The artifact service.
     /// </summary>
     private readonly ArtifactService artifactService;
@@ -48,6 +53,7 @@ public sealed class ContextBuilder
     /// <param name="rollingContextStore">The rolling context store.</param>
     /// <param name="systemRuleStore">The system rule store.</param>
     /// <param name="artifactRuleStore">The artifact rule store.</param>
+    /// <param name="importanceRuleStore">The importance rule store.</param>
     /// <param name="artifactService">The artifact service.</param>
     public ContextBuilder(
         CriteriaService criteriaService,
@@ -55,6 +61,7 @@ public sealed class ContextBuilder
         IRollingContextStore rollingContextStore,
         ISystemRuleStore systemRuleStore,
         IArtifactRuleStore artifactRuleStore,
+        IImportanceRuleStore importanceRuleStore,
         ArtifactService artifactService)
     {
         this.criteriaService = criteriaService;
@@ -62,6 +69,7 @@ public sealed class ContextBuilder
         this.rollingContextStore = rollingContextStore;
         this.systemRuleStore = systemRuleStore;
         this.artifactRuleStore = artifactRuleStore;
+        this.importanceRuleStore = importanceRuleStore;
         this.artifactService = artifactService;
     }
 
@@ -83,6 +91,7 @@ public sealed class ContextBuilder
 
         string systemRule = systemRuleStore.Load(projectRoot);
         string artifactRule = artifactRuleStore.Load(projectRoot);
+        string importanceRule = importanceRuleStore.Load(projectRoot);
         IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
         ProjectState projectState = projectStateService.Get(projectRoot);
         RollingContextSummary? rollingContext = rollingContextStore.LoadCurrent(projectRoot);
@@ -97,6 +106,7 @@ public sealed class ContextBuilder
             message,
             systemRule,
             artifactRule,
+            importanceRule,
             activeCriteria,
             projectState,
             rollingContext,
@@ -122,6 +132,7 @@ public sealed class ContextBuilder
         AppendSystemMessage(messages, BuildProjectStateMessage((ProjectState)contextPackage.ProjectState));
         AppendSystemMessage(messages, BuildRollingContextMessage(contextPackage.RollingContextSummary));
         AppendSystemMessage(messages, contextPackage.ArtifactRule);
+        AppendSystemMessage(messages, contextPackage.ImportanceRule);
         AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts));
 
         messages.Add(new ChatMessage
@@ -281,6 +292,8 @@ public sealed class ContextBuilder
     /// <param name="requestId">The request identifier.</param>
     /// <param name="message">The user message.</param>
     /// <param name="systemRule">The system rule.</param>
+    /// <param name="artifactRule">The artifact rule.</param>
+    /// <param name="importanceRule">The importance rule.</param>
     /// <param name="activeCriteria">The active criteria.</param>
     /// <param name="projectState">The project state.</param>
     /// <param name="rollingContext">The rolling context summary.</param>
@@ -291,6 +304,7 @@ public sealed class ContextBuilder
         string message,
         string systemRule,
         string artifactRule,
+        string importanceRule,
         IReadOnlyList<Criterion> activeCriteria,
         ProjectState projectState,
         RollingContextSummary? rollingContext,
@@ -301,6 +315,7 @@ public sealed class ContextBuilder
             RequestId = requestId,
             SystemRule = systemRule,
             ArtifactRule = artifactRule,
+            ImportanceRule = importanceRule,
             UserRequest = message,
             ProjectState = projectState,
             UsedRollingContextId = rollingContext?.RollingContextId ?? string.Empty,

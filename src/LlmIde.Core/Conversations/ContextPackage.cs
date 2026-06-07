@@ -21,6 +21,11 @@ public sealed class ContextPackage
     public string ArtifactRule { get; set; } = string.Empty;
 
     /// <summary>
+    /// Gets or sets the importance scoring rule.
+    /// </summary>
+    public string ImportanceRule { get; set; } = string.Empty;
+
+    /// <summary>
     /// Gets or sets active criteria.
     /// </summary>
     public List<string> ActiveCriteria { get; set; } = [];

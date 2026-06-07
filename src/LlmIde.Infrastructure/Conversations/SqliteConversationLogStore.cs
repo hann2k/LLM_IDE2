@@ -44,6 +44,30 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next sequential request identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next request sequence number.</returns>
+    public long GetNextRequestSequence(string projectRoot)
+    {
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        return GetNextSequence(connection, "select request_id from conversation_turns;");
+    }
+
+    /// <summary>
+    /// Gets the next sequential message identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next message sequence number.</returns>
+    public long GetNextMessageSequence(string projectRoot)
+    {
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        return GetNextSequence(connection, "select message_id from conversation_messages;");
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -67,6 +91,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
                 used_rolling_context_id,
                 rolling_context_path,
                 recent_turn_count,
+                importance_weight,
                 compression_request_id,
                 compression_status,
                 compression_error,
@@ -86,6 +111,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
                 $used_rolling_context_id,
                 $rolling_context_path,
                 $recent_turn_count,
+                $importance_weight,
                 $compression_request_id,
                 $compression_status,
                 $compression_error,
@@ -104,11 +130,33 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
         command.Parameters.AddWithValue("$used_rolling_context_id", request.UsedRollingContextId);
         command.Parameters.AddWithValue("$rolling_context_path", request.RollingContextPath);
         command.Parameters.AddWithValue("$recent_turn_count", request.RecentTurnCount);
+        command.Parameters.AddWithValue("$importance_weight", request.ImportanceWeight);
         command.Parameters.AddWithValue("$compression_request_id", request.CompressionRequestId);
         command.Parameters.AddWithValue("$compression_status", request.CompressionStatus);
         command.Parameters.AddWithValue("$compression_error", request.CompressionError);
         command.Parameters.AddWithValue("$status", request.Status);
         command.Parameters.AddWithValue("$error", request.Error);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Updates the importance weight for a stored request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The request identifier.</param>
+    /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
+    public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
+    {
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            update conversation_turns
+            set importance_weight = $importance_weight
+            where request_id = $request_id;
+            """;
+        command.Parameters.AddWithValue("$importance_weight", importanceWeight);
+        command.Parameters.AddWithValue("$request_id", requestId);
         command.ExecuteNonQuery();
     }
 
@@ -230,6 +278,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
                 used_rolling_context_id text not null default '',
                 rolling_context_path text not null default '',
                 recent_turn_count integer not null default 0,
+                importance_weight integer not null default 0,
                 compression_request_id text not null default '',
                 compression_status text not null default '',
                 compression_error text not null default '',
@@ -275,6 +324,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
             ["used_rolling_context_id"] = "text not null default ''",
             ["rolling_context_path"] = "text not null default ''",
             ["recent_turn_count"] = "integer not null default 0",
+            ["importance_weight"] = "integer not null default 0",
             ["compression_request_id"] = "text not null default ''",
             ["compression_status"] = "text not null default ''",
             ["compression_error"] = "text not null default ''",
@@ -315,6 +365,35 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
         }
 
         return columns;
+    }
+
+    /// <summary>
+    /// Gets the next sequence number from stored identifiers.
+    /// </summary>
+    /// <param name="connection">The SQLite connection.</param>
+    /// <param name="selectIdentifiersSql">The SQL that selects identifier values.</param>
+    /// <returns>The next sequence number.</returns>
+    private static long GetNextSequence(SqliteConnection connection, string selectIdentifiersSql)
+    {
+        long maxSequence = 0;
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = selectIdentifiersSql;
+        using SqliteDataReader reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            if (!ConversationSequence.TryParse(reader.GetString(0), out long sequence))
+            {
+                continue;
+            }
+
+            if (sequence > maxSequence)
+            {
+                maxSequence = sequence;
+            }
+        }
+
+        return maxSequence + 1;
     }
 
     /// <summary>

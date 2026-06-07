@@ -60,6 +60,9 @@ public sealed class JsonFileProjectStore : IProjectStore
             EnsureTextFile(
                 Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ArtifactRuleFileName),
                 LoadProgramPolicyTemplate(LlmIdeLayout.ArtifactRuleFileName));
+            EnsureTextFile(
+                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ImportanceRuleFileName),
+                LoadProgramPolicyTemplate(LlmIdeLayout.ImportanceRuleFileName));
             EnsureJsonTextFile(
                 Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName),
                 LoadProgramPolicyTemplate(LlmIdeLayout.ContextPolicyFileName, CreateDefaultContextPolicyJson()));

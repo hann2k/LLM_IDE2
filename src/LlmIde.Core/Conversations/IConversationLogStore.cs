@@ -14,11 +14,33 @@ public interface IConversationLogStore
     string SaveContextPackage(string projectRoot, ContextPackage contextPackage);
 
     /// <summary>
+    /// Gets the next sequential request identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next request sequence number.</returns>
+    long GetNextRequestSequence(string projectRoot);
+
+    /// <summary>
+    /// Gets the next sequential message identifier number.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next message sequence number.</returns>
+    long GetNextMessageSequence(string projectRoot);
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="request">The request record.</param>
     void AppendRequest(string projectRoot, ConversationRequestRecord request);
+
+    /// <summary>
+    /// Updates the importance weight for a stored request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The request identifier.</param>
+    /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
+    void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight);
 
     /// <summary>
     /// Appends a message record.
