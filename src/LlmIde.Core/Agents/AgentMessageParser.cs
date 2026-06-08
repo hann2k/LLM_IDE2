@@ -18,6 +18,11 @@ public enum ModelMessageKind
     ToolRequest,
 
     /// <summary>
+    /// A tool list (discovery) request message.
+    /// </summary>
+    ListTools,
+
+    /// <summary>
     /// A message with an unknown type value.
     /// </summary>
     UnknownType,
@@ -96,6 +101,11 @@ public static class AgentMessageParser
                     ? answerElement.GetString() ?? string.Empty
                     : string.Empty;
                 return new ParsedModelMessage { Kind = ModelMessageKind.Final, Answer = answer };
+            }
+
+            if (string.Equals(type, "list_tools", StringComparison.Ordinal))
+            {
+                return new ParsedModelMessage { Kind = ModelMessageKind.ListTools };
             }
 
             if (string.Equals(type, "tool_request", StringComparison.Ordinal))

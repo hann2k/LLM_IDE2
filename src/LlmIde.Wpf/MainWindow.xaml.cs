@@ -128,11 +128,7 @@ public partial class MainWindow : Window
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = new AgentToolHost(
-        [
-            new FetchUrlTool(fetchHttpClient),
-            new WebSearchTool(fetchHttpClient)
-        ]);
+        IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
         chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -838,7 +834,7 @@ public partial class MainWindow : Window
                 preview => RunOnUi(() => row = AddConversationRow(preview.RequestId, text, sentAt)),
                 chunk => RunOnUi(() => AppendAssistantChunk(row, chunk)),
                 CancellationToken.None,
-                onToolExecuted: toolResult => RunOnUi(() => OnChatToolExecuted(row, toolResult)));
+                onAgentStep: label => RunOnUi(() => OnChatAgentStep(row, label)));
 
             RunOnUi(() => FinalizeConversationRow(row, response));
             SaveResponseArtifacts(projectRoot, response);
@@ -893,31 +889,19 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Handles an in-chat tool execution by replacing the streamed tool request with a short notice.
+    /// Handles an agent step (tool discovery or tool run) by replacing the streamed protocol JSON with a notice.
     /// </summary>
     /// <param name="row">The conversation row.</param>
-    /// <param name="toolResult">The tool result.</param>
-    private void OnChatToolExecuted(ConversationListItem? row, AgentToolResult toolResult)
+    /// <param name="label">The step label.</param>
+    private void OnChatAgentStep(ConversationListItem? row, string label)
     {
         if (row is null)
         {
             return;
         }
 
-        string info = string.Empty;
-
-        if (toolResult.Result is FetchUrlResult fetchResult
-            && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
-        {
-            info = uri.Host;
-        }
-        else if (toolResult.Result is WebSearchResult searchResult)
-        {
-            info = searchResult.Query;
-        }
-
-        // Clear the streamed tool_request JSON and show a short notice; the final answer streams in next.
-        row.AssistantContent = $"[도구 실행: {toolResult.Tool} {info}]" + Environment.NewLine;
+        // Clear the streamed protocol JSON and show a short notice; the final answer streams in next.
+        row.AssistantContent = $"[{label}]" + Environment.NewLine;
         ConversationGrid.ScrollIntoView(row);
     }
 

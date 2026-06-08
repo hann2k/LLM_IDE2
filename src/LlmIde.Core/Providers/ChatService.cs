@@ -61,12 +61,10 @@ public sealed class ChatService
     /// The in-chat tool instruction injected when tools are available.
     /// </summary>
     private const string ToolInstruction =
-        "외부 정보가 필요하면 다른 텍스트 없이 아래 JSON 중 하나만 출력하라.\n" +
-        "- 웹 검색: {\"type\":\"tool_request\",\"tool\":\"web_search\",\"arguments\":{\"query\":\"검색어\",\"maxResults\":5}}\n" +
-        "- URL 본문: {\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://...\",\"maxChars\":12000}}\n" +
-        "무엇을 찾아 달라는 요청은 보통 먼저 web_search로 검색하고, 필요하면 fetch_url로 본문을 가져온다.\n" +
-        "도구 결과(tool_result)가 제공되면 그 내용만 근거로 평소 형식대로 답하라.\n" +
-        "도구 결과 없이 추측하지 마라. 외부 정보가 필요 없으면 평소대로 바로 답하라.";
+        "도구가 필요하면 먼저 다른 텍스트 없이 {\"type\":\"list_tools\"} 만 출력해 도구 목록을 요청하라.\n" +
+        "tool_list 응답에서 도구 이름과 인자를 확인한 뒤 {\"type\":\"tool_request\",\"tool\":\"<이름>\",\"arguments\":{ ... }} 로 사용하라.\n" +
+        "tool_result가 제공되면 그 내용만 근거로 평소 형식대로 답하라. 결과 없이 추측하지 마라.\n" +
+        "외부 정보가 필요 없으면 평소대로 바로 답하라.";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
@@ -126,7 +124,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         List<AgentToolResult> toolResults = [];
-        ChatProviderResponse response = await ResolveWithToolsAsync(preparedRequest, toolResults, null, cancellationToken);
+        ChatProviderResponse response = await ResolveWithToolsAsync(preparedRequest, toolResults, cancellationToken);
         response.SentRequest = preparedRequest.Request;
         response.RequestId = preparedRequest.RequestId;
         response.ToolResults = toolResults;
@@ -164,7 +162,7 @@ public sealed class ChatService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onCompressionRequestReady">Callback invoked before compression is sent.</param>
     /// <param name="onCompressionChunk">Callback invoked for every streamed compression chunk.</param>
-    /// <param name="onToolExecuted">Callback invoked after each in-chat tool runs.</param>
+    /// <param name="onAgentStep">Callback invoked after each tool discovery or tool run, with a short label.</param>
     /// <returns>The completed provider response.</returns>
     public async Task<ChatProviderResponse> StreamAsync(
         string projectRoot,
@@ -175,7 +173,7 @@ public sealed class ChatService
         IReadOnlyList<string>? artifactIds = null,
         Action<ChatProviderResponse>? onCompressionRequestReady = null,
         Action<string>? onCompressionChunk = null,
-        Action<AgentToolResult>? onToolExecuted = null)
+        Action<string>? onAgentStep = null)
     {
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
@@ -186,7 +184,7 @@ public sealed class ChatService
             preparedRequest,
             onChunk,
             toolResults,
-            onToolExecuted,
+            onAgentStep,
             cancellationToken);
 
         ChatProviderResponse response = new ChatProviderResponse
@@ -222,17 +220,15 @@ public sealed class ChatService
     }
 
     /// <summary>
-    /// Sends the request, resolving any tool requests, until a final (non-tool) answer is produced.
+    /// Sends the request, resolving tool discovery and tool requests, until a final answer is produced.
     /// </summary>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="toolResults">The collected tool results.</param>
-    /// <param name="onToolExecuted">Callback invoked after each tool runs.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The final provider response.</returns>
     private async Task<ChatProviderResponse> ResolveWithToolsAsync(
         PreparedChatRequest preparedRequest,
         List<AgentToolResult> toolResults,
-        Action<AgentToolResult>? onToolExecuted,
         CancellationToken cancellationToken)
     {
         ChatProviderResponse response = new ChatProviderResponse();
@@ -244,7 +240,9 @@ public sealed class ChatService
                 preparedRequest.Settings,
                 cancellationToken);
 
-            if (!await TryRunToolAsync(preparedRequest, response.Content, toolResults, onToolExecuted, cancellationToken))
+            (bool handled, _) = await HandleAgentTurnAsync(preparedRequest, response.Content, toolResults, cancellationToken);
+
+            if (!handled)
             {
                 return response;
             }
@@ -254,19 +252,19 @@ public sealed class ChatService
     }
 
     /// <summary>
-    /// Streams the request, resolving any tool requests, until a final (non-tool) answer is produced.
+    /// Streams the request, resolving tool discovery and tool requests, until a final answer is produced.
     /// </summary>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="onChunk">Callback invoked for every streamed chunk.</param>
     /// <param name="toolResults">The collected tool results.</param>
-    /// <param name="onToolExecuted">Callback invoked after each tool runs.</param>
+    /// <param name="onAgentStep">Callback invoked after each tool discovery or tool run, with a short label.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The final answer content.</returns>
     private async Task<string> StreamWithToolsAsync(
         PreparedChatRequest preparedRequest,
         Action<string> onChunk,
         List<AgentToolResult> toolResults,
-        Action<AgentToolResult>? onToolExecuted,
+        Action<string>? onAgentStep,
         CancellationToken cancellationToken)
     {
         for (int turn = 0; turn <= MaxToolTurns; turn++)
@@ -283,42 +281,50 @@ public sealed class ChatService
             }
 
             string text = content.ToString();
+            (bool handled, string? label) = await HandleAgentTurnAsync(preparedRequest, text, toolResults, cancellationToken);
 
-            if (!await TryRunToolAsync(preparedRequest, text, toolResults, onToolExecuted, cancellationToken))
+            if (!handled)
             {
                 return text;
             }
+
+            onAgentStep?.Invoke(label ?? string.Empty);
         }
 
         return string.Empty;
     }
 
     /// <summary>
-    /// Detects a tool request, runs it, and appends the tool result to the conversation messages.
+    /// Handles one model turn: tool discovery (list_tools) or a tool request. Returns whether to continue.
     /// </summary>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="content">The model response content.</param>
     /// <param name="toolResults">The collected tool results.</param>
-    /// <param name="onToolExecuted">Callback invoked after the tool runs.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>True when a tool was run; false when the content is a final answer.</returns>
-    private async Task<bool> TryRunToolAsync(
+    /// <returns>True with a label when handled (continue); false when the content is a final answer.</returns>
+    private async Task<(bool Handled, string? Label)> HandleAgentTurnAsync(
         PreparedChatRequest preparedRequest,
         string content,
         List<AgentToolResult> toolResults,
-        Action<AgentToolResult>? onToolExecuted,
         CancellationToken cancellationToken)
     {
         if (!ToolsEnabled)
         {
-            return false;
+            return (false, null);
         }
 
         ParsedModelMessage parsed = AgentMessageParser.Parse(content);
 
+        if (parsed.Kind == ModelMessageKind.ListTools)
+        {
+            preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
+            preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolList(toolHost.ListTools()) });
+            return (true, "도구 목록 요청");
+        }
+
         if (parsed.Kind != ModelMessageKind.ToolRequest || !toolHost.HasTool(parsed.Tool))
         {
-            return false;
+            return (false, null);
         }
 
         AgentToolRequest toolRequest = new AgentToolRequest
@@ -347,27 +353,29 @@ public sealed class ChatService
 
         toolResults.Add(toolResult);
         preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
-        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = BuildToolResultEnvelope(toolResult) });
-        onToolExecuted?.Invoke(toolResult);
-        return true;
+        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolResult(toolResult) });
+        return (true, DescribeStep(toolResult));
     }
 
     /// <summary>
-    /// Builds the tool_result envelope JSON fed back to the model.
+    /// Builds a short label describing a tool step (host or query only, never secrets).
     /// </summary>
     /// <param name="toolResult">The tool result.</param>
-    /// <returns>The tool_result JSON.</returns>
-    private static string BuildToolResultEnvelope(AgentToolResult toolResult)
+    /// <returns>The step label.</returns>
+    private static string DescribeStep(AgentToolResult toolResult)
     {
-        object payload = toolResult.Result ?? new { ok = toolResult.Ok, errorMessage = toolResult.ErrorMessage };
-        var envelope = new
+        if (toolResult.Result is FetchUrlResult fetchResult
+            && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
         {
-            type = "tool_result",
-            tool = toolResult.Tool,
-            requestId = toolResult.RequestId,
-            result = payload
-        };
-        return JsonSerializer.Serialize(envelope, AgentJson.Options);
+            return $"{toolResult.Tool} 실행: {uri.Host}";
+        }
+
+        if (toolResult.Result is WebSearchResult searchResult)
+        {
+            return $"{toolResult.Tool} 실행: {searchResult.Query}";
+        }
+
+        return $"{toolResult.Tool} 실행";
     }
 
     /// <summary>

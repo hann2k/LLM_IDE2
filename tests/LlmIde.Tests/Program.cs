@@ -60,6 +60,7 @@ public static class Program
             CliWithoutOptionsPrintsFullUsage,
             AgentLoopReturnsFinalAnswer,
             AgentLoopRunsToolThenFinal,
+            AgentLoopListToolsThenAnswers,
             AgentLoopFetchUrlThenFinal,
             AgentLoopMaxTurnsExceeded,
             AgentLoopUnknownToolInvalid,
@@ -971,6 +972,27 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies the agent loop answers a list_tools request, then runs a tool, then finalizes.
+    /// </summary>
+    private static void AgentLoopListToolsThenAnswers()
+    {
+        FakeAgentTool tool = new FakeAgentTool();
+        FakeChatModelClient client = new FakeChatModelClient(
+            "{\"type\":\"list_tools\"}",
+            "{\"type\":\"tool_request\",\"tool\":\"fake_tool\",\"arguments\":{}}",
+            "{\"type\":\"final\",\"answer\":\"done\"}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([tool]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.IsSuccess, "list_tools then tool then final should succeed.");
+        AssertEqual(1, tool.CallCount, "Tool should run once after discovery.");
+        AssertEqual("done", result.FinalText, "Final text should be returned.");
+    }
+
+    /// <summary>
     /// Verifies fetch_url result is used before a final answer.
     /// </summary>
     private static void AgentLoopFetchUrlThenFinal()
@@ -1575,6 +1597,16 @@ public sealed class FakeAgentTool : IAgentTool
     /// Gets the tool name.
     /// </summary>
     public string Name => "fake_tool";
+
+    /// <summary>
+    /// Gets the tool description.
+    /// </summary>
+    public string Description => "테스트 도구";
+
+    /// <summary>
+    /// Gets the tool argument summary.
+    /// </summary>
+    public string Arguments => "{}";
 
     /// <summary>
     /// Executes the fake tool.

@@ -90,6 +90,14 @@ public sealed class AgentLoop : IAgentLoop
                 };
             }
 
+            if (parsed.Kind == ModelMessageKind.ListTools)
+            {
+                string toolListJson = AgentProtocol.ToolList(toolHost.ListTools());
+                turns.Add(new AgentTurn { Role = AgentTurnRole.Tool, Content = toolListJson });
+                messages.Add(new ChatMessage { Role = "user", Content = toolListJson });
+                continue;
+            }
+
             // tool_request
             if (!toolHost.HasTool(parsed.Tool))
             {
@@ -116,7 +124,7 @@ public sealed class AgentLoop : IAgentLoop
             }
 
             toolResults.Add(toolResult);
-            string toolResultJson = BuildToolResultEnvelope(toolResult, options.MaxToolResultChars);
+            string toolResultJson = AgentProtocol.ToolResult(toolResult);
             turns.Add(new AgentTurn { Role = AgentTurnRole.Tool, Content = toolResultJson });
             messages.Add(new ChatMessage { Role = "user", Content = toolResultJson });
         }
@@ -140,73 +148,23 @@ public sealed class AgentLoop : IAgentLoop
             - 도구 결과 없이 URL 내용을 추측하지 마라.
             - 최종 답변은 final JSON으로 반환하라.
 
-            너는 항상 아래 둘 중 하나의 JSON만 반환한다. 다른 텍스트는 출력하지 마라.
+            너는 항상 아래 JSON 중 하나만 반환한다. 다른 텍스트는 출력하지 마라.
+
+            도구 목록 요청:
+            {"type":"list_tools"}
+
+            도구 사용 요청:
+            {"type":"tool_request","tool":"<도구이름>","arguments":{ ... }}
 
             최종 답변:
             {"type":"final","answer":"사용자에게 보여줄 최종 답변"}
 
-            도구 요청(웹 검색):
-            {"type":"tool_request","tool":"web_search","arguments":{"query":"검색어","maxResults":5}}
-
-            도구 요청(URL 본문):
-            {"type":"tool_request","tool":"fetch_url","arguments":{"url":"https://example.com","maxChars":12000}}
-
-            사용 가능한 도구:
-            - web_search: 검색어로 웹을 검색하고 제목/URL/요약 목록을 반환한다.
-            - fetch_url: 주어진 URL을 가져와 본문 텍스트를 반환한다.
-
-            무엇을 찾아 달라는 요청은 보통 먼저 web_search로 검색하고, 필요하면 fetch_url로 본문을 가져와 답한다.
+            절차:
+            - 도구가 필요하면 먼저 list_tools로 도구 목록을 요청하라.
+            - tool_list 응답에서 도구 이름과 인자를 확인한 뒤 tool_request로 사용하라.
+            - tool_result가 제공되면 그 내용만 근거로 답하라. 결과 없이 추측하지 마라.
+            - 충분하면 final로 종료하라.
             """;
-    }
-
-    /// <summary>
-    /// Builds the tool_result envelope JSON sent back to the model.
-    /// </summary>
-    /// <param name="toolResult">The tool result.</param>
-    /// <param name="maxToolResultChars">The maximum tool result text length.</param>
-    /// <returns>The tool_result JSON.</returns>
-    private static string BuildToolResultEnvelope(AgentToolResult toolResult, int maxToolResultChars)
-    {
-        object payload = BuildLimitedPayload(toolResult, maxToolResultChars);
-        var envelope = new
-        {
-            type = "tool_result",
-            tool = toolResult.Tool,
-            requestId = toolResult.RequestId,
-            result = payload
-        };
-        return JsonSerializer.Serialize(envelope, AgentJson.Options);
-    }
-
-    /// <summary>
-    /// Builds the tool result payload, limiting large text before sending to the model.
-    /// </summary>
-    /// <param name="toolResult">The tool result.</param>
-    /// <param name="maxToolResultChars">The maximum tool result text length.</param>
-    /// <returns>The payload object.</returns>
-    private static object BuildLimitedPayload(AgentToolResult toolResult, int maxToolResultChars)
-    {
-        if (toolResult.Result is FetchUrlResult fetchResult && fetchResult.Text.Length > maxToolResultChars)
-        {
-            return new FetchUrlResult
-            {
-                Ok = fetchResult.Ok,
-                Url = fetchResult.Url,
-                ContentType = fetchResult.ContentType,
-                StatusCode = fetchResult.StatusCode,
-                Title = fetchResult.Title,
-                Text = fetchResult.Text[..maxToolResultChars],
-                Truncated = true,
-                ErrorMessage = fetchResult.ErrorMessage
-            };
-        }
-
-        if (toolResult.Result is not null)
-        {
-            return toolResult.Result;
-        }
-
-        return new { ok = toolResult.Ok, errorMessage = toolResult.ErrorMessage };
     }
 
     /// <summary>

@@ -75,6 +75,16 @@ public sealed class WebSearchTool : IAgentTool
     public string Name => "web_search";
 
     /// <summary>
+    /// Gets the tool description.
+    /// </summary>
+    public string Description => "검색어로 웹을 검색하고 제목/URL/요약 목록을 반환한다.";
+
+    /// <summary>
+    /// Gets the tool argument summary.
+    /// </summary>
+    public string Arguments => "{\"query\":\"필수\",\"maxResults\":\"선택, 기본 5\"}";
+
+    /// <summary>
     /// Executes the web_search tool.
     /// </summary>
     /// <param name="request">The tool request.</param>

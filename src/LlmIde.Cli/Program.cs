@@ -53,11 +53,7 @@ public static class Program
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = new AgentToolHost(
-        [
-            new FetchUrlTool(fetchHttpClient),
-            new WebSearchTool(fetchHttpClient)
-        ]);
+        IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>

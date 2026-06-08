@@ -32,6 +32,27 @@ public sealed class AgentToolHost : IAgentToolHost
     public bool HasAnyTool => tools.Count > 0;
 
     /// <summary>
+    /// Lists the available tool descriptors.
+    /// </summary>
+    /// <returns>The available tool descriptors.</returns>
+    public IReadOnlyList<AgentToolDescriptor> ListTools()
+    {
+        List<AgentToolDescriptor> descriptors = [];
+
+        foreach (IAgentTool tool in tools.Values)
+        {
+            descriptors.Add(new AgentToolDescriptor
+            {
+                Name = tool.Name,
+                Description = tool.Description,
+                Arguments = tool.Arguments
+            });
+        }
+
+        return descriptors;
+    }
+
+    /// <summary>
     /// Determines whether a tool is registered.
     /// </summary>
     /// <param name="toolName">The tool name.</param>

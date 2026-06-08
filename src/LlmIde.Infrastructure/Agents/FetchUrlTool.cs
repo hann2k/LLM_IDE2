@@ -75,6 +75,16 @@ public sealed class FetchUrlTool : IAgentTool
     public string Name => "fetch_url";
 
     /// <summary>
+    /// Gets the tool description.
+    /// </summary>
+    public string Description => "주어진 URL을 가져와 본문 텍스트를 반환한다.";
+
+    /// <summary>
+    /// Gets the tool argument summary.
+    /// </summary>
+    public string Arguments => "{\"url\":\"필수\",\"maxChars\":\"선택, 기본 12000\"}";
+
+    /// <summary>
     /// Executes the fetch_url tool.
     /// </summary>
     /// <param name="request">The tool request.</param>

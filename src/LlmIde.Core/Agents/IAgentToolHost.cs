@@ -11,6 +11,12 @@ public interface IAgentToolHost
     bool HasAnyTool { get; }
 
     /// <summary>
+    /// Lists the available tool descriptors.
+    /// </summary>
+    /// <returns>The available tool descriptors.</returns>
+    IReadOnlyList<AgentToolDescriptor> ListTools();
+
+    /// <summary>
     /// Determines whether a tool is registered.
     /// </summary>
     /// <param name="toolName">The tool name.</param>

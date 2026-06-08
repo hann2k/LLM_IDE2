@@ -11,6 +11,16 @@ public interface IAgentTool
     string Name { get; }
 
     /// <summary>
+    /// Gets the tool description shown during tool discovery.
+    /// </summary>
+    string Description { get; }
+
+    /// <summary>
+    /// Gets a short summary of the tool arguments shown during tool discovery.
+    /// </summary>
+    string Arguments { get; }
+
+    /// <summary>
     /// Executes the tool.
     /// </summary>
     /// <param name="request">The tool request.</param>
