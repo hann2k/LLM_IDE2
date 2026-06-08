@@ -221,6 +221,49 @@ public sealed class ChatService
     }
 
     /// <summary>
+    /// Records a manually entered conversation (user + assistant) as a completed turn, without
+    /// calling any provider. Useful for importing a conversation pasted from another session.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="userText">The user message text.</param>
+    /// <param name="assistantText">The assistant message text.</param>
+    /// <returns>The new conversation request identifier.</returns>
+    public string AddManualConversation(string projectRoot, string userText, string assistantText)
+    {
+        string requestId = ConversationSequence.ToId(conversationLogStore.GetNextRequestSequence(projectRoot));
+        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
+
+        conversationLogStore.AppendRequest(projectRoot, new ConversationRequestRecord
+        {
+            RequestId = requestId,
+            RequestType = "manual",
+            CompressionStatus = "skipped",
+            Status = "completed",
+            CreatedAt = createdAt
+        });
+
+        conversationLogStore.AppendMessage(projectRoot, new ConversationMessageRecord
+        {
+            MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
+            RequestId = requestId,
+            Role = "user",
+            Content = userText,
+            CreatedAt = createdAt
+        });
+
+        conversationLogStore.AppendMessage(projectRoot, new ConversationMessageRecord
+        {
+            MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
+            RequestId = requestId,
+            Role = "assistant",
+            Content = assistantText,
+            CreatedAt = createdAt
+        });
+
+        return requestId;
+    }
+
+    /// <summary>
     /// Sends the request, resolving tool discovery and tool requests, until a final answer is produced.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

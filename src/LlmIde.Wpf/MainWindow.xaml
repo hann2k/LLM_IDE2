@@ -121,6 +121,9 @@
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="ImportanceRuleMenuItem_Click" />
                 </MenuItem>
+                <MenuItem Header="대화추가"
+                          IsEnabled="{Binding HasSelectedProject}"
+                          Click="ManualConversationMenuItem_Click" />
                 <MenuItem Header="도구관리"
                           Click="ToolManagerMenuItem_Click" />
             </Menu>
@@ -231,7 +234,14 @@
                                                      Margin="6"
                                                      FontSize="12"
                                                      VerticalScrollBarVisibility="Disabled"
-                                                     HorizontalScrollBarVisibility="Disabled" />
+                                                     HorizontalScrollBarVisibility="Disabled">
+                                            <RichTextBox.ContextMenu>
+                                                <ContextMenu>
+                                                    <MenuItem Header="아티팩트로 추출"
+                                                              Click="ExtractArtifactMenuItem_Click" />
+                                                </ContextMenu>
+                                            </RichTextBox.ContextMenu>
+                                        </RichTextBox>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

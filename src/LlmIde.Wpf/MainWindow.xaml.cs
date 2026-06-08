@@ -484,6 +484,56 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Adds a manually entered conversation (user + assistant) as a completed turn without an LLM call.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ManualConversationMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        ManualConversationDialog dialog = new ManualConversationDialog
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            string projectRoot = viewModel.SelectedProject.Path;
+            chatService.AddManualConversation(projectRoot, dialog.UserText, dialog.AssistantText);
+            ReloadConversations(projectRoot);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "대화 수동 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Reloads the conversation list from disk and scrolls to the latest conversation.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    private void ReloadConversations(string projectRoot)
+    {
+        viewModel.Conversations.Clear();
+
+        foreach (ConversationListItem conversation in ConversationLogReader.Read(projectRoot))
+        {
+            viewModel.Conversations.Add(conversation);
+        }
+
+        ScrollConversationsToEnd();
+    }
+
+    /// <summary>
     /// Opens the edit dialog for project criteria using one line per criterion.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -1105,6 +1155,69 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, "대화 삭제 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Extracts the dragged selection from a conversation response into a new artifact.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ExtractArtifactMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not System.Windows.Controls.MenuItem menuItem
+            || menuItem.Parent is not System.Windows.Controls.ContextMenu contextMenu
+            || contextMenu.PlacementTarget is not System.Windows.Controls.RichTextBox richTextBox
+            || richTextBox.DataContext is not ConversationListItem row)
+        {
+            return;
+        }
+
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        string selection = richTextBox.Selection.Text;
+
+        if (string.IsNullOrWhiteSpace(selection))
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "추출할 영역을 드래그하여 선택하세요.",
+                "아티팩트 추출",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        ArtifactEditDialog dialog = new ArtifactEditDialog(row.RequestId, selection)
+        {
+            Owner = this
+        };
+
+        if (dialog.ShowDialog() != true)
+        {
+            return;
+        }
+
+        try
+        {
+            string projectRoot = viewModel.SelectedProject.Path;
+            artifactService.Save(
+                projectRoot,
+                new ArtifactCandidate
+                {
+                    Title = dialog.ArtifactTitle,
+                    Type = dialog.ArtifactType,
+                    Content = dialog.ArtifactContent
+                },
+                row.RequestId);
+            ReloadArtifacts(projectRoot);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "아티팩트 추출 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

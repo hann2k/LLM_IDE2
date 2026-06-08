@@ -74,7 +74,8 @@ public static class Program
             ChatServiceRunsToolThenAnswers,
             WebSearchParsesResults,
             WebSearchEmptyQueryFails,
-            ConversationDeleteRemovesTurnAndMessages
+            ConversationDeleteRemovesTurnAndMessages,
+            ManualConversationIsStoredAsCompletedTurn
         ];
 
         foreach (Action test in tests)
@@ -1249,6 +1250,63 @@ public static class Program
         IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
         AssertEqual(1, messages.Count, "Only the surviving conversation's messages should remain.");
         AssertEqual("2", messages[0].RequestId, "Remaining message should belong to conversation 2.");
+    }
+
+    /// <summary>
+    /// Verifies a manually added conversation is stored as a completed user+assistant turn without an LLM call.
+    /// </summary>
+    private static void ManualConversationIsStoredAsCompletedTurn()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string root = workspace.Root;
+        ProjectInitializer initializer = CreateProjectInitializer(root);
+        ProjectInitializationResult init = initializer.Initialize(new ProjectInitializationRequest
+        {
+            PId = "Manual",
+            HasExplicitPId = true
+        });
+        string projectRoot = init.ProjectRoot;
+
+        CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
+        ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore(root);
+        ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
+        ContextBuilder contextBuilder = new ContextBuilder(
+            criteriaService,
+            projectStateService,
+            rollingContextStore,
+            new FileSystemRuleStore(),
+            new FileArtifactRuleStore(),
+            new FileImportanceRuleStore(root),
+            artifactService);
+        IConversationLogStore logStore = new CompositeConversationLogStore(
+        [
+            new JsonlConversationLogStore(),
+            new SqliteConversationLogStore()
+        ]);
+        ChatService chatService = new ChatService(
+            new JsonProviderSettingsStore(),
+            new Dictionary<string, IChatProvider>
+            {
+                ["deepseek"] = new ScriptedChatProvider("unused")
+            },
+            logStore,
+            contextBuilder,
+            rollingContextStore,
+            artifactService,
+            new JsonFileProjectStore(root),
+            new AgentToolHost([]));
+
+        string requestId = chatService.AddManualConversation(projectRoot, "수동 사용자 발화", "수동 어시스턴트 응답");
+
+        IReadOnlyList<ConversationMessageRecord> messages = logStore.GetRecentMessages(projectRoot, int.MaxValue);
+        AssertEqual(2, messages.Count, "Manual conversation should store user and assistant messages.");
+        ConversationMessageRecord user = messages.First(message => message.Role == "user");
+        ConversationMessageRecord assistant = messages.First(message => message.Role == "assistant");
+        AssertEqual(requestId, user.RequestId, "User message should use the new request id.");
+        AssertEqual(requestId, assistant.RequestId, "Assistant message should use the new request id.");
+        AssertEqual("수동 사용자 발화", user.Content, "User content should be preserved.");
+        AssertEqual("수동 어시스턴트 응답", assistant.Content, "Assistant content should be preserved.");
     }
 
     /// <summary>
