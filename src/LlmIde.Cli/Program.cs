@@ -53,7 +53,11 @@ public static class Program
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
+        IAgentToolHost agentToolHost = new AgentToolHost(
+        [
+            new FetchUrlTool(fetchHttpClient),
+            new WebSearchTool(fetchHttpClient)
+        ]);
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -322,15 +326,19 @@ public sealed class CliApplication
     {
         foreach (AgentToolResult toolResult in result.ToolResults)
         {
-            string host = string.Empty;
+            string info = string.Empty;
 
             if (toolResult.Result is FetchUrlResult fetchResult
                 && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
             {
-                host = uri.Host;
+                info = "host=" + uri.Host;
+            }
+            else if (toolResult.Result is WebSearchResult searchResult)
+            {
+                info = "query=" + searchResult.Query;
             }
 
-            Console.WriteLine($"[도구] {toolResult.Tool} host={host} ok={toolResult.Ok}");
+            Console.WriteLine($"[도구] {toolResult.Tool} {info} ok={toolResult.Ok}");
         }
 
         Console.WriteLine($"stop_reason: {result.StopReason}");

@@ -27,6 +27,11 @@ public sealed class AgentToolHost : IAgentToolHost
     }
 
     /// <summary>
+    /// Gets a value indicating whether any tool is registered.
+    /// </summary>
+    public bool HasAnyTool => tools.Count > 0;
+
+    /// <summary>
     /// Determines whether a tool is registered.
     /// </summary>
     /// <param name="toolName">The tool name.</param>

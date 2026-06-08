@@ -6,6 +6,11 @@ namespace LlmIde.Core.Agents;
 public interface IAgentToolHost
 {
     /// <summary>
+    /// Gets a value indicating whether any tool is registered.
+    /// </summary>
+    bool HasAnyTool { get; }
+
+    /// <summary>
     /// Determines whether a tool is registered.
     /// </summary>
     /// <param name="toolName">The tool name.</param>

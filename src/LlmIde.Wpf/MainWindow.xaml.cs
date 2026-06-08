@@ -128,7 +128,11 @@ public partial class MainWindow : Window
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
+        IAgentToolHost agentToolHost = new AgentToolHost(
+        [
+            new FetchUrlTool(fetchHttpClient),
+            new WebSearchTool(fetchHttpClient)
+        ]);
         chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -900,16 +904,20 @@ public partial class MainWindow : Window
             return;
         }
 
-        string host = string.Empty;
+        string info = string.Empty;
 
         if (toolResult.Result is FetchUrlResult fetchResult
             && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
         {
-            host = uri.Host;
+            info = uri.Host;
+        }
+        else if (toolResult.Result is WebSearchResult searchResult)
+        {
+            info = searchResult.Query;
         }
 
         // Clear the streamed tool_request JSON and show a short notice; the final answer streams in next.
-        row.AssistantContent = $"[도구 실행: {toolResult.Tool} {host}]" + Environment.NewLine;
+        row.AssistantContent = $"[도구 실행: {toolResult.Tool} {info}]" + Environment.NewLine;
         ConversationGrid.ScrollIntoView(row);
     }
 

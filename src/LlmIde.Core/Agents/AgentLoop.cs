@@ -145,11 +145,17 @@ public sealed class AgentLoop : IAgentLoop
             최종 답변:
             {"type":"final","answer":"사용자에게 보여줄 최종 답변"}
 
-            도구 요청:
+            도구 요청(웹 검색):
+            {"type":"tool_request","tool":"web_search","arguments":{"query":"검색어","maxResults":5}}
+
+            도구 요청(URL 본문):
             {"type":"tool_request","tool":"fetch_url","arguments":{"url":"https://example.com","maxChars":12000}}
 
             사용 가능한 도구:
+            - web_search: 검색어로 웹을 검색하고 제목/URL/요약 목록을 반환한다.
             - fetch_url: 주어진 URL을 가져와 본문 텍스트를 반환한다.
+
+            무엇을 찾아 달라는 요청은 보통 먼저 web_search로 검색하고, 필요하면 fetch_url로 본문을 가져와 답한다.
             """;
     }
 

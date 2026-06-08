@@ -61,10 +61,12 @@ public sealed class ChatService
     /// The in-chat tool instruction injected when tools are available.
     /// </summary>
     private const string ToolInstruction =
-        "외부 URL 내용이 필요하면 다른 텍스트 없이 아래 JSON만 출력하라.\n" +
-        "{\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://...\",\"maxChars\":12000}}\n" +
+        "외부 정보가 필요하면 다른 텍스트 없이 아래 JSON 중 하나만 출력하라.\n" +
+        "- 웹 검색: {\"type\":\"tool_request\",\"tool\":\"web_search\",\"arguments\":{\"query\":\"검색어\",\"maxResults\":5}}\n" +
+        "- URL 본문: {\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://...\",\"maxChars\":12000}}\n" +
+        "무엇을 찾아 달라는 요청은 보통 먼저 web_search로 검색하고, 필요하면 fetch_url로 본문을 가져온다.\n" +
         "도구 결과(tool_result)가 제공되면 그 내용만 근거로 평소 형식대로 답하라.\n" +
-        "도구 결과 없이 URL 내용을 추측하지 마라. 외부 내용이 필요 없으면 평소대로 바로 답하라.";
+        "도구 결과 없이 추측하지 마라. 외부 정보가 필요 없으면 평소대로 바로 답하라.";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
@@ -100,7 +102,7 @@ public sealed class ChatService
     /// <summary>
     /// Gets a value indicating whether in-chat tools are available.
     /// </summary>
-    private bool ToolsEnabled => toolHost.HasTool("fetch_url");
+    private bool ToolsEnabled => toolHost.HasAnyTool;
 
     /// <summary>
     /// Sends a single user message to the project's default provider.

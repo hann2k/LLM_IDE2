@@ -69,7 +69,9 @@ public static class Program
             FetchUrlBlocksFileScheme,
             FetchUrlTruncatesLongResponse,
             FetchUrlToolFailureDoesNotThrow,
-            ChatServiceRunsToolThenAnswers
+            ChatServiceRunsToolThenAnswers,
+            WebSearchParsesResults,
+            WebSearchEmptyQueryFails
         ];
 
         foreach (Action test in tests)
@@ -1129,6 +1131,58 @@ public static class Program
         JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
             JsonSerializer.Serialize(new { url }));
         return new AgentToolRequest { Tool = "fetch_url", RequestId = "tool-001", Arguments = arguments };
+    }
+
+    /// <summary>
+    /// Verifies web_search parses result titles, URLs, and snippets.
+    /// </summary>
+    private static void WebSearchParsesResults()
+    {
+        string html =
+            "<div class=\"result\"><a class=\"result__a\" href=\"//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.com%2Fa\">First &amp; Title</a>" +
+            "<a class=\"result__snippet\">Snippet <b>one</b></a></div>" +
+            "<div class=\"result\"><a class=\"result__a\" href=\"//duckduckgo.com/l/?uddg=https%3A%2F%2Fexample.org%2Fb\">Second</a>" +
+            "<a class=\"result__snippet\">Snippet two</a></div>";
+        WebSearchTool tool = new WebSearchTool(new HttpClient(new FakeHttpMessageHandler(html, "text/html", 200)));
+
+        AgentToolResult result = tool.ExecuteAsync(CreateSearchRequest("example"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        WebSearchResult searchResult = (WebSearchResult)result.Result!;
+        AssertTrue(searchResult.Ok, "Search should succeed.");
+        AssertEqual(2, searchResult.Results.Count, "Two results should be parsed.");
+        AssertEqual("First & Title", searchResult.Results[0].Title, "Title should be decoded.");
+        AssertEqual("https://example.com/a", searchResult.Results[0].Url, "Redirect URL should be resolved.");
+        AssertContains(searchResult.Results[0].Snippet, "one");
+    }
+
+    /// <summary>
+    /// Verifies web_search rejects an empty query.
+    /// </summary>
+    private static void WebSearchEmptyQueryFails()
+    {
+        WebSearchTool tool = new WebSearchTool(new HttpClient(new ThrowingHttpMessageHandler()));
+
+        AgentToolResult result = tool.ExecuteAsync(CreateSearchRequest(string.Empty), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        WebSearchResult searchResult = (WebSearchResult)result.Result!;
+        AssertFalse(result.Ok, "Empty query should fail.");
+        AssertFalse(searchResult.Ok, "Empty query result should fail.");
+    }
+
+    /// <summary>
+    /// Creates a web_search tool request for a query.
+    /// </summary>
+    /// <param name="query">The query.</param>
+    /// <returns>The tool request.</returns>
+    private static AgentToolRequest CreateSearchRequest(string query)
+    {
+        JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { query }));
+        return new AgentToolRequest { Tool = "web_search", RequestId = "tool-001", Arguments = arguments };
     }
 
     /// <summary>
