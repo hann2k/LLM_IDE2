@@ -76,7 +76,8 @@ public static class Program
             WebSearchEmptyQueryFails,
             ConversationDeleteRemovesTurnAndMessages,
             ManualConversationIsStoredAsCompletedTurn,
-            UpdateAssistantMessageContentReplacesContent
+            UpdateAssistantMessageContentReplacesContent,
+            MarkdownSelectionMatchesAcrossMarkers
         ];
 
         foreach (Action test in tests)
@@ -1251,6 +1252,32 @@ public static class Program
         IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
         AssertEqual(1, messages.Count, "Only the surviving conversation's messages should remain.");
         AssertEqual("2", messages[0].RequestId, "Remaining message should belong to conversation 2.");
+    }
+
+    /// <summary>
+    /// Verifies a rendered selection maps back to the original Markdown source span across markers and line breaks.
+    /// </summary>
+    private static void MarkdownSelectionMatchesAcrossMarkers()
+    {
+        // Heading: rendered selection drops the leading "## ".
+        string source = "## 제목\n\n본문 **굵게** 끝";
+        (int Start, int Length)? heading = MarkdownSelectionMatcher.FindSourceSpan(source, "제목");
+        AssertTrue(heading is not null, "Heading text should map to a source span.");
+        AssertEqual("제목", source.Substring(heading!.Value.Start, heading.Value.Length), "Heading span should be the original heading text.");
+
+        // Bold spanning + multi-line: rendered selection "본문 굵게 끝" should map across "**" markers.
+        (int Start, int Length)? bold = MarkdownSelectionMatcher.FindSourceSpan(source, "본문 굵게 끝");
+        AssertTrue(bold is not null, "Bold/multi-line text should map to a source span.");
+        AssertEqual("본문 **굵게** 끝", source.Substring(bold!.Value.Start, bold.Value.Length), "Source span should keep the original Markdown markers.");
+
+        // List items across lines: rendered selection joins items, source keeps "- " markers and newline.
+        string listSource = "- 하나\n- 둘";
+        (int Start, int Length)? list = MarkdownSelectionMatcher.FindSourceSpan(listSource, "하나\r\n둘");
+        AssertTrue(list is not null, "List items should map to a source span.");
+        AssertEqual("하나\n- 둘", listSource.Substring(list!.Value.Start, list.Value.Length), "List span should keep the original source between items.");
+
+        // Missing text returns null.
+        AssertTrue(MarkdownSelectionMatcher.FindSourceSpan(source, "없는내용") is null, "Unmatched text should return null.");
     }
 
     /// <summary>
