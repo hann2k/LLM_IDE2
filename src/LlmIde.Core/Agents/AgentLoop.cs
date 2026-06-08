@@ -120,6 +120,14 @@ public sealed class AgentLoop : IAgentLoop
             }
             catch (Exception ex)
             {
+                // Record the failed execution so no tool usage is omitted, then stop.
+                toolResults.Add(new AgentToolResult
+                {
+                    Tool = toolRequest.Tool,
+                    RequestId = toolRequest.RequestId,
+                    Ok = false,
+                    ErrorMessage = ex.Message
+                });
                 return Failure(turns, toolResults, StopReason.ToolError, ex.Message);
             }
 

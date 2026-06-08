@@ -61,6 +61,7 @@ public static class Program
             AgentLoopReturnsFinalAnswer,
             AgentLoopRunsToolThenFinal,
             AgentLoopListToolsThenAnswers,
+            AgentLoopToolErrorIsRecorded,
             AgentLoopFetchUrlThenFinal,
             AgentLoopMaxTurnsExceeded,
             AgentLoopUnknownToolInvalid,
@@ -993,6 +994,25 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies a tool execution failure is still recorded in the result (no omission).
+    /// </summary>
+    private static void AgentLoopToolErrorIsRecorded()
+    {
+        FakeChatModelClient client = new FakeChatModelClient(
+            "{\"type\":\"tool_request\",\"tool\":\"throwing_tool\",\"arguments\":{}}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([new ThrowingAgentTool()]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(!result.IsSuccess, "Tool error should fail the run.");
+        AssertEqual(StopReason.ToolError, result.StopReason, "Stop reason should be ToolError.");
+        AssertEqual(1, result.ToolResults.Count, "The failed tool execution must still be recorded.");
+        AssertTrue(!result.ToolResults[0].Ok, "Recorded tool result should be marked as failed.");
+    }
+
+    /// <summary>
     /// Verifies fetch_url result is used before a final answer.
     /// </summary>
     private static void AgentLoopFetchUrlThenFinal()
@@ -1323,7 +1343,12 @@ public static class Program
             {
                 ["deepseek"] = new FakeChatProvider()
             },
-            new AgentToolHost([]));
+            new AgentToolHost([]),
+            new CompositeConversationLogStore(
+            [
+                new JsonlConversationLogStore(),
+                new SqliteConversationLogStore()
+            ]));
     }
 
     /// <summary>
@@ -1624,6 +1649,38 @@ public sealed class FakeAgentTool : IAgentTool
             Ok = true,
             Result = new FetchUrlResult { Ok = true, Text = "fake" }
         });
+    }
+}
+
+/// <summary>
+/// A fake agent tool that always throws when executed.
+/// </summary>
+public sealed class ThrowingAgentTool : IAgentTool
+{
+    /// <summary>
+    /// Gets the tool name.
+    /// </summary>
+    public string Name => "throwing_tool";
+
+    /// <summary>
+    /// Gets the tool description.
+    /// </summary>
+    public string Description => "항상 실패하는 테스트 도구";
+
+    /// <summary>
+    /// Gets the tool argument summary.
+    /// </summary>
+    public string Arguments => "{}";
+
+    /// <summary>
+    /// Always throws to simulate a tool execution failure.
+    /// </summary>
+    /// <param name="request">The tool request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Never returns; always throws.</returns>
+    public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
+    {
+        throw new InvalidOperationException("도구 실행 실패");
     }
 }
 

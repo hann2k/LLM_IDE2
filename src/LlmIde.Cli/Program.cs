@@ -54,17 +54,18 @@ public static class Program
             Timeout = TimeSpan.FromSeconds(15)
         };
         IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
+        IConversationLogStore conversationLogStore = new CompositeConversationLogStore(
+        [
+            new JsonlConversationLogStore(),
+            new SqliteConversationLogStore()
+        ]);
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = deepSeekProvider
             },
-            new CompositeConversationLogStore(
-            [
-                new JsonlConversationLogStore(),
-                new SqliteConversationLogStore()
-            ]),
+            conversationLogStore,
             contextBuilder,
             rollingContextStore,
             artifactService,
@@ -91,7 +92,8 @@ public static class Program
             projectStateService,
             artifactService,
             chatProviders,
-            agentToolHost);
+            agentToolHost,
+            conversationLogStore);
 
         return application.Run(args);
     }
@@ -158,6 +160,11 @@ public sealed class CliApplication
     private readonly IAgentToolHost agentToolHost;
 
     /// <summary>
+    /// The conversation log store.
+    /// </summary>
+    private readonly IConversationLogStore conversationLogStore;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -171,6 +178,7 @@ public sealed class CliApplication
     /// <param name="artifactService">The artifact service.</param>
     /// <param name="chatProviders">The chat providers by name.</param>
     /// <param name="agentToolHost">The agent tool host.</param>
+    /// <param name="conversationLogStore">The conversation log store.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
@@ -182,7 +190,8 @@ public sealed class CliApplication
         ProjectStateService projectStateService,
         ArtifactService artifactService,
         IReadOnlyDictionary<string, IChatProvider> chatProviders,
-        IAgentToolHost agentToolHost)
+        IAgentToolHost agentToolHost,
+        IConversationLogStore conversationLogStore)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
@@ -195,6 +204,7 @@ public sealed class CliApplication
         this.artifactService = artifactService;
         this.chatProviders = chatProviders;
         this.agentToolHost = agentToolHost;
+        this.conversationLogStore = conversationLogStore;
     }
 
     /// <summary>
@@ -310,8 +320,48 @@ public sealed class CliApplication
             .GetAwaiter()
             .GetResult();
 
+        LogAgentToolCalls(project.Path, settings, result);
         PrintAgentResult(result);
         return result.IsSuccess ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Persists every tool execution from an agent run to the conversation tool call log.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="settings">The provider settings used for the run.</param>
+    /// <param name="result">The agent run result.</param>
+    private void LogAgentToolCalls(string projectRoot, ProviderSettings settings, AgentRunResult result)
+    {
+        if (result.ToolResults.Count == 0)
+        {
+            return;
+        }
+
+        DateTimeOffset createdAt = DateTimeOffset.UtcNow;
+        string requestId = ConversationSequence.ToId(conversationLogStore.GetNextRequestSequence(projectRoot));
+
+        // Record the agent run as a request so the tool call ids are traceable and unique.
+        conversationLogStore.AppendRequest(projectRoot, new ConversationRequestRecord
+        {
+            RequestId = requestId,
+            RequestType = "agent",
+            Provider = settings.Name,
+            Model = settings.Model,
+            Status = result.IsSuccess ? "completed" : "failed",
+            Error = result.ErrorMessage,
+            CreatedAt = createdAt
+        });
+
+        int sequence = 0;
+
+        foreach (AgentToolResult toolResult in result.ToolResults)
+        {
+            sequence++;
+            conversationLogStore.AppendToolCall(
+                projectRoot,
+                ConversationToolCallRecord.Create(requestId, sequence, toolResult, createdAt));
+        }
     }
 
     /// <summary>

@@ -1,3 +1,5 @@
+using LlmIde.Core.Agents;
+
 namespace LlmIde.Core.Conversations;
 
 /// <summary>
@@ -5,6 +7,48 @@ namespace LlmIde.Core.Conversations;
 /// </summary>
 public sealed class ConversationToolCallRecord
 {
+    /// <summary>
+    /// Creates a sanitized tool call record from a tool result (host/query only, never secrets).
+    /// </summary>
+    /// <param name="requestId">The request identifier this tool call belongs to.</param>
+    /// <param name="sequence">The execution order within the request (1-based).</param>
+    /// <param name="toolResult">The tool result to record.</param>
+    /// <param name="createdAt">The creation timestamp.</param>
+    /// <returns>The tool call record.</returns>
+    public static ConversationToolCallRecord Create(
+        string requestId,
+        int sequence,
+        AgentToolResult toolResult,
+        DateTimeOffset createdAt)
+    {
+        string target = string.Empty;
+        string summary = string.Empty;
+
+        if (toolResult.Result is FetchUrlResult fetchResult)
+        {
+            // Log host only, never the full URL (avoids leaking query-string secrets).
+            target = Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri) ? uri.Host : string.Empty;
+            summary = $"status={fetchResult.StatusCode}, chars={fetchResult.Text.Length}, truncated={fetchResult.Truncated}";
+        }
+        else if (toolResult.Result is WebSearchResult searchResult)
+        {
+            target = searchResult.Query;
+            summary = $"results={searchResult.Results.Count}";
+        }
+
+        return new ConversationToolCallRecord
+        {
+            RequestId = requestId,
+            Sequence = sequence,
+            Tool = toolResult.Tool,
+            Target = target,
+            Ok = toolResult.Ok,
+            ResultSummary = summary,
+            ErrorMessage = toolResult.ErrorMessage,
+            CreatedAt = createdAt
+        };
+    }
+
     /// <summary>
     /// Gets or sets the chat request identifier this tool call belongs to.
     /// </summary>

@@ -374,32 +374,9 @@ public sealed class ChatService
     /// <param name="toolResult">The tool result.</param>
     private void LogToolCall(string projectRoot, string requestId, int sequence, AgentToolResult toolResult)
     {
-        string target = string.Empty;
-        string summary = string.Empty;
-
-        if (toolResult.Result is FetchUrlResult fetchResult)
-        {
-            // Log host only, never the full URL (avoids leaking query-string secrets).
-            target = Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri) ? uri.Host : string.Empty;
-            summary = $"status={fetchResult.StatusCode}, chars={fetchResult.Text.Length}, truncated={fetchResult.Truncated}";
-        }
-        else if (toolResult.Result is WebSearchResult searchResult)
-        {
-            target = searchResult.Query;
-            summary = $"results={searchResult.Results.Count}";
-        }
-
-        conversationLogStore.AppendToolCall(projectRoot, new ConversationToolCallRecord
-        {
-            RequestId = requestId,
-            Sequence = sequence,
-            Tool = toolResult.Tool,
-            Target = target,
-            Ok = toolResult.Ok,
-            ResultSummary = summary,
-            ErrorMessage = toolResult.ErrorMessage,
-            CreatedAt = DateTimeOffset.UtcNow
-        });
+        conversationLogStore.AppendToolCall(
+            projectRoot,
+            ConversationToolCallRecord.Create(requestId, sequence, toolResult, DateTimeOffset.UtcNow));
     }
 
     /// <summary>
