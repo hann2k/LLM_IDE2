@@ -1076,6 +1076,12 @@ public partial class MainWindow : Window
                 Owner = this
             };
             viewer.ShowDialog();
+
+            if (viewer.DeleteRequested)
+            {
+                artifactService.Remove(projectRoot, artifact.ArtifactId);
+                ReloadArtifacts(projectRoot);
+            }
         }
         catch (Exception ex)
         {

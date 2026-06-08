@@ -70,6 +70,14 @@
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="18" />
             <Setter Property="VerticalContentAlignment" Value="Top" />
+            <Style.Triggers>
+                <!-- Use a soft light-gray selection instead of the default blue highlight. -->
+                <Trigger Property="IsSelected" Value="True">
+                    <Setter Property="Background" Value="#EEEEEE" />
+                    <Setter Property="Foreground" Value="Black" />
+                    <Setter Property="BorderBrush" Value="{StaticResource GuideBlueBrush}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
     </Window.Resources>
 

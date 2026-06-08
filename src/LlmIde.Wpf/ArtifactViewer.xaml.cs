@@ -17,6 +17,11 @@ public partial class ArtifactViewer : Window
     private readonly string content;
 
     /// <summary>
+    /// Gets a value indicating whether the user requested deletion of this artifact.
+    /// </summary>
+    public bool DeleteRequested { get; private set; }
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ArtifactViewer"/> class.
     /// </summary>
     /// <param name="title">The artifact title shown in the window title.</param>
@@ -81,6 +86,29 @@ public partial class ArtifactViewer : Window
     private void CopyButton_Click(object sender, RoutedEventArgs e)
     {
         System.Windows.Clipboard.SetText(content);
+    }
+
+    /// <summary>
+    /// Requests deletion of the artifact after user confirmation, then closes the viewer.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void DeleteButton_Click(object sender, RoutedEventArgs e)
+    {
+        MessageBoxResult result = System.Windows.MessageBox.Show(
+            this,
+            "이 아티팩트를 삭제하시겠습니까? 파일도 함께 삭제됩니다.",
+            "아티팩트 삭제",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        DeleteRequested = true;
+        Close();
     }
 
     /// <summary>
