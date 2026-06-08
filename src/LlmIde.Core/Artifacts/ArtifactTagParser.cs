@@ -51,6 +51,48 @@ public static class ArtifactTagParser
         return candidates;
     }
 
+    /// <summary>
+    /// Removes artifact tag blocks from response text for display.
+    /// </summary>
+    /// <param name="text">The response text.</param>
+    /// <returns>The text without artifact blocks.</returns>
+    public static string RemoveArtifacts(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return ArtifactRegex.Replace(text, string.Empty).Trim();
+    }
+
+    /// <summary>
+    /// Replaces artifact tag blocks with the extracted artifact title for display.
+    /// </summary>
+    /// <param name="text">The response text.</param>
+    /// <returns>The text with artifact blocks replaced by their titles.</returns>
+    public static string ReplaceArtifactsWithTitles(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+        {
+            return string.Empty;
+        }
+
+        return ArtifactRegex.Replace(text, ReplaceWithTitle).Trim();
+    }
+
+    /// <summary>
+    /// Builds the title replacement for one artifact match.
+    /// </summary>
+    /// <param name="match">The artifact match.</param>
+    /// <returns>The artifact title marker.</returns>
+    private static string ReplaceWithTitle(Match match)
+    {
+        Dictionary<string, string> attributes = ParseAttributes(match.Groups["attributes"].Value);
+        string title = GetAttribute(attributes, "title", "제목 없는 산출물");
+        return $"[아티팩트: {title}]";
+    }
+
     private static Dictionary<string, string> ParseAttributes(string attributes)
     {
         Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

@@ -8,7 +8,8 @@
         MinHeight="640"
         Background="White"
         FontFamily="Malgun Gothic"
-        Loaded="Window_Loaded">
+        Loaded="Window_Loaded"
+        PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
         <SolidColorBrush x:Key="GuideBlueBrush" Color="#4D8EDB" />
         <Style x:Key="PanelBorderStyle" TargetType="Border">
@@ -50,23 +51,22 @@
             <Setter Property="HorizontalGridLinesBrush" Value="{StaticResource GuideBlueBrush}" />
             <Setter Property="IsReadOnly" Value="True" />
             <Setter Property="RowHeaderWidth" Value="0" />
-            <Setter Property="RowHeight" Value="124" />
             <Setter Property="VerticalGridLinesBrush" Value="{StaticResource GuideBlueBrush}" />
         </Style>
         <Style TargetType="DataGridColumnHeader">
             <Setter Property="Background" Value="White" />
             <Setter Property="BorderBrush" Value="{StaticResource GuideBlueBrush}" />
             <Setter Property="BorderThickness" Value="0,0,1,1" />
-            <Setter Property="FontSize" Value="28" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="FontWeight" Value="Normal" />
             <Setter Property="HorizontalContentAlignment" Value="Center" />
-            <Setter Property="MinHeight" Value="90" />
-            <Setter Property="Padding" Value="12" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="Padding" Value="6" />
         </Style>
         <Style TargetType="DataGridCell">
             <Setter Property="BorderBrush" Value="{StaticResource GuideBlueBrush}" />
             <Setter Property="BorderThickness" Value="0,0,1,1" />
-            <Setter Property="FontSize" Value="24" />
+            <Setter Property="FontSize" Value="12" />
             <Setter Property="Padding" Value="18" />
             <Setter Property="VerticalContentAlignment" Value="Top" />
         </Style>
@@ -88,11 +88,17 @@
                     <MenuItem Header="이름변경"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="RenameProjectMenuItem_Click" />
+                    <MenuItem Header="복제"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="CloneProjectMenuItem_Click" />
                     <MenuItem Header="삭제"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="DeleteProjectMenuItem_Click" />
                 </MenuItem>
                 <MenuItem Header="편집">
+                    <MenuItem Header="기준"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="CriteriaMenuItem_Click" />
                     <MenuItem Header="아티팩트 룰"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="ArtifactRuleMenuItem_Click" />
@@ -122,64 +128,76 @@
             <Border Grid.Column="0"
                     Style="{StaticResource PanelBorderStyle}"
                     BorderThickness="1,0,1,1">
-                <Grid Margin="27,30,20,20">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="프로젝트목록"
-                               FontSize="24"
-                               Margin="0,0,0,22" />
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Projects}"
-                             SelectedItem="{Binding SelectedProject}"
-                             SelectionChanged="ProjectList_SelectionChanged">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="0,0,0,18">
-                                    <TextBlock Text="{Binding DisplayName}" FontSize="23" />
-                                    <TextBlock Text="{Binding PId}" FontSize="13" Foreground="#666666" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
+                <ListBox ItemsSource="{Binding Projects}"
+                         SelectedItem="{Binding SelectedProject}"
+                         SelectionChanged="ProjectList_SelectionChanged"
+                         Padding="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,0,18">
+                                <TextBlock Text="{Binding DisplayName}"
+                                           FontSize="14"
+                                           FontWeight="Bold"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding PId}" FontSize="13" Foreground="#666666" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
 
             <Border Grid.Column="1"
+                    Panel.ZIndex="1"
                     Style="{StaticResource PanelBorderStyle}"
                     BorderThickness="0,0,1,1">
                 <Grid>
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="140" />
                         <RowDefinition Height="*" />
                         <RowDefinition Height="36" />
                     </Grid.RowDefinitions>
-                    <Border Grid.Row="0"
-                            BorderBrush="{StaticResource GuideBlueBrush}"
-                            BorderThickness="0,0,0,1">
-                        <StackPanel Margin="56,28,20,0">
-                            <TextBlock Text="선택된 대화 목록"
-                                       FontSize="24" />
-                        </StackPanel>
-                    </Border>
-                    <DataGrid Grid.Row="1"
+                    <DataGrid x:Name="ConversationGrid"
+                              Grid.Row="0"
                               ItemsSource="{Binding Conversations}"
+                              IsReadOnly="True"
+                              VirtualizingPanel.ScrollUnit="Pixel"
                               VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled">
                         <DataGrid.Columns>
-                            <DataGridTextColumn Header="중요도&#x0a;(0~10)"
-                                                Binding="{Binding ImportanceWeight}"
-                                                Width="150" />
+                            <DataGridTemplateColumn Header="중요도&#x0a;(0~10)"
+                                                    Width="150">
+                                <DataGridTemplateColumn.CellTemplate>
+                                    <DataTemplate>
+                                        <StackPanel VerticalAlignment="Center"
+                                                    Margin="6">
+                                            <TextBlock Text="{Binding Value, ElementName=ImportanceSlider, StringFormat={}{0:0}}"
+                                                       HorizontalAlignment="Center"
+                                                       FontSize="12" />
+                                            <Slider x:Name="ImportanceSlider"
+                                                    Minimum="0"
+                                                    Maximum="10"
+                                                    TickFrequency="1"
+                                                    IsSnapToTickEnabled="True"
+                                                    Value="{Binding ImportanceWeight, Mode=TwoWay}"
+                                                    Margin="0,8,0,0"
+                                                    ValueChanged="ImportanceSlider_ValueChanged"
+                                                    Thumb.DragCompleted="ImportanceSlider_DragCompleted" />
+                                        </StackPanel>
+                                    </DataTemplate>
+                                </DataGridTemplateColumn.CellTemplate>
+                            </DataGridTemplateColumn>
                             <DataGridTemplateColumn Header="[일시]&#x0a;사용자&#x0a;발화내용"
-                                                    Width="250">
+                                                    Width="250"
+                                                    IsReadOnly="True">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
                                         <StackPanel>
+                                            <TextBlock Text="{Binding RequestId, StringFormat=ID {0}}"
+                                                       FontSize="12"
+                                                       Foreground="#666666" />
                                             <TextBlock Text="{Binding CreatedAtText}"
-                                                       FontSize="17" />
+                                                       FontSize="12" />
                                             <TextBlock Text="{Binding UserContent}"
-                                                       FontSize="22"
+                                                       FontSize="12"
                                                        TextWrapping="Wrap"
                                                        Margin="0,12,0,0" />
                                         </StackPanel>
@@ -188,45 +206,98 @@
                             </DataGridTemplateColumn>
                             <DataGridTextColumn Header="LLM&#x0a;응답내용&#x0a;(마크다운 포맷)"
                                                 Binding="{Binding AssistantContent}"
-                                                Width="*" />
+                                                IsReadOnly="True"
+                                                Width="*">
+                                <DataGridTextColumn.ElementStyle>
+                                    <Style TargetType="TextBlock">
+                                        <Setter Property="TextWrapping" Value="Wrap" />
+                                    </Style>
+                                </DataGridTextColumn.ElementStyle>
+                            </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                    <TextBlock Grid.Row="2"
+                    <TextBlock Grid.Row="1"
                                Text="자동스크롤바"
                                HorizontalAlignment="Right"
                                VerticalAlignment="Center"
                                FontSize="24"
                                Margin="0,0,38,0" />
+                    <Border x:Name="ChatInputPanel"
+                            Grid.Row="0"
+                            Visibility="Collapsed"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Stretch"
+                            Background="White"
+                            BorderBrush="{StaticResource GuideBlueBrush}"
+                            BorderThickness="1"
+                            Margin="40,0,40,16">
+                        <Border.RenderTransform>
+                            <TranslateTransform x:Name="ChatInputTransform" />
+                        </Border.RenderTransform>
+                        <Grid Margin="12">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border x:Name="ChatInputDragHandle"
+                                    Grid.Row="0"
+                                    Background="#EEF3FB"
+                                    BorderBrush="{StaticResource GuideBlueBrush}"
+                                    BorderThickness="0,0,0,1"
+                                    Cursor="SizeAll"
+                                    Padding="8,4"
+                                    Margin="0,0,0,8"
+                                    MouseLeftButtonDown="ChatInputDragHandle_MouseLeftButtonDown"
+                                    MouseMove="ChatInputDragHandle_MouseMove"
+                                    MouseLeftButtonUp="ChatInputDragHandle_MouseLeftButtonUp">
+                                <TextBlock Text="입력창"
+                                           FontSize="12"
+                                           Foreground="#444444" />
+                            </Border>
+                            <TextBox x:Name="ChatInputTextBox"
+                                     Grid.Row="1"
+                                     MinHeight="80"
+                                     MaxHeight="220"
+                                     FontSize="18"
+                                     AcceptsReturn="True"
+                                     TextWrapping="Wrap"
+                                     VerticalScrollBarVisibility="Auto"
+                                     PreviewKeyDown="ChatInputTextBox_PreviewKeyDown" />
+                            <TextBlock Grid.Row="2"
+                                       Text="Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기"
+                                       FontSize="13"
+                                       Foreground="#666666"
+                                       Margin="2,8,0,0" />
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
             <Border Grid.Column="2"
                     Style="{StaticResource PanelBorderStyle}"
                     BorderThickness="0,0,1,1">
-                <Grid Margin="16,30,0,20">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="아티팩트 목록"
-                               FontSize="24"
-                               Margin="0,0,0,28" />
-                    <ListBox Grid.Row="1"
-                             ItemsSource="{Binding Artifacts}">
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <StackPanel Margin="0,0,14,18">
-                                    <TextBlock Text="{Binding Title}"
-                                               FontSize="22"
-                                               TextWrapping="Wrap" />
-                                    <TextBlock Text="{Binding Type}"
-                                               FontSize="13"
-                                               Foreground="#666666" />
-                                </StackPanel>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
+                <ListBox ItemsSource="{Binding Artifacts}"
+                         Padding="0">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Margin="0,0,14,18"
+                                        Background="Transparent"
+                                        MouseLeftButtonUp="ArtifactItem_Click">
+                                <TextBlock Text="{Binding Title}"
+                                           FontSize="14"
+                                           FontWeight="Bold"
+                                           TextWrapping="Wrap" />
+                                <TextBlock Text="{Binding Type}"
+                                           FontSize="13"
+                                           Foreground="#666666" />
+                                <TextBlock Text="{Binding SourceRequestId, StringFormat=대화 {0}}"
+                                           FontSize="13"
+                                           Foreground="#666666" />
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
             </Border>
         </Grid>
     </Grid>

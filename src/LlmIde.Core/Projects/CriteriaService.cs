@@ -59,6 +59,40 @@ public sealed class CriteriaService
     }
 
     /// <summary>
+    /// Replaces all criteria using one line per criterion.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="lines">The criterion lines.</param>
+    /// <returns>The rebuilt criteria.</returns>
+    public IReadOnlyList<Criterion> ReplaceFromLines(string projectRoot, IEnumerable<string> lines)
+    {
+        List<Criterion> criteria = [];
+
+        foreach (string line in lines)
+        {
+            string title = line.Trim();
+
+            // Each non-empty line becomes one active criterion.
+            if (string.IsNullOrWhiteSpace(title))
+            {
+                continue;
+            }
+
+            criteria.Add(new Criterion
+            {
+                CriterionId = $"crt_{Guid.NewGuid():N}",
+                Title = title,
+                Description = string.Empty,
+                Priority = "normal",
+                Status = "active"
+            });
+        }
+
+        criteriaStore.Save(projectRoot, criteria);
+        return criteria;
+    }
+
+    /// <summary>
     /// Updates a criterion.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

@@ -36,6 +36,25 @@ public sealed class ProjectRegistryService
     }
 
     /// <summary>
+    /// Gets the next numeric project identifier.
+    /// </summary>
+    /// <returns>The next numeric project identifier.</returns>
+    public string NextProjectPId()
+    {
+        long max = 0;
+
+        foreach (ProjectRegistryEntry project in List())
+        {
+            if (long.TryParse(project.PId, out long value) && value > max)
+            {
+                max = value;
+            }
+        }
+
+        return (max + 1).ToString(System.Globalization.CultureInfo.InvariantCulture);
+    }
+
+    /// <summary>
     /// Gets a project by project identifier.
     /// </summary>
     /// <param name="pId">The project identifier.</param>
@@ -259,7 +278,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when the project identifier is valid.</returns>
     private static bool IsEnglishPId(string pId)
     {
-        if (pId.Length == 0 || !IsAsciiLetter(pId[0]))
+        if (pId.Length == 0 || !(IsAsciiLetter(pId[0]) || IsAsciiDigit(pId[0])))
         {
             return false;
         }

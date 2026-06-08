@@ -350,11 +350,11 @@ public static class Program
         AssertEqual("1", messages[0].MessageId, "First stored user message should use a readable sequence identifier.");
         AssertEqual("2", messages[1].MessageId, "First stored assistant message should use a readable sequence identifier.");
         AssertEqual("1", requests[0].RequestId, "First chat request should use a readable sequence identifier.");
-        AssertEqual("2", requests[1].RequestId, "First compression request should use a readable sequence identifier.");
+        AssertEqual("1c", requests[1].RequestId, "First compression request should use a readable sequence identifier.");
         AssertEqual(7, requests[0].ImportanceWeight, "Chat request should store the parsed importance weight.");
         AssertEqual(0, requests[1].ImportanceWeight, "Compression request should not store chat importance.");
         AssertFileExists(projectRoot, ".llmide/conversations/context-packages/1.json");
-        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/2.json");
+        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/1c.json");
         AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
         string rollingContext = File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md"));
         AssertFalse(string.IsNullOrWhiteSpace(rollingContext), "Current rolling context should be updated.");

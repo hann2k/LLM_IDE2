@@ -96,16 +96,21 @@ public sealed class ChatService
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
         onChatResponseReady?.Invoke(response);
-        ApplyCompressionResult(
-            response,
-            await CompressAfterChatAsync(
-                projectRoot,
-                preparedRequest,
-                message,
-                response.Content,
-                cancellationToken,
-                onCompressionRequestReady,
-                onCompressionChunk));
+
+        // Skip compression entirely when the conversation importance is 2 or below.
+        if (response.ImportanceWeight > 2)
+        {
+            ApplyCompressionResult(
+                response,
+                await CompressAfterChatAsync(
+                    projectRoot,
+                    preparedRequest,
+                    message,
+                    response.Content,
+                    cancellationToken,
+                    onCompressionRequestReady,
+                    onCompressionChunk));
+        }
 
         return response;
     }
@@ -158,16 +163,22 @@ public sealed class ChatService
         response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
 
         StoreAssistantMessage(projectRoot, preparedRequest, response);
-        ApplyCompressionResult(
-            response,
-            await CompressAfterChatAsync(
-                projectRoot,
-                preparedRequest,
-                message,
-                response.Content,
-                cancellationToken,
-                onCompressionRequestReady,
-                onCompressionChunk));
+
+        // Skip compression entirely when the conversation importance is 2 or below.
+        if (response.ImportanceWeight > 2)
+        {
+            ApplyCompressionResult(
+                response,
+                await CompressAfterChatAsync(
+                    projectRoot,
+                    preparedRequest,
+                    message,
+                    response.Content,
+                    cancellationToken,
+                    onCompressionRequestReady,
+                    onCompressionChunk));
+        }
+
         return response;
     }
 
@@ -193,7 +204,7 @@ public sealed class ChatService
 
         long nextRequestSequence = conversationLogStore.GetNextRequestSequence(projectRoot);
         string requestId = ConversationSequence.ToId(nextRequestSequence);
-        string compressionRequestId = ConversationSequence.ToId(nextRequestSequence + 1);
+        string compressionRequestId = requestId + "c";
         ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message, artifactIds);
 
         ChatProviderRequest request = new ChatProviderRequest
@@ -271,22 +282,34 @@ public sealed class ChatService
         string previousRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId;
         string compressionRule = rollingContextStore.LoadCompressionRule(projectRoot);
         string compressionPrompt = BuildCompressionPrompt(projectRoot, preparedRequest, userMessage, assistantMessage);
+        IReadOnlyList<string> activeCriteria = preparedRequest.ContextPackage.ActiveCriteria;
+        string activeCriteriaMessage = BuildActiveCriteriaMessage(activeCriteria);
+        List<ChatMessage> compressionMessages = [];
+
+        // Always send active criteria with the compression request.
+        if (!string.IsNullOrWhiteSpace(activeCriteriaMessage))
+        {
+            compressionMessages.Add(new ChatMessage
+            {
+                Role = "system",
+                Content = activeCriteriaMessage
+            });
+        }
+
+        compressionMessages.Add(new ChatMessage
+        {
+            Role = "system",
+            Content = compressionRule
+        });
+        compressionMessages.Add(new ChatMessage
+        {
+            Role = "user",
+            Content = compressionPrompt
+        });
         ChatProviderRequest compressionRequest = new ChatProviderRequest
         {
             Model = preparedRequest.Request.Model,
-            Messages =
-            [
-                new ChatMessage
-                {
-                    Role = "system",
-                    Content = compressionRule
-                },
-                new ChatMessage
-                {
-                    Role = "user",
-                    Content = compressionPrompt
-                }
-            ]
+            Messages = compressionMessages
         };
         string compressionContextPath = conversationLogStore.SaveContextPackage(
             projectRoot,
@@ -294,7 +317,8 @@ public sealed class ChatService
                 preparedRequest.CompressionRequestId,
                 compressionRule,
                 compressionPrompt,
-                preparedRequest.ContextPackage.RollingContextSummary));
+                preparedRequest.ContextPackage.RollingContextSummary,
+                activeCriteria));
         onCompressionRequestReady?.Invoke(CreateCompressionPreviewResponse(preparedRequest, compressionRequest));
 
         try
@@ -508,12 +532,14 @@ public sealed class ChatService
         string requestId,
         string compressionRule,
         string compressionPrompt,
-        string previousSummary)
+        string previousSummary,
+        IReadOnlyList<string> activeCriteria)
     {
         return new ContextPackage
         {
             RequestId = requestId,
             SystemRule = compressionRule,
+            ActiveCriteria = activeCriteria.ToList(),
             RollingContextSummary = previousSummary,
             UserRequest = compressionPrompt,
             AttachedMessages =
@@ -522,6 +548,30 @@ public sealed class ChatService
                 $"user: {compressionPrompt}"
             ]
         };
+    }
+
+    /// <summary>
+    /// Builds the active criteria system message.
+    /// </summary>
+    /// <param name="activeCriteria">The active criteria.</param>
+    /// <returns>The active criteria system message.</returns>
+    private static string BuildActiveCriteriaMessage(IReadOnlyList<string> activeCriteria)
+    {
+        if (activeCriteria.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        StringBuilder builder = new StringBuilder();
+        builder.AppendLine("다음 활성 프로젝트 기준을 따른다.");
+
+        foreach (string criterion in activeCriteria)
+        {
+            builder.Append("- ");
+            builder.AppendLine(criterion);
+        }
+
+        return builder.ToString();
     }
 
     /// <summary>

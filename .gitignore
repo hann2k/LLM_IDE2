@@ -5,6 +5,7 @@ obj/
 # User and IDE local files
 .vs/
 .vscode/
+.obsidian/
 *.user
 *.suo
 *.userosscache
