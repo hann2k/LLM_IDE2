@@ -1,13 +1,16 @@
+using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Agents;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
+using System.Net.Http;
 using System.Text.Json;
 
 namespace LlmIde.Cli;
@@ -63,6 +66,19 @@ public static class Program
             {
                 ["deepseek"] = deepSeekProvider
             });
+        Dictionary<string, IChatProvider> chatProviders = new Dictionary<string, IChatProvider>
+        {
+            ["deepseek"] = deepSeekProvider
+        };
+        HttpClient fetchHttpClient = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 5
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
         CliApplication application = new CliApplication(
             projectStore,
             projectInitializer,
@@ -72,7 +88,9 @@ public static class Program
             providerSettingsService,
             criteriaService,
             projectStateService,
-            artifactService);
+            artifactService,
+            chatProviders,
+            agentToolHost);
 
         return application.Run(args);
     }
@@ -129,6 +147,16 @@ public sealed class CliApplication
     private readonly ArtifactService artifactService;
 
     /// <summary>
+    /// The chat providers by name.
+    /// </summary>
+    private readonly IReadOnlyDictionary<string, IChatProvider> chatProviders;
+
+    /// <summary>
+    /// The agent tool host.
+    /// </summary>
+    private readonly IAgentToolHost agentToolHost;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="CliApplication"/> class.
     /// </summary>
     /// <param name="projectStore">The project metadata store.</param>
@@ -140,6 +168,8 @@ public sealed class CliApplication
     /// <param name="criteriaService">The criteria service.</param>
     /// <param name="projectStateService">The project state service.</param>
     /// <param name="artifactService">The artifact service.</param>
+    /// <param name="chatProviders">The chat providers by name.</param>
+    /// <param name="agentToolHost">The agent tool host.</param>
     public CliApplication(
         IProjectStore projectStore,
         ProjectInitializer projectInitializer,
@@ -149,7 +179,9 @@ public sealed class CliApplication
         ProviderSettingsService providerSettingsService,
         CriteriaService criteriaService,
         ProjectStateService projectStateService,
-        ArtifactService artifactService)
+        ArtifactService artifactService,
+        IReadOnlyDictionary<string, IChatProvider> chatProviders,
+        IAgentToolHost agentToolHost)
     {
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
@@ -160,6 +192,8 @@ public sealed class CliApplication
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
         this.artifactService = artifactService;
+        this.chatProviders = chatProviders;
+        this.agentToolHost = agentToolHost;
     }
 
     /// <summary>
@@ -230,8 +264,111 @@ public sealed class CliApplication
             return RunArtifacts(args);
         }
 
+        if (command == "agent-run")
+        {
+            return RunAgent(args);
+        }
+
         PrintUsage();
         return 1;
+    }
+
+    /// <summary>
+    /// Runs the agent loop for one user input.
+    /// </summary>
+    /// <param name="args">The command-line arguments.</param>
+    /// <returns>The process exit code.</returns>
+    private int RunAgent(string[] args)
+    {
+        if (args.Length < 3)
+        {
+            PrintAgentUsage();
+            return 1;
+        }
+
+        string projectName = args[1];
+        string message = string.Join(' ', args.Skip(2));
+
+        if (string.IsNullOrWhiteSpace(message))
+        {
+            PrintAgentUsage();
+            return 1;
+        }
+
+        ProjectRegistryEntry project = projectRegistryService.GetRequired(projectName);
+        ProviderSettings settings = GetDefaultProviderSettings(providerSettingsStore.Load(project.Path));
+
+        if (!chatProviders.TryGetValue(settings.Name, out IChatProvider? provider))
+        {
+            throw new InvalidOperationException($"Provider is not available: {settings.Name}");
+        }
+
+        IChatModelClient client = new DeepSeekChatModelClient(provider, settings);
+        AgentLoop loop = new AgentLoop(client, agentToolHost);
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = message }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        PrintAgentResult(result);
+        return result.IsSuccess ? 0 : 1;
+    }
+
+    /// <summary>
+    /// Prints the agent run result. Only host names are printed, never full URLs.
+    /// </summary>
+    /// <param name="result">The agent run result.</param>
+    private static void PrintAgentResult(AgentRunResult result)
+    {
+        foreach (AgentToolResult toolResult in result.ToolResults)
+        {
+            string host = string.Empty;
+
+            if (toolResult.Result is FetchUrlResult fetchResult
+                && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
+            {
+                host = uri.Host;
+            }
+
+            Console.WriteLine($"[도구] {toolResult.Tool} host={host} ok={toolResult.Ok}");
+        }
+
+        Console.WriteLine($"stop_reason: {result.StopReason}");
+
+        if (result.IsSuccess)
+        {
+            Console.WriteLine(result.FinalText);
+        }
+        else
+        {
+            Console.WriteLine($"오류: {result.ErrorMessage}");
+        }
+    }
+
+    /// <summary>
+    /// Gets the default provider settings.
+    /// </summary>
+    /// <param name="settingsDocument">The settings document.</param>
+    /// <returns>The default provider settings.</returns>
+    private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument settingsDocument)
+    {
+        ProviderSettings? settings = settingsDocument.Providers.FirstOrDefault(provider =>
+            string.Equals(provider.Name, settingsDocument.DefaultProvider, StringComparison.OrdinalIgnoreCase));
+
+        if (settings is null)
+        {
+            throw new InvalidOperationException($"Provider settings are missing: {settingsDocument.DefaultProvider}");
+        }
+
+        return settings;
+    }
+
+    /// <summary>
+    /// Prints agent command usage.
+    /// </summary>
+    private static void PrintAgentUsage()
+    {
+        Console.WriteLine("사용법:");
+        Console.WriteLine("  llmide agent-run <project-id> <message>");
     }
 
     /// <summary>
@@ -1558,6 +1695,7 @@ public sealed class CliApplication
         Console.WriteLine("  llmide chat <project-id> <message> --debug");
         Console.WriteLine("  llmide chat <project-id> <message> --no-stream");
         Console.WriteLine("  llmide chat <project-id> <message> --debug --no-stream");
+        Console.WriteLine("  llmide agent-run <project-id> <message>");
     }
 
     /// <summary>

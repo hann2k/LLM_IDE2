@@ -1,15 +1,20 @@
 using LlmIde.Cli;
+using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Agents;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
+using System.Net;
+using System.Net.Http;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 
 namespace LlmIde.Tests;
@@ -52,7 +57,18 @@ public static class Program
             CliArtifactsExtractPrintsCandidates,
             CliChatAttachesArtifact,
             JsonOptionsPreserveKoreanText,
-            CliWithoutOptionsPrintsFullUsage
+            CliWithoutOptionsPrintsFullUsage,
+            AgentLoopReturnsFinalAnswer,
+            AgentLoopRunsToolThenFinal,
+            AgentLoopFetchUrlThenFinal,
+            AgentLoopMaxTurnsExceeded,
+            AgentLoopUnknownToolInvalid,
+            AgentLoopInvalidJsonFails,
+            FetchUrlBlocksLocalhost,
+            FetchUrlBlocksPrivateIp,
+            FetchUrlBlocksFileScheme,
+            FetchUrlTruncatesLongResponse,
+            FetchUrlToolFailureDoesNotThrow
         ];
 
         foreach (Action test in tests)
@@ -912,6 +928,208 @@ public static class Program
     /// </summary>
     /// <param name="ideProgramRoot">The test IDE program root.</param>
     /// <returns>The CLI application.</returns>
+    /// <summary>
+    /// Verifies the agent loop returns immediately on a final answer.
+    /// </summary>
+    private static void AgentLoopReturnsFinalAnswer()
+    {
+        FakeChatModelClient client = new FakeChatModelClient("{\"type\":\"final\",\"answer\":\"hi\"}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.IsSuccess, "Final answer run should succeed.");
+        AssertTrue(result.StopReason == StopReason.FinalAnswer, "Stop reason should be FinalAnswer.");
+        AssertEqual("hi", result.FinalText, "Final text should be returned.");
+        AssertEqual(0, result.ToolResults.Count, "No tools should run for an immediate final answer.");
+    }
+
+    /// <summary>
+    /// Verifies a tool request runs the tool host and the model is called again.
+    /// </summary>
+    private static void AgentLoopRunsToolThenFinal()
+    {
+        FakeAgentTool tool = new FakeAgentTool();
+        FakeChatModelClient client = new FakeChatModelClient(
+            "{\"type\":\"tool_request\",\"tool\":\"fake_tool\",\"arguments\":{}}",
+            "{\"type\":\"final\",\"answer\":\"done\"}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([tool]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.IsSuccess, "Tool then final run should succeed.");
+        AssertEqual(1, tool.CallCount, "Tool should be executed once.");
+        AssertEqual(1, result.ToolResults.Count, "One tool result should be recorded.");
+        AssertEqual("done", result.FinalText, "Final text should be returned after the tool.");
+    }
+
+    /// <summary>
+    /// Verifies fetch_url result is used before a final answer.
+    /// </summary>
+    private static void AgentLoopFetchUrlThenFinal()
+    {
+        FakeHttpMessageHandler handler = new FakeHttpMessageHandler(
+            "<html><title>T</title><body>Hello <b>World</b></body></html>",
+            "text/html",
+            200);
+        FetchUrlTool tool = new FetchUrlTool(new HttpClient(handler));
+        FakeChatModelClient client = new FakeChatModelClient(
+            "{\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://example.com\"}}",
+            "{\"type\":\"final\",\"answer\":\"ok\"}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([tool]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.IsSuccess, "Fetch then final run should succeed.");
+        AssertEqual(1, result.ToolResults.Count, "One tool result should be recorded.");
+        FetchUrlResult fetchResult = (FetchUrlResult)result.ToolResults[0].Result!;
+        AssertTrue(fetchResult.Ok, "Fetch should succeed.");
+        AssertContains(fetchResult.Text, "World");
+        AssertEqual("ok", result.FinalText, "Final text should be returned after fetch_url.");
+    }
+
+    /// <summary>
+    /// Verifies the agent loop stops with MaxTurnsExceeded.
+    /// </summary>
+    private static void AgentLoopMaxTurnsExceeded()
+    {
+        FakeChatModelClient client = new FakeChatModelClient("{\"type\":\"tool_request\",\"tool\":\"fake_tool\",\"arguments\":{}}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([new FakeAgentTool()]));
+
+        AgentRunResult result = loop.RunAsync(
+            new AgentRunRequest { UserInput = "q", Options = new AgentLoopOptions { MaxTurns = 3 } },
+            CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.IsSuccess, "Endless tool requests should not succeed.");
+        AssertTrue(result.StopReason == StopReason.MaxTurnsExceeded, "Stop reason should be MaxTurnsExceeded.");
+    }
+
+    /// <summary>
+    /// Verifies an unknown tool request stops with InvalidToolRequest.
+    /// </summary>
+    private static void AgentLoopUnknownToolInvalid()
+    {
+        FakeChatModelClient client = new FakeChatModelClient("{\"type\":\"tool_request\",\"tool\":\"nope\",\"arguments\":{}}");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([new FakeAgentTool()]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.IsSuccess, "Unknown tool should not succeed.");
+        AssertTrue(result.StopReason == StopReason.InvalidToolRequest, "Stop reason should be InvalidToolRequest.");
+    }
+
+    /// <summary>
+    /// Verifies invalid JSON model output fails safely.
+    /// </summary>
+    private static void AgentLoopInvalidJsonFails()
+    {
+        FakeChatModelClient client = new FakeChatModelClient("this is not json");
+        AgentLoop loop = new AgentLoop(client, new AgentToolHost([]));
+
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = "q" }, CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.IsSuccess, "Invalid JSON should not succeed.");
+        AssertTrue(result.StopReason == StopReason.ModelError, "Stop reason should be ModelError.");
+    }
+
+    /// <summary>
+    /// Verifies fetch_url blocks localhost.
+    /// </summary>
+    private static void FetchUrlBlocksLocalhost()
+    {
+        AssertFetchBlocked("http://localhost:8080/admin");
+    }
+
+    /// <summary>
+    /// Verifies fetch_url blocks private IP ranges.
+    /// </summary>
+    private static void FetchUrlBlocksPrivateIp()
+    {
+        AssertFetchBlocked("http://10.0.0.5/secret");
+    }
+
+    /// <summary>
+    /// Verifies fetch_url blocks the file scheme.
+    /// </summary>
+    private static void FetchUrlBlocksFileScheme()
+    {
+        AssertFetchBlocked("file:///etc/passwd");
+    }
+
+    /// <summary>
+    /// Verifies fetch_url truncates an oversized response.
+    /// </summary>
+    private static void FetchUrlTruncatesLongResponse()
+    {
+        FakeHttpMessageHandler handler = new FakeHttpMessageHandler(new string('a', 50000), "text/plain", 200);
+        FetchUrlTool tool = new FetchUrlTool(new HttpClient(handler), defaultMaxChars: 100);
+
+        AgentToolResult result = tool.ExecuteAsync(CreateFetchRequest("https://example.com"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        FetchUrlResult fetchResult = (FetchUrlResult)result.Result!;
+        AssertTrue(fetchResult.Truncated, "Long response should be truncated.");
+        AssertEqual(100, fetchResult.Text.Length, "Text should be truncated to maxChars.");
+    }
+
+    /// <summary>
+    /// Verifies a tool failure does not throw.
+    /// </summary>
+    private static void FetchUrlToolFailureDoesNotThrow()
+    {
+        FetchUrlTool tool = new FetchUrlTool(new HttpClient(new ThrowingHttpMessageHandler()));
+
+        AgentToolResult result = tool.ExecuteAsync(CreateFetchRequest("https://example.com"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        FetchUrlResult fetchResult = (FetchUrlResult)result.Result!;
+        AssertFalse(result.Ok, "Failed fetch should report not ok.");
+        AssertFalse(fetchResult.Ok, "Failed fetch result should report not ok.");
+    }
+
+    /// <summary>
+    /// Asserts that a fetch_url request to the given URL is blocked.
+    /// </summary>
+    /// <param name="url">The URL to fetch.</param>
+    private static void AssertFetchBlocked(string url)
+    {
+        FetchUrlTool tool = new FetchUrlTool(new HttpClient(new ThrowingHttpMessageHandler()));
+
+        AgentToolResult result = tool.ExecuteAsync(CreateFetchRequest(url), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        FetchUrlResult fetchResult = (FetchUrlResult)result.Result!;
+        AssertFalse(result.Ok, $"Fetch should be blocked: {url}");
+        AssertFalse(fetchResult.Ok, $"Fetch result should be blocked: {url}");
+    }
+
+    /// <summary>
+    /// Creates a fetch_url tool request for a URL.
+    /// </summary>
+    /// <param name="url">The URL.</param>
+    /// <returns>The tool request.</returns>
+    private static AgentToolRequest CreateFetchRequest(string url)
+    {
+        JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { url }));
+        return new AgentToolRequest { Tool = "fetch_url", RequestId = "tool-001", Arguments = arguments };
+    }
+
     private static CliApplication CreateCliApplication(string ideProgramRoot)
     {
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
@@ -961,7 +1179,12 @@ public static class Program
             providerSettingsService,
             criteriaService,
             projectStateService,
-            artifactService);
+            artifactService,
+            new Dictionary<string, IChatProvider>
+            {
+                ["deepseek"] = new FakeChatProvider()
+            },
+            new AgentToolHost([]));
     }
 
     /// <summary>
@@ -1181,6 +1404,148 @@ public static class Program
 /// <summary>
 /// Provides a fake chat provider for CLI tests.
 /// </summary>
+/// <summary>
+/// A scripted model client for agent loop tests.
+/// </summary>
+public sealed class FakeChatModelClient : IChatModelClient
+{
+    /// <summary>
+    /// The scripted responses.
+    /// </summary>
+    private readonly IReadOnlyList<string> responses;
+
+    /// <summary>
+    /// The current response index.
+    /// </summary>
+    private int index;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FakeChatModelClient"/> class.
+    /// </summary>
+    /// <param name="responses">The scripted responses (last one repeats).</param>
+    public FakeChatModelClient(params string[] responses)
+    {
+        this.responses = responses;
+    }
+
+    /// <summary>
+    /// Returns the next scripted response.
+    /// </summary>
+    /// <param name="request">The model request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The model response.</returns>
+    public Task<ChatModelResponse> CompleteAsync(ChatModelRequest request, CancellationToken cancellationToken)
+    {
+        string content = responses.Count == 0
+            ? string.Empty
+            : responses[Math.Min(index, responses.Count - 1)];
+        index++;
+        return Task.FromResult(new ChatModelResponse { Content = content });
+    }
+}
+
+/// <summary>
+/// A fake agent tool used in agent loop tests.
+/// </summary>
+public sealed class FakeAgentTool : IAgentTool
+{
+    /// <summary>
+    /// Gets the number of times the tool was executed.
+    /// </summary>
+    public int CallCount { get; private set; }
+
+    /// <summary>
+    /// Gets the tool name.
+    /// </summary>
+    public string Name => "fake_tool";
+
+    /// <summary>
+    /// Executes the fake tool.
+    /// </summary>
+    /// <param name="request">The tool request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The tool result.</returns>
+    public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
+    {
+        CallCount++;
+        return Task.FromResult(new AgentToolResult
+        {
+            Tool = Name,
+            RequestId = request.RequestId,
+            Ok = true,
+            Result = new FetchUrlResult { Ok = true, Text = "fake" }
+        });
+    }
+}
+
+/// <summary>
+/// A fake HTTP handler returning a fixed response.
+/// </summary>
+public sealed class FakeHttpMessageHandler : HttpMessageHandler
+{
+    /// <summary>
+    /// The response body.
+    /// </summary>
+    private readonly string body;
+
+    /// <summary>
+    /// The response content type.
+    /// </summary>
+    private readonly string contentType;
+
+    /// <summary>
+    /// The response status code.
+    /// </summary>
+    private readonly int statusCode;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FakeHttpMessageHandler"/> class.
+    /// </summary>
+    /// <param name="body">The response body.</param>
+    /// <param name="contentType">The response content type.</param>
+    /// <param name="statusCode">The response status code.</param>
+    public FakeHttpMessageHandler(string body, string contentType, int statusCode)
+    {
+        this.body = body;
+        this.contentType = contentType;
+        this.statusCode = statusCode;
+    }
+
+    /// <summary>
+    /// Returns the fixed response.
+    /// </summary>
+    /// <param name="request">The HTTP request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The HTTP response.</returns>
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        StringContent content = new StringContent(body, Encoding.UTF8);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        HttpResponseMessage response = new HttpResponseMessage((HttpStatusCode)statusCode)
+        {
+            Content = content
+        };
+        return Task.FromResult(response);
+    }
+}
+
+/// <summary>
+/// A fake HTTP handler that always throws (verifies tool failure handling).
+/// </summary>
+public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
+{
+    /// <summary>
+    /// Throws to simulate a network failure.
+    /// </summary>
+    /// <param name="request">The HTTP request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>Never returns.</returns>
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        throw new HttpRequestException("network blocked in test");
+    }
+}
+
 public sealed class FakeChatProvider : IChatProvider
 {
     /// <summary>
