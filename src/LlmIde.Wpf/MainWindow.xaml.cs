@@ -83,19 +83,9 @@ public partial class MainWindow : Window
     private bool isSending;
 
     /// <summary>
-    /// A value indicating whether the chat input box is being dragged.
+    /// The standalone chat input popup window (created on demand).
     /// </summary>
-    private bool isDraggingChatInput;
-
-    /// <summary>
-    /// The last drag position while moving the chat input box.
-    /// </summary>
-    private System.Windows.Point chatInputDragStart;
-
-    /// <summary>
-    /// Suppresses provider change handling while the combo box is populated programmatically.
-    /// </summary>
-    private bool suppressProviderChange;
+    private ChatInputWindow? chatInputWindow;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
@@ -741,114 +731,75 @@ public partial class MainWindow : Window
             return;
         }
 
-        // When the input box is already open, let its own handler manage Enter.
-        if (ChatInputPanel.Visibility == Visibility.Visible)
+        if (viewModel.SelectedProject is null)
         {
             return;
         }
 
-        if (isSending || viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        ShowChatInput();
+        OpenChatInput();
         e.Handled = true;
     }
 
     /// <summary>
-    /// Handles Enter and Escape inside the chat input box.
+    /// Opens (or re-activates) the standalone chat input popup window.
     /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ChatInputTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
-    {
-        if (e.Key == Key.Escape)
-        {
-            // Hide but keep the typed text.
-            e.Handled = true;
-            HideChatInput();
-            return;
-        }
-
-        // In manual conversation mode, Enter inserts a newline (registration uses the button).
-        if (IsManualConversationMode)
-        {
-            return;
-        }
-
-        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
-        {
-            e.Handled = true;
-            HandleChatInputEnter();
-        }
-    }
-
-    /// <summary>
-    /// Gets a value indicating whether manual conversation mode is enabled.
-    /// </summary>
-    private bool IsManualConversationMode => ManualModeCheckBox.IsChecked == true;
-
-    /// <summary>
-    /// Sends the chat input or closes the box when it is empty.
-    /// </summary>
-    private void HandleChatInputEnter()
-    {
-        string text = ChatInputTextBox.Text;
-
-        if (string.IsNullOrWhiteSpace(text))
-        {
-            HideChatInput();
-            ChatInputTextBox.Clear();
-            System.Windows.MessageBox.Show(this, "전송할 내용이 없어 전송되지 않고 닫혔습니다.", "전송", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        _ = SendMessageAsync(text);
-    }
-
-    /// <summary>
-    /// Shows the chat input box and focuses it.
-    /// </summary>
-    private void ShowChatInput()
-    {
-        PopulateProviderCombo();
-        ChatInputPanel.Visibility = Visibility.Visible;
-        ChatInputTextBox.Focus();
-        ChatInputTextBox.CaretIndex = ChatInputTextBox.Text.Length;
-    }
-
-    /// <summary>
-    /// Populates the provider combo box with the project's registered providers.
-    /// </summary>
-    private void PopulateProviderCombo()
+    private void OpenChatInput()
     {
         if (viewModel.SelectedProject is null)
         {
             return;
         }
 
-        ProviderSettingsDocument document = providerSettingsStore.Load(viewModel.SelectedProject.Path);
-
-        suppressProviderChange = true;
-        ProviderComboBox.ItemsSource = document.Providers.Select(provider => provider.Name).ToList();
-        ProviderComboBox.SelectedItem = document.DefaultProvider;
-        suppressProviderChange = false;
+        EnsureChatInputWindow();
+        PopulateChatInputProviders();
+        chatInputWindow!.Show();
+        chatInputWindow.Activate();
+        chatInputWindow.FocusInput();
     }
 
     /// <summary>
-    /// Changes the project's default provider when the user picks one.
+    /// Creates the chat input window once and wires its events to the chat pipeline.
     /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ProviderComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    private void EnsureChatInputWindow()
     {
-        if (suppressProviderChange || viewModel.SelectedProject is null)
+        if (chatInputWindow is not null)
         {
             return;
         }
 
-        if (ProviderComboBox.SelectedItem is not string providerName || string.IsNullOrWhiteSpace(providerName))
+        chatInputWindow = new ChatInputWindow
+        {
+            Owner = this
+        };
+        chatInputWindow.SendRequested += text => _ = SendMessageAsync(text);
+        chatInputWindow.ManualRegisterRequested = TryRegisterManualConversation;
+        chatInputWindow.ProviderChanged += ChangeDefaultProvider;
+        chatInputWindow.Closed += (_, _) => chatInputWindow = null;
+    }
+
+    /// <summary>
+    /// Loads the project's registered providers into the chat input window.
+    /// </summary>
+    private void PopulateChatInputProviders()
+    {
+        if (chatInputWindow is null || viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        ProviderSettingsDocument document = providerSettingsStore.Load(viewModel.SelectedProject.Path);
+        chatInputWindow.SetProviders(
+            document.Providers.Select(provider => provider.Name).ToList(),
+            document.DefaultProvider);
+    }
+
+    /// <summary>
+    /// Changes the project's default provider.
+    /// </summary>
+    /// <param name="providerName">The provider name.</param>
+    private void ChangeDefaultProvider(string providerName)
+    {
+        if (viewModel.SelectedProject is null)
         {
             return;
         }
@@ -867,128 +818,30 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Toggles manual conversation mode: shows the assistant input and register button.
+    /// Registers a manual conversation (user + assistant) without an LLM call.
     /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ManualModeCheckBox_Changed(object sender, RoutedEventArgs e)
-    {
-        bool manual = IsManualConversationMode;
-        AssistantInputArea.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        RegisterManualButton.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
-        ChatInputHint.Text = manual
-            ? "수동대화: Enter=줄바꿈, [등록]으로 추가, ESC: 닫기"
-            : "Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기";
-    }
-
-    /// <summary>
-    /// Registers a manually entered conversation (user + assistant) without an LLM call.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void RegisterManualButton_Click(object sender, RoutedEventArgs e)
+    /// <param name="userText">The user message.</param>
+    /// <param name="assistantText">The assistant message.</param>
+    /// <returns>True when registration succeeded.</returns>
+    private bool TryRegisterManualConversation(string userText, string assistantText)
     {
         if (viewModel.SelectedProject is null)
         {
-            return;
-        }
-
-        if (string.IsNullOrWhiteSpace(ChatInputTextBox.Text) || string.IsNullOrWhiteSpace(AssistantInputTextBox.Text))
-        {
-            System.Windows.MessageBox.Show(this, "user와 assistant 내용을 모두 입력하세요.", "수동대화 추가", MessageBoxButton.OK, MessageBoxImage.Warning);
-            return;
+            return false;
         }
 
         try
         {
             string projectRoot = viewModel.SelectedProject.Path;
-            chatService.AddManualConversation(projectRoot, ChatInputTextBox.Text, AssistantInputTextBox.Text);
+            chatService.AddManualConversation(projectRoot, userText, assistantText);
             ReloadConversations(projectRoot);
-            ChatInputTextBox.Clear();
-            AssistantInputTextBox.Clear();
-            ChatInputTextBox.Focus();
+            return true;
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, "수동대화 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+            return false;
         }
-    }
-
-    /// <summary>
-    /// Resizes the chat input panel when the bottom-right grip is dragged.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The drag delta event arguments.</param>
-    private void ChatInputResizeGrip_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
-    {
-        double newWidth = Math.Max(ChatInputPanel.MinWidth, ChatInputPanel.Width + e.HorizontalChange);
-        double newHeight = Math.Max(ChatInputPanel.MinHeight, ChatInputPanel.Height + e.VerticalChange);
-
-        // The panel is bottom-anchored; shift it down by the height change so the top edge stays put
-        // and the bottom edge follows the cursor.
-        double appliedHeightChange = newHeight - ChatInputPanel.Height;
-        ChatInputPanel.Width = newWidth;
-        ChatInputPanel.Height = newHeight;
-        ChatInputTransform.Y += appliedHeightChange;
-    }
-
-    /// <summary>
-    /// Hides the chat input box without clearing the text.
-    /// </summary>
-    private void HideChatInput()
-    {
-        ChatInputPanel.Visibility = Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// Begins dragging the chat input box.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ChatInputDragHandle_MouseLeftButtonDown(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is not UIElement handle)
-        {
-            return;
-        }
-
-        isDraggingChatInput = true;
-        chatInputDragStart = e.GetPosition(this);
-        handle.CaptureMouse();
-    }
-
-    /// <summary>
-    /// Moves the chat input box while dragging.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ChatInputDragHandle_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (!isDraggingChatInput)
-        {
-            return;
-        }
-
-        System.Windows.Point current = e.GetPosition(this);
-        ChatInputTransform.X += current.X - chatInputDragStart.X;
-        ChatInputTransform.Y += current.Y - chatInputDragStart.Y;
-        chatInputDragStart = current;
-    }
-
-    /// <summary>
-    /// Ends dragging the chat input box.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ChatInputDragHandle_MouseLeftButtonUp(object sender, System.Windows.Input.MouseButtonEventArgs e)
-    {
-        if (sender is not UIElement handle)
-        {
-            return;
-        }
-
-        isDraggingChatInput = false;
-        handle.ReleaseMouseCapture();
     }
 
     /// <summary>
@@ -1005,10 +858,6 @@ public partial class MainWindow : Window
 
         isSending = true;
         string projectRoot = viewModel.SelectedProject.Path;
-
-        // The send is accepted: hide and clear the input box.
-        HideChatInput();
-        ChatInputTextBox.Clear();
 
         ConversationListItem? row = null;
         DateTimeOffset sentAt = DateTimeOffset.Now;
@@ -1148,8 +997,8 @@ public partial class MainWindow : Window
         // When no row was added the request was never stored, so restore the input for retry.
         if (row is null)
         {
-            ChatInputTextBox.Text = text;
-            ShowChatInput();
+            EnsureChatInputWindow();
+            chatInputWindow!.RestoreForRetry(text);
         }
 
         System.Windows.MessageBox.Show(this, ex.Message, "전송 오류", MessageBoxButton.OK, MessageBoxImage.Error);
