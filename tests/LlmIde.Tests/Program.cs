@@ -73,7 +73,8 @@ public static class Program
             FetchUrlToolFailureDoesNotThrow,
             ChatServiceRunsToolThenAnswers,
             WebSearchParsesResults,
-            WebSearchEmptyQueryFails
+            WebSearchEmptyQueryFails,
+            ConversationDeleteRemovesTurnAndMessages
         ];
 
         foreach (Action test in tests)
@@ -1217,6 +1218,37 @@ public static class Program
         WebSearchResult searchResult = (WebSearchResult)result.Result!;
         AssertFalse(result.Ok, "Empty query should fail.");
         AssertFalse(searchResult.Ok, "Empty query result should fail.");
+    }
+
+    /// <summary>
+    /// Verifies deleting a conversation removes its turn, messages, and tool calls but keeps others.
+    /// </summary>
+    private static void ConversationDeleteRemovesTurnAndMessages()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string root = workspace.Root;
+        IConversationLogStore store = new CompositeConversationLogStore(
+        [
+            new JsonlConversationLogStore(),
+            new SqliteConversationLogStore()
+        ]);
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+
+        store.SaveContextPackage(root, new ContextPackage { RequestId = "1" });
+        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "1", RequestType = "chat", CreatedAt = now });
+        store.AppendMessage(root, new ConversationMessageRecord { MessageId = "1", RequestId = "1", Role = "user", Content = "hi", CreatedAt = now });
+        store.AppendMessage(root, new ConversationMessageRecord { MessageId = "2", RequestId = "1", Role = "assistant", Content = "yo", CreatedAt = now });
+        store.AppendToolCall(root, new ConversationToolCallRecord { RequestId = "1", Sequence = 1, Tool = "web_search", Ok = true, CreatedAt = now });
+
+        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "2", RequestType = "chat", CreatedAt = now });
+        store.AppendMessage(root, new ConversationMessageRecord { MessageId = "3", RequestId = "2", Role = "user", Content = "keep", CreatedAt = now });
+
+        store.DeleteConversation(root, "1");
+
+        IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
+        AssertEqual(1, messages.Count, "Only the surviving conversation's messages should remain.");
+        AssertEqual("2", messages[0].RequestId, "Remaining message should belong to conversation 2.");
     }
 
     /// <summary>

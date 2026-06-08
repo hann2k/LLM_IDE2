@@ -147,6 +147,87 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Deletes a conversation and its compression turn from the JSONL logs and context packages.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    public void DeleteConversation(string projectRoot, string requestId)
+    {
+        string compressionRequestId = requestId + "c";
+        string conversationsDirectory = GetConversationsDirectory(projectRoot);
+
+        string messagePath = Path.Combine(conversationsDirectory, LlmIdeLayout.MessagesFileName);
+        RemoveJsonLines<ConversationMessageRecord>(
+            messagePath,
+            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+
+        string requestPath = Path.Combine(conversationsDirectory, LlmIdeLayout.RequestsFileName);
+        RemoveJsonLines<ConversationRequestRecord>(
+            requestPath,
+            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+
+        string toolCallPath = Path.Combine(conversationsDirectory, LlmIdeLayout.ToolCallsFileName);
+        RemoveJsonLines<ConversationToolCallRecord>(
+            toolCallPath,
+            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+
+        string packageDirectory = Path.Combine(conversationsDirectory, LlmIdeLayout.ContextPackagesDirectoryName);
+        DeleteFileIfExists(Path.Combine(packageDirectory, $"{requestId}.json"));
+        DeleteFileIfExists(Path.Combine(packageDirectory, $"{compressionRequestId}.json"));
+    }
+
+    /// <summary>
+    /// Determines whether a record's request identifier is the chat or its compression request.
+    /// </summary>
+    /// <param name="recordRequestId">The record's request identifier.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    /// <param name="compressionRequestId">The compression request identifier.</param>
+    /// <returns>True when the record belongs to the conversation being deleted.</returns>
+    private static bool IsTargetRequest(string recordRequestId, string requestId, string compressionRequestId)
+    {
+        return string.Equals(recordRequestId, requestId, StringComparison.Ordinal)
+            || string.Equals(recordRequestId, compressionRequestId, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// Rewrites a JSONL file without the records matching a predicate.
+    /// </summary>
+    /// <typeparam name="TValue">The record type.</typeparam>
+    /// <param name="path">The JSONL file path.</param>
+    /// <param name="shouldRemove">The predicate selecting records to remove.</param>
+    private static void RemoveJsonLines<TValue>(string path, Func<TValue, bool> shouldRemove)
+    {
+        if (!File.Exists(path))
+        {
+            return;
+        }
+
+        List<TValue> kept = [];
+
+        foreach (TValue value in ReadJsonLines<TValue>(path))
+        {
+            if (!shouldRemove(value))
+            {
+                kept.Add(value);
+            }
+        }
+
+        WriteJsonLines(path, kept);
+    }
+
+    /// <summary>
+    /// Deletes a file when it exists.
+    /// </summary>
+    /// <param name="path">The file path.</param>
+    private static void DeleteFileIfExists(string path)
+    {
+        if (File.Exists(path))
+        {
+            File.Delete(path);
+        }
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from the JSONL message log.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

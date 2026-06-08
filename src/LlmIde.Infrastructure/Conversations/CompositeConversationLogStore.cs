@@ -142,6 +142,19 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Deletes a conversation from all stores.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    public void DeleteConversation(string projectRoot, string requestId)
+    {
+        foreach (IConversationLogStore store in stores)
+        {
+            store.DeleteConversation(projectRoot, requestId);
+        }
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from the primary readable store.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

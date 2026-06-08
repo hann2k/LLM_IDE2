@@ -57,6 +57,14 @@ public interface IConversationLogStore
     void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall);
 
     /// <summary>
+    /// Deletes a conversation (its chat turn, messages, context package, tool calls, and the
+    /// associated compression turn) by chat request identifier. Rolling context summaries are left intact.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    void DeleteConversation(string projectRoot, string requestId);
+
+    /// <summary>
     /// Gets recent conversation messages in chronological order.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

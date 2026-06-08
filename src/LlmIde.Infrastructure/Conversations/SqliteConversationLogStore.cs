@@ -251,6 +251,28 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Deletes a conversation and its compression turn from SQLite. Rolling context is left intact.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    public void DeleteConversation(string projectRoot, string requestId)
+    {
+        string compressionRequestId = requestId + "c";
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            delete from conversation_messages where request_id in ($request_id, $compression_request_id);
+            delete from agent_tool_calls where request_id in ($request_id, $compression_request_id);
+            delete from context_packages where request_id in ($request_id, $compression_request_id);
+            delete from conversation_turns where request_id in ($request_id, $compression_request_id);
+            """;
+        command.Parameters.AddWithValue("$request_id", requestId);
+        command.Parameters.AddWithValue("$compression_request_id", compressionRequestId);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from SQLite.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

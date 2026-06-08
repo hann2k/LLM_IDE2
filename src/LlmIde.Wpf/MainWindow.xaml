@@ -187,6 +187,11 @@
                                                     Margin="0,8,0,0"
                                                     ValueChanged="ImportanceSlider_ValueChanged"
                                                     Thumb.DragCompleted="ImportanceSlider_DragCompleted" />
+                                            <Button Content="삭제"
+                                                    FontSize="12"
+                                                    Height="28"
+                                                    Margin="0,12,0,0"
+                                                    Click="DeleteConversationButton_Click" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>

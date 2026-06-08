@@ -1050,6 +1050,46 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Deletes the conversation row after user confirmation.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void DeleteConversationButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not FrameworkElement element || element.DataContext is not ConversationListItem row)
+        {
+            return;
+        }
+
+        if (viewModel.SelectedProject is null || string.IsNullOrWhiteSpace(row.RequestId))
+        {
+            return;
+        }
+
+        MessageBoxResult result = System.Windows.MessageBox.Show(
+            this,
+            $"이 대화(ID {row.RequestId})를 삭제하시겠습니까? 대화 로그에서 제거됩니다.",
+            "대화 삭제",
+            MessageBoxButton.OKCancel,
+            MessageBoxImage.Warning);
+
+        if (result != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        try
+        {
+            conversationLogStore.DeleteConversation(viewModel.SelectedProject.Path, row.RequestId);
+            viewModel.Conversations.Remove(row);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "대화 삭제 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
     /// Opens the artifact viewer for a clicked artifact.
     /// </summary>
     /// <param name="sender">The event sender.</param>
