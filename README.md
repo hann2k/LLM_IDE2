@@ -6,6 +6,33 @@ IDE가 프로젝트 상태, 기준, 대화 로그, 맥락 요약, 산출물을 �
 현재 개발 단계는 Phase 9 WPF GUI 적용 단계다.
 Phase 1~8.5의 Core/CLI 기반 MVP 기능은 구현되어 있고, WPF에서 같은 Core와 같은 `.llmide` 데이터를 사용하는 GUI 기능을 연결하는 중이다.
 
+[!IMPORTANT]
+
+> ## License / Usage Terms
+>
+> This project is  **source-available for personal and non-commercial use only** .
+>
+> 이 프로젝트는 **개인 및 비상업적 용도에 한해 소스 열람과 사용을 허용**합니다.
+>
+> 허용되는 사용:
+>
+> * 소스 코드 열람, 복제, 학습
+> * 개인, 교육, 연구, 비상업적 목적의 사용
+> * 비상업적 목적의 개인 수정
+>
+> 사전 서면 승인 없이 금지되는 사용:
+>
+> * 상업적 목적의 사용
+> * 판매, 재라이선스, 임대, 유료 호스팅, 유료 서비스 제공
+> * 상업 제품, SaaS, 사내 업무 도구, 유료 컨설팅 산출물에 포함
+> * 저작권, 라이선스, 출처 표시 제거
+>
+> 상업적 사용은 저작자의 사전 승인이 필요합니다.
+>
+> Copyright © 2026 hann2k. All rights reserved except as expressly permitted above.
+>
+> 상업적 라이선스 문의는 저장소 소유자에게 연락하십시오.
+
 ## 현재 상태
 
 완료된 단계:
