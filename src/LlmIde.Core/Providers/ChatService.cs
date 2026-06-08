@@ -1,7 +1,9 @@
+using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using System.Text;
+using System.Text.Json;
 
 namespace LlmIde.Core.Providers;
 
@@ -46,6 +48,25 @@ public sealed class ChatService
     private readonly IProjectStore projectStore;
 
     /// <summary>
+    /// The agent tool host (enables in-chat tool calls such as fetch_url).
+    /// </summary>
+    private readonly IAgentToolHost toolHost;
+
+    /// <summary>
+    /// The maximum number of tool resolution turns per chat request.
+    /// </summary>
+    private const int MaxToolTurns = 4;
+
+    /// <summary>
+    /// The in-chat tool instruction injected when tools are available.
+    /// </summary>
+    private const string ToolInstruction =
+        "외부 URL 내용이 필요하면 다른 텍스트 없이 아래 JSON만 출력하라.\n" +
+        "{\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://...\",\"maxChars\":12000}}\n" +
+        "도구 결과(tool_result)가 제공되면 그 내용만 근거로 평소 형식대로 답하라.\n" +
+        "도구 결과 없이 URL 내용을 추측하지 마라. 외부 내용이 필요 없으면 평소대로 바로 답하라.";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
@@ -55,6 +76,7 @@ public sealed class ChatService
     /// <param name="rollingContextStore">The rolling context store.</param>
     /// <param name="artifactService">The artifact service.</param>
     /// <param name="projectStore">The project metadata store.</param>
+    /// <param name="toolHost">The agent tool host for in-chat tool calls.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
@@ -62,7 +84,8 @@ public sealed class ChatService
         ContextBuilder contextBuilder,
         IRollingContextStore rollingContextStore,
         ArtifactService artifactService,
-        IProjectStore projectStore)
+        IProjectStore projectStore,
+        IAgentToolHost toolHost)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
@@ -71,7 +94,13 @@ public sealed class ChatService
         this.rollingContextStore = rollingContextStore;
         this.artifactService = artifactService;
         this.projectStore = projectStore;
+        this.toolHost = toolHost;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether in-chat tools are available.
+    /// </summary>
+    private bool ToolsEnabled => toolHost.HasTool("fetch_url");
 
     /// <summary>
     /// Sends a single user message to the project's default provider.
@@ -94,12 +123,11 @@ public sealed class ChatService
     {
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
-        ChatProviderResponse response = await preparedRequest.Provider.SendAsync(
-            preparedRequest.Request,
-            preparedRequest.Settings,
-            cancellationToken);
+        List<AgentToolResult> toolResults = [];
+        ChatProviderResponse response = await ResolveWithToolsAsync(preparedRequest, toolResults, null, cancellationToken);
         response.SentRequest = preparedRequest.Request;
         response.RequestId = preparedRequest.RequestId;
+        response.ToolResults = toolResults;
         ApplyImportanceResult(projectRoot, preparedRequest, response);
         response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
 
@@ -134,6 +162,7 @@ public sealed class ChatService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <param name="onCompressionRequestReady">Callback invoked before compression is sent.</param>
     /// <param name="onCompressionChunk">Callback invoked for every streamed compression chunk.</param>
+    /// <param name="onToolExecuted">Callback invoked after each in-chat tool runs.</param>
     /// <returns>The completed provider response.</returns>
     public async Task<ChatProviderResponse> StreamAsync(
         string projectRoot,
@@ -143,30 +172,29 @@ public sealed class ChatService
         CancellationToken cancellationToken,
         IReadOnlyList<string>? artifactIds = null,
         Action<ChatProviderResponse>? onCompressionRequestReady = null,
-        Action<string>? onCompressionChunk = null)
+        Action<string>? onCompressionChunk = null,
+        Action<AgentToolResult>? onToolExecuted = null)
     {
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         onRequestReady?.Invoke(CreatePreviewResponse(preparedRequest));
 
-        StringBuilder content = new StringBuilder();
-
-        await foreach (string chunk in preparedRequest.Provider.StreamAsync(
-            preparedRequest.Request,
-            preparedRequest.Settings,
-            cancellationToken))
-        {
-            content.Append(chunk);
-            onChunk(chunk);
-        }
+        List<AgentToolResult> toolResults = [];
+        string finalContent = await StreamWithToolsAsync(
+            preparedRequest,
+            onChunk,
+            toolResults,
+            onToolExecuted,
+            cancellationToken);
 
         ChatProviderResponse response = new ChatProviderResponse
         {
-            Content = content.ToString(),
+            Content = finalContent,
             Provider = preparedRequest.Settings.Name,
             Model = preparedRequest.Request.Model,
             SentRequest = preparedRequest.Request,
             RequestId = preparedRequest.RequestId,
+            ToolResults = toolResults
         };
         ApplyImportanceResult(projectRoot, preparedRequest, response);
         response.ArtifactCandidates = artifactService.ExtractCandidates(response.Content).ToList();
@@ -189,6 +217,155 @@ public sealed class ChatService
         }
 
         return response;
+    }
+
+    /// <summary>
+    /// Sends the request, resolving any tool requests, until a final (non-tool) answer is produced.
+    /// </summary>
+    /// <param name="preparedRequest">The prepared request.</param>
+    /// <param name="toolResults">The collected tool results.</param>
+    /// <param name="onToolExecuted">Callback invoked after each tool runs.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The final provider response.</returns>
+    private async Task<ChatProviderResponse> ResolveWithToolsAsync(
+        PreparedChatRequest preparedRequest,
+        List<AgentToolResult> toolResults,
+        Action<AgentToolResult>? onToolExecuted,
+        CancellationToken cancellationToken)
+    {
+        ChatProviderResponse response = new ChatProviderResponse();
+
+        for (int turn = 0; turn <= MaxToolTurns; turn++)
+        {
+            response = await preparedRequest.Provider.SendAsync(
+                preparedRequest.Request,
+                preparedRequest.Settings,
+                cancellationToken);
+
+            if (!await TryRunToolAsync(preparedRequest, response.Content, toolResults, onToolExecuted, cancellationToken))
+            {
+                return response;
+            }
+        }
+
+        return response;
+    }
+
+    /// <summary>
+    /// Streams the request, resolving any tool requests, until a final (non-tool) answer is produced.
+    /// </summary>
+    /// <param name="preparedRequest">The prepared request.</param>
+    /// <param name="onChunk">Callback invoked for every streamed chunk.</param>
+    /// <param name="toolResults">The collected tool results.</param>
+    /// <param name="onToolExecuted">Callback invoked after each tool runs.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The final answer content.</returns>
+    private async Task<string> StreamWithToolsAsync(
+        PreparedChatRequest preparedRequest,
+        Action<string> onChunk,
+        List<AgentToolResult> toolResults,
+        Action<AgentToolResult>? onToolExecuted,
+        CancellationToken cancellationToken)
+    {
+        for (int turn = 0; turn <= MaxToolTurns; turn++)
+        {
+            StringBuilder content = new StringBuilder();
+
+            await foreach (string chunk in preparedRequest.Provider.StreamAsync(
+                preparedRequest.Request,
+                preparedRequest.Settings,
+                cancellationToken))
+            {
+                content.Append(chunk);
+                onChunk(chunk);
+            }
+
+            string text = content.ToString();
+
+            if (!await TryRunToolAsync(preparedRequest, text, toolResults, onToolExecuted, cancellationToken))
+            {
+                return text;
+            }
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Detects a tool request, runs it, and appends the tool result to the conversation messages.
+    /// </summary>
+    /// <param name="preparedRequest">The prepared request.</param>
+    /// <param name="content">The model response content.</param>
+    /// <param name="toolResults">The collected tool results.</param>
+    /// <param name="onToolExecuted">Callback invoked after the tool runs.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>True when a tool was run; false when the content is a final answer.</returns>
+    private async Task<bool> TryRunToolAsync(
+        PreparedChatRequest preparedRequest,
+        string content,
+        List<AgentToolResult> toolResults,
+        Action<AgentToolResult>? onToolExecuted,
+        CancellationToken cancellationToken)
+    {
+        if (!ToolsEnabled)
+        {
+            return false;
+        }
+
+        ParsedModelMessage parsed = AgentMessageParser.Parse(content);
+
+        if (parsed.Kind != ModelMessageKind.ToolRequest || !toolHost.HasTool(parsed.Tool))
+        {
+            return false;
+        }
+
+        AgentToolRequest toolRequest = new AgentToolRequest
+        {
+            Tool = parsed.Tool,
+            RequestId = $"tool-{toolResults.Count + 1:000}",
+            Arguments = parsed.Arguments
+        };
+
+        AgentToolResult toolResult;
+
+        try
+        {
+            toolResult = await toolHost.ExecuteAsync(toolRequest, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            toolResult = new AgentToolResult
+            {
+                Tool = toolRequest.Tool,
+                RequestId = toolRequest.RequestId,
+                Ok = false,
+                ErrorMessage = ex.Message
+            };
+        }
+
+        toolResults.Add(toolResult);
+        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
+        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = BuildToolResultEnvelope(toolResult) });
+        onToolExecuted?.Invoke(toolResult);
+        return true;
+    }
+
+    /// <summary>
+    /// Builds the tool_result envelope JSON fed back to the model.
+    /// </summary>
+    /// <param name="toolResult">The tool result.</param>
+    /// <returns>The tool_result JSON.</returns>
+    private static string BuildToolResultEnvelope(AgentToolResult toolResult)
+    {
+        object payload = toolResult.Result ?? new { ok = toolResult.Ok, errorMessage = toolResult.ErrorMessage };
+        var envelope = new
+        {
+            type = "tool_result",
+            tool = toolResult.Tool,
+            requestId = toolResult.RequestId,
+            result = payload
+        };
+        return JsonSerializer.Serialize(envelope, AgentJson.Options);
     }
 
     /// <summary>
@@ -227,6 +404,16 @@ public sealed class ChatService
             Model = settings.Model,
             Messages = context.Messages
         };
+
+        // When tools are available, tell the model how to request them (before the user message).
+        if (ToolsEnabled && request.Messages.Count > 0)
+        {
+            request.Messages.Insert(request.Messages.Count - 1, new ChatMessage
+            {
+                Role = "system",
+                Content = ToolInstruction
+            });
+        }
 
         return new PreparedChatRequest(
             provider,

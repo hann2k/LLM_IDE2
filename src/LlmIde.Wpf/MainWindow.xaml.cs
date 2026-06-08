@@ -7,10 +7,12 @@ using System.Text.Json;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using LlmIde.Infrastructure.Agents;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
@@ -118,6 +120,15 @@ public partial class MainWindow : Window
             new JsonlConversationLogStore(),
             new SqliteConversationLogStore()
         ]);
+        HttpClient fetchHttpClient = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 5
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
         chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -128,7 +139,8 @@ public partial class MainWindow : Window
             contextBuilder,
             rollingContextStore,
             artifactService,
-            projectStore);
+            projectStore,
+            agentToolHost);
 
         DataContext = viewModel;
     }
@@ -821,7 +833,8 @@ public partial class MainWindow : Window
                 text,
                 preview => RunOnUi(() => row = AddConversationRow(preview.RequestId, text, sentAt)),
                 chunk => RunOnUi(() => AppendAssistantChunk(row, chunk)),
-                CancellationToken.None);
+                CancellationToken.None,
+                onToolExecuted: toolResult => RunOnUi(() => OnChatToolExecuted(row, toolResult)));
 
             RunOnUi(() => FinalizeConversationRow(row, response));
             SaveResponseArtifacts(projectRoot, response);
@@ -872,6 +885,31 @@ public partial class MainWindow : Window
         }
 
         row.AssistantContent += chunk;
+        ConversationGrid.ScrollIntoView(row);
+    }
+
+    /// <summary>
+    /// Handles an in-chat tool execution by replacing the streamed tool request with a short notice.
+    /// </summary>
+    /// <param name="row">The conversation row.</param>
+    /// <param name="toolResult">The tool result.</param>
+    private void OnChatToolExecuted(ConversationListItem? row, AgentToolResult toolResult)
+    {
+        if (row is null)
+        {
+            return;
+        }
+
+        string host = string.Empty;
+
+        if (toolResult.Result is FetchUrlResult fetchResult
+            && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
+        {
+            host = uri.Host;
+        }
+
+        // Clear the streamed tool_request JSON and show a short notice; the final answer streams in next.
+        row.AssistantContent = $"[도구 실행: {toolResult.Tool} {host}]" + Environment.NewLine;
         ConversationGrid.ScrollIntoView(row);
     }
 

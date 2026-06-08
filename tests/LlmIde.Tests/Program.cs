@@ -68,7 +68,8 @@ public static class Program
             FetchUrlBlocksPrivateIp,
             FetchUrlBlocksFileScheme,
             FetchUrlTruncatesLongResponse,
-            FetchUrlToolFailureDoesNotThrow
+            FetchUrlToolFailureDoesNotThrow,
+            ChatServiceRunsToolThenAnswers
         ];
 
         foreach (Action test in tests)
@@ -1130,6 +1131,67 @@ public static class Program
         return new AgentToolRequest { Tool = "fetch_url", RequestId = "tool-001", Arguments = arguments };
     }
 
+    /// <summary>
+    /// Verifies the chat pipeline runs an in-chat tool then produces a final answer.
+    /// </summary>
+    private static void ChatServiceRunsToolThenAnswers()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string root = workspace.Root;
+        ProjectInitializer initializer = CreateProjectInitializer(root);
+        ProjectInitializationResult init = initializer.Initialize(new ProjectInitializationRequest
+        {
+            PId = "ToolChat",
+            HasExplicitPId = true
+        });
+        string projectRoot = init.ProjectRoot;
+
+        CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
+        criteriaService.Add(projectRoot, "기준", string.Empty, "normal");
+        ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore(root);
+        ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
+        ContextBuilder contextBuilder = new ContextBuilder(
+            criteriaService,
+            projectStateService,
+            rollingContextStore,
+            new FileSystemRuleStore(),
+            new FileArtifactRuleStore(),
+            new FileImportanceRuleStore(root),
+            artifactService);
+        FetchUrlTool fetchTool = new FetchUrlTool(
+            new HttpClient(new FakeHttpMessageHandler("<html><body>Hello World</body></html>", "text/html", 200)));
+        ScriptedChatProvider provider = new ScriptedChatProvider(
+            "{\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://example.com\"}}",
+            "요약: Hello World");
+        ChatService chatService = new ChatService(
+            new JsonProviderSettingsStore(),
+            new Dictionary<string, IChatProvider>
+            {
+                ["deepseek"] = provider
+            },
+            new CompositeConversationLogStore(
+            [
+                new JsonlConversationLogStore(),
+                new SqliteConversationLogStore()
+            ]),
+            contextBuilder,
+            rollingContextStore,
+            artifactService,
+            new JsonFileProjectStore(root),
+            new AgentToolHost([fetchTool]));
+
+        ChatProviderResponse response = chatService.SendAsync(
+            projectRoot,
+            "이 URL 요약: https://example.com",
+            CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertEqual(1, response.ToolResults.Count, "fetch_url should run once during chat.");
+        AssertContains(response.Content, "Hello World");
+    }
+
     private static CliApplication CreateCliApplication(string ideProgramRoot)
     {
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
@@ -1162,7 +1224,8 @@ public static class Program
             contextBuilder,
             rollingContextStore,
             artifactService,
-            projectStore);
+            projectStore,
+            new AgentToolHost([]));
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -1543,6 +1606,71 @@ public sealed class ThrowingHttpMessageHandler : HttpMessageHandler
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         throw new HttpRequestException("network blocked in test");
+    }
+}
+
+/// <summary>
+/// A scripted chat provider for in-chat tool integration tests.
+/// </summary>
+public sealed class ScriptedChatProvider : IChatProvider
+{
+    /// <summary>
+    /// The scripted responses.
+    /// </summary>
+    private readonly IReadOnlyList<string> responses;
+
+    /// <summary>
+    /// The current response index.
+    /// </summary>
+    private int index;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="ScriptedChatProvider"/> class.
+    /// </summary>
+    /// <param name="responses">The scripted responses (last one repeats).</param>
+    public ScriptedChatProvider(params string[] responses)
+    {
+        this.responses = responses;
+    }
+
+    /// <summary>
+    /// Returns the next scripted response.
+    /// </summary>
+    /// <param name="request">The provider request.</param>
+    /// <param name="settings">The provider settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The provider response.</returns>
+    public Task<ChatProviderResponse> SendAsync(
+        ChatProviderRequest request,
+        ProviderSettings settings,
+        CancellationToken cancellationToken)
+    {
+        string content = responses.Count == 0
+            ? string.Empty
+            : responses[Math.Min(index, responses.Count - 1)];
+        index++;
+        return Task.FromResult(new ChatProviderResponse
+        {
+            Content = content,
+            Provider = settings.Name,
+            Model = settings.Model
+        });
+    }
+
+    /// <summary>
+    /// Streams the next scripted response as a single chunk.
+    /// </summary>
+    /// <param name="request">The provider request.</param>
+    /// <param name="settings">The provider settings.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The streamed response.</returns>
+    public async IAsyncEnumerable<string> StreamAsync(
+        ChatProviderRequest request,
+        ProviderSettings settings,
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        ChatProviderResponse response = await SendAsync(request, settings, cancellationToken);
+        yield return response.Content;
     }
 }
 

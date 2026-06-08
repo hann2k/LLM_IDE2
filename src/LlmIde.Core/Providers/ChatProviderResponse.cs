@@ -1,3 +1,4 @@
+using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 
 namespace LlmIde.Core.Providers;
@@ -66,4 +67,9 @@ public sealed class ChatProviderResponse
     /// Gets or sets artifact candidates extracted from the response.
     /// </summary>
     public List<ArtifactCandidate> ArtifactCandidates { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the tool results produced while resolving the response.
+    /// </summary>
+    public List<AgentToolResult> ToolResults { get; set; } = [];
 }

@@ -45,6 +45,15 @@ public static class Program
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
+        HttpClient fetchHttpClient = new HttpClient(new HttpClientHandler
+        {
+            AllowAutoRedirect = true,
+            MaxAutomaticRedirections = 5
+        })
+        {
+            Timeout = TimeSpan.FromSeconds(15)
+        };
+        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -59,7 +68,8 @@ public static class Program
             contextBuilder,
             rollingContextStore,
             artifactService,
-            projectStore);
+            projectStore,
+            agentToolHost);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -70,15 +80,6 @@ public static class Program
         {
             ["deepseek"] = deepSeekProvider
         };
-        HttpClient fetchHttpClient = new HttpClient(new HttpClientHandler
-        {
-            AllowAutoRedirect = true,
-            MaxAutomaticRedirections = 5
-        })
-        {
-            Timeout = TimeSpan.FromSeconds(15)
-        };
-        IAgentToolHost agentToolHost = new AgentToolHost([new FetchUrlTool(fetchHttpClient)]);
         CliApplication application = new CliApplication(
             projectStore,
             projectInitializer,
