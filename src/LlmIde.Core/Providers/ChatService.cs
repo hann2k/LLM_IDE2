@@ -235,6 +235,7 @@ public sealed class ChatService
         CancellationToken cancellationToken)
     {
         ChatProviderResponse response = new ChatProviderResponse();
+        int[] step = [0];
 
         for (int turn = 0; turn <= MaxToolTurns; turn++)
         {
@@ -243,7 +244,7 @@ public sealed class ChatService
                 preparedRequest.Settings,
                 cancellationToken);
 
-            (bool handled, _) = await HandleAgentTurnAsync(projectRoot, preparedRequest, response.Content, toolResults, cancellationToken);
+            (bool handled, _) = await HandleAgentTurnAsync(projectRoot, preparedRequest, response.Content, toolResults, step, cancellationToken);
 
             if (!handled)
             {
@@ -272,6 +273,8 @@ public sealed class ChatService
         Action<string>? onAgentStep,
         CancellationToken cancellationToken)
     {
+        int[] step = [0];
+
         for (int turn = 0; turn <= MaxToolTurns; turn++)
         {
             StringBuilder content = new StringBuilder();
@@ -286,7 +289,7 @@ public sealed class ChatService
             }
 
             string text = content.ToString();
-            (bool handled, string? label) = await HandleAgentTurnAsync(projectRoot, preparedRequest, text, toolResults, cancellationToken);
+            (bool handled, string? label) = await HandleAgentTurnAsync(projectRoot, preparedRequest, text, toolResults, step, cancellationToken);
 
             if (!handled)
             {
@@ -306,6 +309,7 @@ public sealed class ChatService
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="content">The model response content.</param>
     /// <param name="toolResults">The collected tool results.</param>
+    /// <param name="step">The single-element step counter shared across turns (for ordered logging).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True with a label when handled (continue); false when the content is a final answer.</returns>
     private async Task<(bool Handled, string? Label)> HandleAgentTurnAsync(
@@ -313,6 +317,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest,
         string content,
         List<AgentToolResult> toolResults,
+        int[] step,
         CancellationToken cancellationToken)
     {
         if (!ToolsEnabled)
@@ -324,8 +329,17 @@ public sealed class ChatService
 
         if (parsed.Kind == ModelMessageKind.ListTools)
         {
+            IReadOnlyList<AgentToolDescriptor> catalog = toolHost.ListTools();
+            step[0]++;
+            LogToolCall(projectRoot, preparedRequest.RequestId, step[0], new AgentToolResult
+            {
+                Tool = "list_tools",
+                RequestId = "list-tools",
+                Ok = true,
+                Result = catalog
+            });
             preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
-            preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolList(toolHost.ListTools()) });
+            preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolList(catalog) });
             return (true, "도구 목록 요청");
         }
 
@@ -359,7 +373,8 @@ public sealed class ChatService
         }
 
         toolResults.Add(toolResult);
-        LogToolCall(projectRoot, preparedRequest.RequestId, toolResults.Count, toolResult);
+        step[0]++;
+        LogToolCall(projectRoot, preparedRequest.RequestId, step[0], toolResult);
         preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
         preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolResult(toolResult) });
         return (true, DescribeStep(toolResult));

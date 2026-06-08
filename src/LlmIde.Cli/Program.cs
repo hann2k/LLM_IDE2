@@ -333,7 +333,7 @@ public sealed class CliApplication
     /// <param name="result">The agent run result.</param>
     private void LogAgentToolCalls(string projectRoot, ProviderSettings settings, AgentRunResult result)
     {
-        if (result.ToolResults.Count == 0)
+        if (result.ToolCalls.Count == 0)
         {
             return;
         }
@@ -355,12 +355,13 @@ public sealed class CliApplication
 
         int sequence = 0;
 
-        foreach (AgentToolResult toolResult in result.ToolResults)
+        // Includes tool discovery (list_tools) and tool executions in order, so intent is traceable.
+        foreach (AgentToolResult toolCall in result.ToolCalls)
         {
             sequence++;
             conversationLogStore.AppendToolCall(
                 projectRoot,
-                ConversationToolCallRecord.Create(requestId, sequence, toolResult, createdAt));
+                ConversationToolCallRecord.Create(requestId, sequence, toolCall, createdAt));
         }
     }
 

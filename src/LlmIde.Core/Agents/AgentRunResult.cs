@@ -16,9 +16,15 @@ public sealed class AgentRunResult
     public List<AgentTurn> Turns { get; set; } = [];
 
     /// <summary>
-    /// Gets or sets the tool results produced during the run.
+    /// Gets or sets the tool results produced during the run (executions only).
     /// </summary>
     public List<AgentToolResult> ToolResults { get; set; } = [];
+
+    /// <summary>
+    /// Gets or sets the ordered agent steps, including tool discovery (list_tools) and tool executions.
+    /// Used for complete, intent-traceable logging.
+    /// </summary>
+    public List<AgentToolResult> ToolCalls { get; set; } = [];
 
     /// <summary>
     /// Gets or sets the stop reason.

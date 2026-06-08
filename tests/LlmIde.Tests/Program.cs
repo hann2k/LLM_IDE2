@@ -991,6 +991,10 @@ public static class Program
         AssertTrue(result.IsSuccess, "list_tools then tool then final should succeed.");
         AssertEqual(1, tool.CallCount, "Tool should run once after discovery.");
         AssertEqual("done", result.FinalText, "Final text should be returned.");
+        AssertEqual(2, result.ToolCalls.Count, "Both discovery and execution must be recorded in order.");
+        AssertEqual("list_tools", result.ToolCalls[0].Tool, "First recorded step should be tool discovery.");
+        AssertEqual("fake_tool", result.ToolCalls[1].Tool, "Second recorded step should be the tool execution.");
+        AssertEqual(1, result.ToolResults.Count, "ToolResults should contain executions only (no discovery).");
     }
 
     /// <summary>

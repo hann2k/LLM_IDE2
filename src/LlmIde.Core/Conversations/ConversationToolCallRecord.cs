@@ -1,3 +1,4 @@
+using System.Linq;
 using LlmIde.Core.Agents;
 
 namespace LlmIde.Core.Conversations;
@@ -24,7 +25,13 @@ public sealed class ConversationToolCallRecord
         string target = string.Empty;
         string summary = string.Empty;
 
-        if (toolResult.Result is FetchUrlResult fetchResult)
+        if (toolResult.Result is IReadOnlyList<AgentToolDescriptor> tools)
+        {
+            // Tool discovery (list_tools): record which tools were offered, to reconstruct intent later.
+            target = string.Join(",", tools.Select(tool => tool.Name));
+            summary = $"tools={tools.Count}";
+        }
+        else if (toolResult.Result is FetchUrlResult fetchResult)
         {
             // Log host only, never the full URL (avoids leaking query-string secrets).
             target = Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri) ? uri.Host : string.Empty;

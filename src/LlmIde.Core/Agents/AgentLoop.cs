@@ -40,6 +40,7 @@ public sealed class AgentLoop : IAgentLoop
         AgentLoopOptions options = request.Options ?? new AgentLoopOptions();
         List<AgentTurn> turns = [];
         List<AgentToolResult> toolResults = [];
+        List<AgentToolResult> toolCalls = [];
         List<ChatMessage> messages =
         [
             new ChatMessage { Role = "system", Content = BuildSystemInstructions() },
@@ -59,7 +60,7 @@ public sealed class AgentLoop : IAgentLoop
             }
             catch (Exception ex)
             {
-                return Failure(turns, toolResults, StopReason.ModelError, ex.Message);
+                return Failure(turns, toolResults, toolCalls, StopReason.ModelError, ex.Message);
             }
 
             string content = response.Content ?? string.Empty;
@@ -70,12 +71,12 @@ public sealed class AgentLoop : IAgentLoop
 
             if (parsed.Kind == ModelMessageKind.ParseError)
             {
-                return Failure(turns, toolResults, StopReason.ModelError, parsed.Error);
+                return Failure(turns, toolResults, toolCalls, StopReason.ModelError, parsed.Error);
             }
 
             if (parsed.Kind == ModelMessageKind.UnknownType)
             {
-                return Failure(turns, toolResults, StopReason.InvalidToolRequest, parsed.Error);
+                return Failure(turns, toolResults, toolCalls, StopReason.InvalidToolRequest, parsed.Error);
             }
 
             if (parsed.Kind == ModelMessageKind.Final)
@@ -85,6 +86,7 @@ public sealed class AgentLoop : IAgentLoop
                     FinalText = parsed.Answer,
                     Turns = turns,
                     ToolResults = toolResults,
+                    ToolCalls = toolCalls,
                     StopReason = StopReason.FinalAnswer,
                     IsSuccess = true
                 };
@@ -92,7 +94,18 @@ public sealed class AgentLoop : IAgentLoop
 
             if (parsed.Kind == ModelMessageKind.ListTools)
             {
-                string toolListJson = AgentProtocol.ToolList(toolHost.ListTools());
+                IReadOnlyList<AgentToolDescriptor> catalog = toolHost.ListTools();
+
+                // Record the discovery step so the model's intent is traceable later.
+                toolCalls.Add(new AgentToolResult
+                {
+                    Tool = "list_tools",
+                    RequestId = "list-tools",
+                    Ok = true,
+                    Result = catalog
+                });
+
+                string toolListJson = AgentProtocol.ToolList(catalog);
                 turns.Add(new AgentTurn { Role = AgentTurnRole.Tool, Content = toolListJson });
                 messages.Add(new ChatMessage { Role = "user", Content = toolListJson });
                 continue;
@@ -101,7 +114,7 @@ public sealed class AgentLoop : IAgentLoop
             // tool_request
             if (!toolHost.HasTool(parsed.Tool))
             {
-                return Failure(turns, toolResults, StopReason.InvalidToolRequest, $"알 수 없는 도구입니다: {parsed.Tool}");
+                return Failure(turns, toolResults, toolCalls, StopReason.InvalidToolRequest, $"알 수 없는 도구입니다: {parsed.Tool}");
             }
 
             toolCounter++;
@@ -121,23 +134,26 @@ public sealed class AgentLoop : IAgentLoop
             catch (Exception ex)
             {
                 // Record the failed execution so no tool usage is omitted, then stop.
-                toolResults.Add(new AgentToolResult
+                AgentToolResult failedResult = new AgentToolResult
                 {
                     Tool = toolRequest.Tool,
                     RequestId = toolRequest.RequestId,
                     Ok = false,
                     ErrorMessage = ex.Message
-                });
-                return Failure(turns, toolResults, StopReason.ToolError, ex.Message);
+                };
+                toolResults.Add(failedResult);
+                toolCalls.Add(failedResult);
+                return Failure(turns, toolResults, toolCalls, StopReason.ToolError, ex.Message);
             }
 
             toolResults.Add(toolResult);
+            toolCalls.Add(toolResult);
             string toolResultJson = AgentProtocol.ToolResult(toolResult);
             turns.Add(new AgentTurn { Role = AgentTurnRole.Tool, Content = toolResultJson });
             messages.Add(new ChatMessage { Role = "user", Content = toolResultJson });
         }
 
-        return Failure(turns, toolResults, StopReason.MaxTurnsExceeded, "최대 반복 횟수를 초과했습니다.");
+        return Failure(turns, toolResults, toolCalls, StopReason.MaxTurnsExceeded, "최대 반복 횟수를 초과했습니다.");
     }
 
     /// <summary>
@@ -179,13 +195,15 @@ public sealed class AgentLoop : IAgentLoop
     /// Builds a failed agent run result.
     /// </summary>
     /// <param name="turns">The turns so far.</param>
-    /// <param name="toolResults">The tool results so far.</param>
+    /// <param name="toolResults">The tool results so far (executions only).</param>
+    /// <param name="toolCalls">The ordered agent steps so far (discovery and executions).</param>
     /// <param name="stopReason">The stop reason.</param>
     /// <param name="errorMessage">The error message.</param>
     /// <returns>The failed result.</returns>
     private static AgentRunResult Failure(
         List<AgentTurn> turns,
         List<AgentToolResult> toolResults,
+        List<AgentToolResult> toolCalls,
         StopReason stopReason,
         string errorMessage)
     {
@@ -193,6 +211,7 @@ public sealed class AgentLoop : IAgentLoop
         {
             Turns = turns,
             ToolResults = toolResults,
+            ToolCalls = toolCalls,
             StopReason = stopReason,
             IsSuccess = false,
             ErrorMessage = errorMessage
