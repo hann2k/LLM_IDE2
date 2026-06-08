@@ -93,6 +93,11 @@ public partial class MainWindow : Window
     private System.Windows.Point chatInputDragStart;
 
     /// <summary>
+    /// Suppresses provider change handling while the combo box is populated programmatically.
+    /// </summary>
+    private bool suppressProviderChange;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -484,40 +489,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Adds a manually entered conversation (user + assistant) as a completed turn without an LLM call.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ManualConversationMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        ManualConversationDialog dialog = new ManualConversationDialog
-        {
-            Owner = this
-        };
-
-        if (dialog.ShowDialog() != true)
-        {
-            return;
-        }
-
-        try
-        {
-            string projectRoot = viewModel.SelectedProject.Path;
-            chatService.AddManualConversation(projectRoot, dialog.UserText, dialog.AssistantText);
-            ReloadConversations(projectRoot);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "대화 수동 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
     /// Reloads the conversation list from disk and scrolls to the latest conversation.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -792,20 +763,31 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private void ChatInputTextBox_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
-        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
-        {
-            e.Handled = true;
-            HandleChatInputEnter();
-            return;
-        }
-
         if (e.Key == Key.Escape)
         {
             // Hide but keep the typed text.
             e.Handled = true;
             HideChatInput();
+            return;
+        }
+
+        // In manual conversation mode, Enter inserts a newline (registration uses the button).
+        if (IsManualConversationMode)
+        {
+            return;
+        }
+
+        if (e.Key == Key.Enter && (Keyboard.Modifiers & ModifierKeys.Shift) == 0)
+        {
+            e.Handled = true;
+            HandleChatInputEnter();
         }
     }
+
+    /// <summary>
+    /// Gets a value indicating whether manual conversation mode is enabled.
+    /// </summary>
+    private bool IsManualConversationMode => ManualModeCheckBox.IsChecked == true;
 
     /// <summary>
     /// Sends the chat input or closes the box when it is empty.
@@ -830,9 +812,124 @@ public partial class MainWindow : Window
     /// </summary>
     private void ShowChatInput()
     {
+        PopulateProviderCombo();
         ChatInputPanel.Visibility = Visibility.Visible;
         ChatInputTextBox.Focus();
         ChatInputTextBox.CaretIndex = ChatInputTextBox.Text.Length;
+    }
+
+    /// <summary>
+    /// Populates the provider combo box with the project's registered providers.
+    /// </summary>
+    private void PopulateProviderCombo()
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        ProviderSettingsDocument document = providerSettingsStore.Load(viewModel.SelectedProject.Path);
+
+        suppressProviderChange = true;
+        ProviderComboBox.ItemsSource = document.Providers.Select(provider => provider.Name).ToList();
+        ProviderComboBox.SelectedItem = document.DefaultProvider;
+        suppressProviderChange = false;
+    }
+
+    /// <summary>
+    /// Changes the project's default provider when the user picks one.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ProviderComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
+    {
+        if (suppressProviderChange || viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        if (ProviderComboBox.SelectedItem is not string providerName || string.IsNullOrWhiteSpace(providerName))
+        {
+            return;
+        }
+
+        try
+        {
+            string projectRoot = viewModel.SelectedProject.Path;
+            ProviderSettingsDocument document = providerSettingsStore.Load(projectRoot);
+            document.DefaultProvider = providerName;
+            providerSettingsStore.Save(projectRoot, document);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "프로바이더 변경 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Toggles manual conversation mode: shows the assistant input and register button.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ManualModeCheckBox_Changed(object sender, RoutedEventArgs e)
+    {
+        bool manual = IsManualConversationMode;
+        AssistantInputArea.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        RegisterManualButton.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+        ChatInputHint.Text = manual
+            ? "수동대화: Enter=줄바꿈, [등록]으로 추가, ESC: 닫기"
+            : "Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기";
+    }
+
+    /// <summary>
+    /// Registers a manually entered conversation (user + assistant) without an LLM call.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void RegisterManualButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(ChatInputTextBox.Text) || string.IsNullOrWhiteSpace(AssistantInputTextBox.Text))
+        {
+            System.Windows.MessageBox.Show(this, "user와 assistant 내용을 모두 입력하세요.", "수동대화 추가", MessageBoxButton.OK, MessageBoxImage.Warning);
+            return;
+        }
+
+        try
+        {
+            string projectRoot = viewModel.SelectedProject.Path;
+            chatService.AddManualConversation(projectRoot, ChatInputTextBox.Text, AssistantInputTextBox.Text);
+            ReloadConversations(projectRoot);
+            ChatInputTextBox.Clear();
+            AssistantInputTextBox.Clear();
+            ChatInputTextBox.Focus();
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "수동대화 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Resizes the chat input panel when the bottom-right grip is dragged.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The drag delta event arguments.</param>
+    private void ChatInputResizeGrip_DragDelta(object sender, System.Windows.Controls.Primitives.DragDeltaEventArgs e)
+    {
+        double newWidth = Math.Max(ChatInputPanel.MinWidth, ChatInputPanel.Width + e.HorizontalChange);
+        double newHeight = Math.Max(ChatInputPanel.MinHeight, ChatInputPanel.Height + e.VerticalChange);
+
+        // The panel is bottom-anchored; shift it down by the height change so the top edge stays put
+        // and the bottom edge follows the cursor.
+        double appliedHeightChange = newHeight - ChatInputPanel.Height;
+        ChatInputPanel.Width = newWidth;
+        ChatInputPanel.Height = newHeight;
+        ChatInputTransform.Y += appliedHeightChange;
     }
 
     /// <summary>

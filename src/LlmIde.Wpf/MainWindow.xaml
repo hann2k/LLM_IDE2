@@ -121,9 +121,6 @@
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="ImportanceRuleMenuItem_Click" />
                 </MenuItem>
-                <MenuItem Header="대화추가"
-                          IsEnabled="{Binding HasSelectedProject}"
-                          Click="ManualConversationMenuItem_Click" />
                 <MenuItem Header="도구관리"
                           Click="ToolManagerMenuItem_Click" />
             </Menu>
@@ -251,17 +248,23 @@
                             Grid.Row="0"
                             Visibility="Collapsed"
                             VerticalAlignment="Bottom"
-                            HorizontalAlignment="Stretch"
+                            HorizontalAlignment="Left"
+                            Width="820"
+                            Height="280"
+                            MinWidth="420"
+                            MinHeight="200"
                             Background="White"
                             BorderBrush="{StaticResource GuideBlueBrush}"
                             BorderThickness="1"
-                            Margin="40,0,40,16">
+                            Margin="40,0,0,16">
                         <Border.RenderTransform>
                             <TranslateTransform x:Name="ChatInputTransform" />
                         </Border.RenderTransform>
                         <Grid Margin="12">
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
@@ -280,20 +283,86 @@
                                            FontSize="12"
                                            Foreground="#444444" />
                             </Border>
+
+                            <StackPanel Grid.Row="1"
+                                        Orientation="Horizontal"
+                                        Margin="0,0,0,8">
+                                <TextBlock Text="프로바이더"
+                                           FontSize="13"
+                                           VerticalAlignment="Center"
+                                           Margin="0,0,6,0" />
+                                <ComboBox x:Name="ProviderComboBox"
+                                          Width="170"
+                                          FontSize="13"
+                                          VerticalAlignment="Center"
+                                          SelectionChanged="ProviderComboBox_SelectionChanged" />
+                                <CheckBox x:Name="ManualModeCheckBox"
+                                          Content="수동대화 추가"
+                                          FontSize="13"
+                                          VerticalAlignment="Center"
+                                          Margin="18,0,0,0"
+                                          Checked="ManualModeCheckBox_Changed"
+                                          Unchecked="ManualModeCheckBox_Changed" />
+                            </StackPanel>
+
                             <TextBox x:Name="ChatInputTextBox"
-                                     Grid.Row="1"
-                                     MinHeight="80"
-                                     MaxHeight="220"
+                                     Grid.Row="2"
+                                     MinHeight="60"
                                      FontSize="18"
                                      AcceptsReturn="True"
                                      TextWrapping="Wrap"
                                      VerticalScrollBarVisibility="Auto"
                                      PreviewKeyDown="ChatInputTextBox_PreviewKeyDown" />
-                            <TextBlock Grid.Row="2"
-                                       Text="Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기"
-                                       FontSize="13"
-                                       Foreground="#666666"
-                                       Margin="2,8,0,0" />
+
+                            <Grid x:Name="AssistantInputArea"
+                                  Grid.Row="3"
+                                  Visibility="Collapsed"
+                                  Margin="0,8,0,0">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+                                <TextBlock Grid.Row="0"
+                                           Text="assistant:"
+                                           FontSize="13"
+                                           FontWeight="Bold"
+                                           Margin="0,0,0,4" />
+                                <TextBox x:Name="AssistantInputTextBox"
+                                         Grid.Row="1"
+                                         MinHeight="80"
+                                         MaxHeight="160"
+                                         FontSize="16"
+                                         AcceptsReturn="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         PreviewKeyDown="ChatInputTextBox_PreviewKeyDown" />
+                            </Grid>
+
+                            <Grid Grid.Row="4" Margin="0,8,0,0">
+                                <TextBlock x:Name="ChatInputHint"
+                                           Text="Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기"
+                                           FontSize="13"
+                                           Foreground="#666666"
+                                           VerticalAlignment="Center"
+                                           HorizontalAlignment="Left" />
+                                <StackPanel Orientation="Horizontal"
+                                            HorizontalAlignment="Right"
+                                            VerticalAlignment="Bottom">
+                                    <Button x:Name="RegisterManualButton"
+                                            Content="등록"
+                                            Width="80"
+                                            Height="30"
+                                            Visibility="Collapsed"
+                                            Margin="0,0,8,0"
+                                            Click="RegisterManualButton_Click" />
+                                    <Thumb x:Name="ChatInputResizeGrip"
+                                           Width="16"
+                                           Height="16"
+                                           Cursor="SizeNWSE"
+                                           Background="#BFC9D6"
+                                           DragDelta="ChatInputResizeGrip_DragDelta" />
+                                </StackPanel>
+                            </Grid>
                         </Grid>
                     </Border>
                 </Grid>
