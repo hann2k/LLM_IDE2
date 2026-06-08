@@ -155,6 +155,20 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Updates the stored assistant message content for a request in all stores.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The conversation request identifier.</param>
+    /// <param name="content">The new assistant message content.</param>
+    public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
+    {
+        foreach (IConversationLogStore store in stores)
+        {
+            store.UpdateAssistantMessageContent(projectRoot, requestId, content);
+        }
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from the primary readable store.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

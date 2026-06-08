@@ -75,7 +75,8 @@ public static class Program
             WebSearchParsesResults,
             WebSearchEmptyQueryFails,
             ConversationDeleteRemovesTurnAndMessages,
-            ManualConversationIsStoredAsCompletedTurn
+            ManualConversationIsStoredAsCompletedTurn,
+            UpdateAssistantMessageContentReplacesContent
         ];
 
         foreach (Action test in tests)
@@ -1250,6 +1251,33 @@ public static class Program
         IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
         AssertEqual(1, messages.Count, "Only the surviving conversation's messages should remain.");
         AssertEqual("2", messages[0].RequestId, "Remaining message should belong to conversation 2.");
+    }
+
+    /// <summary>
+    /// Verifies updating assistant message content replaces only the assistant message of the request.
+    /// </summary>
+    private static void UpdateAssistantMessageContentReplacesContent()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string root = workspace.Root;
+        IConversationLogStore store = new CompositeConversationLogStore(
+        [
+            new JsonlConversationLogStore(),
+            new SqliteConversationLogStore()
+        ]);
+
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "1", RequestType = "chat", CreatedAt = now });
+        store.AppendMessage(root, new ConversationMessageRecord { MessageId = "1", RequestId = "1", Role = "user", Content = "질문", CreatedAt = now });
+        store.AppendMessage(root, new ConversationMessageRecord { MessageId = "2", RequestId = "1", Role = "assistant", Content = "원래 응답 본문", CreatedAt = now });
+
+        store.UpdateAssistantMessageContent(root, "1", "원래 [아티팩트: 제목] 본문");
+
+        IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
+        ConversationMessageRecord user = messages.First(message => message.Role == "user");
+        ConversationMessageRecord assistant = messages.First(message => message.Role == "assistant");
+        AssertEqual("원래 [아티팩트: 제목] 본문", assistant.Content, "Assistant content should be updated.");
+        AssertEqual("질문", user.Content, "User content should be unchanged.");
     }
 
     /// <summary>

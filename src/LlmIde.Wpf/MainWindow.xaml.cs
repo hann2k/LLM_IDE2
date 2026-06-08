@@ -1311,11 +1311,55 @@ public partial class MainWindow : Window
                 },
                 row.RequestId);
             ReloadArtifacts(projectRoot);
+            ReplaceSelectionWithArtifactMarker(projectRoot, row, selection, dialog.ArtifactTitle);
         }
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, "아티팩트 추출 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>
+    /// Replaces the extracted (dragged) region in the conversation response with the artifact name marker,
+    /// then persists the updated assistant message.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="row">The conversation row.</param>
+    /// <param name="selection">The dragged selection text.</param>
+    /// <param name="artifactTitle">The extracted artifact title.</param>
+    private void ReplaceSelectionWithArtifactMarker(
+        string projectRoot,
+        ConversationListItem row,
+        string selection,
+        string artifactTitle)
+    {
+        // Match in newline-normalized space so multi-line selections line up with the stored text.
+        string content = row.AssistantContent.Replace("\r\n", "\n");
+        string needle = selection.Replace("\r\n", "\n").Trim();
+
+        if (needle.Length == 0)
+        {
+            return;
+        }
+
+        int index = content.IndexOf(needle, StringComparison.Ordinal);
+
+        if (index < 0)
+        {
+            System.Windows.MessageBox.Show(
+                this,
+                "아티팩트는 저장되었지만, 선택 영역을 본문에서 찾지 못해 치환하지 못했습니다.",
+                "아티팩트 추출",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+            return;
+        }
+
+        string marker = $"[아티팩트: {artifactTitle}]";
+        string updated = content.Remove(index, needle.Length).Insert(index, marker);
+
+        conversationLogStore.UpdateAssistantMessageContent(projectRoot, row.RequestId, updated);
+        row.AssistantContent = updated;
     }
 
     /// <summary>

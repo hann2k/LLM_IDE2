@@ -273,6 +273,27 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Updates the stored assistant message content for a request in SQLite.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The conversation request identifier.</param>
+    /// <param name="content">The new assistant message content.</param>
+    public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
+    {
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            update conversation_messages
+            set content = $content
+            where request_id = $request_id and role = 'assistant';
+            """;
+        command.Parameters.AddWithValue("$content", content);
+        command.Parameters.AddWithValue("$request_id", requestId);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from SQLite.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

@@ -65,6 +65,14 @@ public interface IConversationLogStore
     void DeleteConversation(string projectRoot, string requestId);
 
     /// <summary>
+    /// Updates the stored assistant message content for a conversation request.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The conversation request identifier.</param>
+    /// <param name="content">The new assistant message content.</param>
+    void UpdateAssistantMessageContent(string projectRoot, string requestId, string content);
+
+    /// <summary>
     /// Gets recent conversation messages in chronological order.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

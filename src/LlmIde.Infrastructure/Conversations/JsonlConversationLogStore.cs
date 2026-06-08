@@ -177,6 +177,41 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Updates the stored assistant message content for a request in the JSONL message log.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The conversation request identifier.</param>
+    /// <param name="content">The new assistant message content.</param>
+    public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
+    {
+        string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
+
+        if (!File.Exists(messagePath))
+        {
+            return;
+        }
+
+        List<ConversationMessageRecord> messages = ReadJsonLines<ConversationMessageRecord>(messagePath);
+        bool updated = false;
+
+        foreach (ConversationMessageRecord message in messages)
+        {
+            if (string.Equals(message.RequestId, requestId, StringComparison.Ordinal)
+                && string.Equals(message.Role, "assistant", StringComparison.OrdinalIgnoreCase))
+            {
+                message.Content = content;
+                updated = true;
+                break;
+            }
+        }
+
+        if (updated)
+        {
+            WriteJsonLines(messagePath, messages);
+        }
+    }
+
+    /// <summary>
     /// Determines whether a record's request identifier is the chat or its compression request.
     /// </summary>
     /// <param name="recordRequestId">The record's request identifier.</param>
