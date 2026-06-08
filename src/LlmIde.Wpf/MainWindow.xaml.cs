@@ -127,7 +127,8 @@ public partial class MainWindow : Window
             conversationLogStore,
             contextBuilder,
             rollingContextStore,
-            artifactService);
+            artifactService,
+            projectStore);
 
         DataContext = viewModel;
     }
@@ -195,6 +196,22 @@ public partial class MainWindow : Window
                 HasExplicitName = !string.IsNullOrWhiteSpace(dialog.ProjectName)
             };
             ProjectInitializationResult result = projectInitializer.Initialize(request);
+
+            // Store the conversation type selected during project creation.
+            ProjectInfo projectInfo = result.ProjectInfo;
+            projectInfo.LongTermConversation = dialog.IsLongTermConversation;
+            projectStore.SaveProjectInfo(result.ProjectRoot, projectInfo);
+
+            // Store the API key entered during project creation.
+            string apiKey = dialog.ProjectApiKey;
+
+            if (!string.IsNullOrWhiteSpace(apiKey))
+            {
+                ProviderSettingsDocument settings = providerSettingsStore.Load(result.ProjectRoot);
+                GetDefaultProviderSettings(settings).ApiKey = apiKey;
+                providerSettingsStore.Save(result.ProjectRoot, settings);
+            }
+
             LoadProjects();
             SelectProjectByRoot(result.ProjectRoot);
             System.Windows.MessageBox.Show(this, "프로젝트를 생성했습니다.", "프로젝트 생성", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -507,49 +524,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Opens the edit dialog for the project's provider API key and saves changes.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ApiKeyMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        string projectRoot = System.IO.Path.GetFullPath(viewModel.SelectedProject.Path);
-        string settingsPath = Path.Combine(
-            projectRoot,
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.SettingsDirectoryName,
-            LlmIdeLayout.ProvidersFileName);
-
-        try
-        {
-            ProviderSettingsDocument document = providerSettingsStore.Load(projectRoot);
-            ProviderSettings settings = GetDefaultProviderSettings(document);
-            EditDialog dialog = new EditDialog(settingsPath, settings.ApiKey)
-            {
-                Owner = this
-            };
-
-            if (dialog.ShowDialog() != true)
-            {
-                return;
-            }
-
-            settings.ApiKey = dialog.EditedContent.Trim();
-            providerSettingsStore.Save(projectRoot, document);
-            System.Windows.MessageBox.Show(this, "API 키를 저장했습니다.", "API 키 입력", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "API 키 입력 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
     /// Gets the default provider settings from a settings document.
     /// </summary>
     /// <param name="document">The provider settings document.</param>
@@ -641,6 +615,16 @@ public partial class MainWindow : Window
     {
         viewModel.Conversations.Clear();
         viewModel.Artifacts.Clear();
+
+        // Importance is editable only for long-term conversation projects.
+        try
+        {
+            viewModel.IsImportanceEditable = projectStore.ReadProjectInfo(project.Path).LongTermConversation;
+        }
+        catch (Exception)
+        {
+            viewModel.IsImportanceEditable = true;
+        }
 
         foreach (ConversationListItem conversation in ConversationLogReader.Read(project.Path))
         {
@@ -1075,9 +1059,36 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     private ProjectListItem? selectedProject;
 
     /// <summary>
+    /// A value indicating whether importance editing is allowed.
+    /// </summary>
+    private bool isImportanceEditable = true;
+
+    /// <summary>
     /// Occurs when a bindable property changes.
     /// </summary>
     public event PropertyChangedEventHandler? PropertyChanged;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether importance editing is allowed.
+    /// </summary>
+    public bool IsImportanceEditable
+    {
+        get
+        {
+            return isImportanceEditable;
+        }
+
+        set
+        {
+            if (isImportanceEditable == value)
+            {
+                return;
+            }
+
+            isImportanceEditable = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Gets the registered projects.

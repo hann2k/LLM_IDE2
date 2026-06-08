@@ -39,4 +39,11 @@ public sealed class ProjectInfo
     /// Gets or sets the default model name.
     /// </summary>
     public string DefaultModel { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Gets or sets a value indicating whether the project uses long-term conversations.
+    /// When false the project is a one-time conversation: weights are fixed to 0,
+    /// compression is skipped, and past context is not injected.
+    /// </summary>
+    public bool LongTermConversation { get; set; } = true;
 }

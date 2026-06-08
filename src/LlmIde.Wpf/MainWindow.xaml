@@ -111,9 +111,6 @@
                     <MenuItem Header="중요도 룰"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="ImportanceRuleMenuItem_Click" />
-                    <MenuItem Header="API 키 입력"
-                              IsEnabled="{Binding HasSelectedProject}"
-                              Click="ApiKeyMenuItem_Click" />
                 </MenuItem>
             </Menu>
         </Border>
@@ -153,7 +150,6 @@
                 <Grid>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="*" />
-                        <RowDefinition Height="36" />
                     </Grid.RowDefinitions>
                     <DataGrid x:Name="ConversationGrid"
                               Grid.Row="0"
@@ -177,6 +173,7 @@
                                                     Maximum="10"
                                                     TickFrequency="1"
                                                     IsSnapToTickEnabled="True"
+                                                    IsEnabled="{Binding DataContext.IsImportanceEditable, RelativeSource={RelativeSource AncestorType=DataGrid}}"
                                                     Value="{Binding ImportanceWeight, Mode=TwoWay}"
                                                     Margin="0,8,0,0"
                                                     ValueChanged="ImportanceSlider_ValueChanged"
@@ -216,12 +213,6 @@
                             </DataGridTextColumn>
                         </DataGrid.Columns>
                     </DataGrid>
-                    <TextBlock Grid.Row="1"
-                               Text="자동스크롤바"
-                               HorizontalAlignment="Right"
-                               VerticalAlignment="Center"
-                               FontSize="24"
-                               Margin="0,0,38,0" />
                     <Border x:Name="ChatInputPanel"
                             Grid.Row="0"
                             Visibility="Collapsed"

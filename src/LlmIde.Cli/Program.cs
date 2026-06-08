@@ -55,7 +55,8 @@ public static class Program
             ]),
             contextBuilder,
             rollingContextStore,
-            artifactService);
+            artifactService,
+            projectStore);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>

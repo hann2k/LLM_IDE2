@@ -80,12 +80,16 @@ public sealed class ContextBuilder
     /// <param name="requestId">The request identifier.</param>
     /// <param name="message">The current user message.</param>
     /// <param name="artifactIds">The artifact identifiers to attach.</param>
+    /// <param name="includeHistory">Whether to inject past context (rolling summary).</param>
+    /// <param name="recentMessages">The recent conversation messages to include as a window.</param>
     /// <returns>The built context.</returns>
     public ContextBuildResult Build(
         string projectRoot,
         string requestId,
         string message,
-        IReadOnlyList<string>? artifactIds = null)
+        IReadOnlyList<string>? artifactIds = null,
+        bool includeHistory = true,
+        IReadOnlyList<ConversationMessageRecord>? recentMessages = null)
     {
         rollingContextStore.EnsureInitialized(projectRoot);
 
@@ -94,13 +98,16 @@ public sealed class ContextBuilder
         string importanceRule = importanceRuleStore.Load(projectRoot);
         IReadOnlyList<Criterion> activeCriteria = criteriaService.ListActive(projectRoot);
         ProjectState projectState = projectStateService.Get(projectRoot);
-        RollingContextSummary? rollingContext = rollingContextStore.LoadCurrent(projectRoot);
+
+        // One-time conversations do not inject past context.
+        RollingContextSummary? rollingContext = includeHistory ? rollingContextStore.LoadCurrent(projectRoot) : null;
 
         if (activeCriteria.Count == 0)
         {
             throw new InvalidOperationException("활성 기준이 없습니다. 대화 전에 기준을 하나 이상 추가하거나 활성화하세요.");
         }
 
+        IReadOnlyList<ConversationMessageRecord> recentList = recentMessages ?? [];
         ContextPackage contextPackage = CreateContextPackage(
             requestId,
             message,
@@ -110,12 +117,13 @@ public sealed class ContextBuilder
             activeCriteria,
             projectState,
             rollingContext,
-            LoadAttachedArtifacts(projectRoot, artifactIds ?? []));
+            LoadAttachedArtifacts(projectRoot, artifactIds ?? []),
+            recentList);
 
         return new ContextBuildResult
         {
             ContextPackage = contextPackage,
-            Messages = BuildProviderMessages(contextPackage)
+            Messages = BuildProviderMessages(contextPackage, recentList)
         };
     }
 
@@ -123,8 +131,11 @@ public sealed class ContextBuilder
     /// Builds provider messages from a context package.
     /// </summary>
     /// <param name="contextPackage">The context package.</param>
+    /// <param name="recentMessages">The recent conversation window messages.</param>
     /// <returns>The provider messages.</returns>
-    private static List<ChatMessage> BuildProviderMessages(ContextPackage contextPackage)
+    private static List<ChatMessage> BuildProviderMessages(
+        ContextPackage contextPackage,
+        IReadOnlyList<ConversationMessageRecord> recentMessages)
     {
         List<ChatMessage> messages = [];
         AppendSystemMessage(messages, contextPackage.SystemRule);
@@ -134,6 +145,16 @@ public sealed class ContextBuilder
         AppendSystemMessage(messages, contextPackage.ArtifactRule);
         AppendSystemMessage(messages, contextPackage.ImportanceRule);
         AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts));
+
+        // Include the recent conversation window as raw turns before the current request.
+        foreach (ConversationMessageRecord recent in recentMessages)
+        {
+            messages.Add(new ChatMessage
+            {
+                Role = recent.Role,
+                Content = recent.Content
+            });
+        }
 
         messages.Add(new ChatMessage
         {
@@ -298,6 +319,7 @@ public sealed class ContextBuilder
     /// <param name="projectState">The project state.</param>
     /// <param name="rollingContext">The rolling context summary.</param>
     /// <param name="attachedArtifacts">The attached artifacts.</param>
+    /// <param name="recentMessages">The recent conversation window messages.</param>
     /// <returns>The context package.</returns>
     private static ContextPackage CreateContextPackage(
         string requestId,
@@ -308,7 +330,8 @@ public sealed class ContextBuilder
         IReadOnlyList<Criterion> activeCriteria,
         ProjectState projectState,
         RollingContextSummary? rollingContext,
-        IReadOnlyList<string> attachedArtifacts)
+        IReadOnlyList<string> attachedArtifacts,
+        IReadOnlyList<ConversationMessageRecord> recentMessages)
     {
         return new ContextPackage
         {
@@ -321,7 +344,10 @@ public sealed class ContextBuilder
             UsedRollingContextId = rollingContext?.RollingContextId ?? string.Empty,
             RollingContextPath = rollingContext?.ContentPath ?? string.Empty,
             RollingContextSummary = rollingContext?.Content ?? string.Empty,
-            RecentTurnCount = 0,
+            RecentTurnCount = recentMessages.Count,
+            RecentTurns = recentMessages
+                .Select(recent => $"{recent.Role}: {recent.Content}")
+                .ToList(),
             AttachedArtifacts = attachedArtifacts.ToList(),
             ActiveCriteria = activeCriteria
                 .Select(FormatCriterion)

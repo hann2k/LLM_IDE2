@@ -79,6 +79,28 @@ public partial class ProjectDialog : Window
     }
 
     /// <summary>
+    /// Gets the requested provider API key.
+    /// </summary>
+    public string ProjectApiKey
+    {
+        get
+        {
+            return ProjectApiKeyTextBox.Text.Trim();
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the project uses long-term conversations.
+    /// </summary>
+    public bool IsLongTermConversation
+    {
+        get
+        {
+            return ConversationTypeCheckBox.IsChecked == true;
+        }
+    }
+
+    /// <summary>
     /// Configures the dialog layout and labels for the active mode.
     /// </summary>
     /// <param name="currentName">The current project display name.</param>
@@ -111,6 +133,13 @@ public partial class ProjectDialog : Window
         ProjectIdLabel.Visibility = Visibility.Collapsed;
         ProjectIdTextBox.Visibility = Visibility.Collapsed;
         ProjectPathLabel.Text = "시작위치";
+
+        // API key is entered during project creation.
+        ProjectApiKeyLabel.Visibility = Visibility.Visible;
+        ProjectApiKeyTextBox.Visibility = Visibility.Visible;
+
+        // Conversation type is selected during project creation.
+        ConversationTypeCheckBox.Visibility = Visibility.Visible;
     }
 
     /// <summary>

@@ -121,6 +121,20 @@ public sealed class JsonFileProjectStore : IProjectStore
     }
 
     /// <summary>
+    /// Saves project information for an initialized project.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="projectInfo">The project information.</param>
+    public void SaveProjectInfo(string projectRoot, ProjectInfo projectInfo)
+    {
+        string projectFile = Path.Combine(
+            Path.GetFullPath(projectRoot),
+            LlmIdeLayout.MetadataDirectoryName,
+            LlmIdeLayout.ProjectFileName);
+        WriteJson(projectFile, projectInfo);
+    }
+
+    /// <summary>
     /// Creates the Phase 1 metadata directories.
     /// </summary>
     /// <param name="metadataRoot">The metadata root path.</param>

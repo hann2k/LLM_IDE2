@@ -393,7 +393,8 @@ public static class Program
             AssertContains(chatOutput, "압축된 이전 대화 맥락을 사용한다.");
             AssertContains(chatOutput, rollingContext);
             AssertContains(chatOutput, "\"content\": \"second\"");
-            AssertFalse(chatOutput.Contains("\"content\": \"first\"", StringComparison.Ordinal), "Previous raw user message should not be sent.");
+            // Long-term chat now also sends the recent conversation window verbatim.
+            AssertContains(chatOutput, "\"content\": \"first\"");
         }
         finally
         {
@@ -942,7 +943,8 @@ public static class Program
             ]),
             contextBuilder,
             rollingContextStore,
-            artifactService);
+            artifactService,
+            projectStore);
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>

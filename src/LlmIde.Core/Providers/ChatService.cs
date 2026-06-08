@@ -1,5 +1,6 @@
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
+using LlmIde.Core.Projects;
 using System.Text;
 
 namespace LlmIde.Core.Providers;
@@ -40,6 +41,11 @@ public sealed class ChatService
     private readonly ArtifactService artifactService;
 
     /// <summary>
+    /// The project metadata store.
+    /// </summary>
+    private readonly IProjectStore projectStore;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
@@ -48,13 +54,15 @@ public sealed class ChatService
     /// <param name="contextBuilder">The context builder.</param>
     /// <param name="rollingContextStore">The rolling context store.</param>
     /// <param name="artifactService">The artifact service.</param>
+    /// <param name="projectStore">The project metadata store.</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
         IConversationLogStore conversationLogStore,
         ContextBuilder contextBuilder,
         IRollingContextStore rollingContextStore,
-        ArtifactService artifactService)
+        ArtifactService artifactService,
+        IProjectStore projectStore)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
@@ -62,6 +70,7 @@ public sealed class ChatService
         this.contextBuilder = contextBuilder;
         this.rollingContextStore = rollingContextStore;
         this.artifactService = artifactService;
+        this.projectStore = projectStore;
     }
 
     /// <summary>
@@ -202,10 +211,16 @@ public sealed class ChatService
             throw new InvalidOperationException($"Provider is not available: {settings.Name}");
         }
 
+        bool longTerm = projectStore.ReadProjectInfo(projectRoot).LongTermConversation;
         long nextRequestSequence = conversationLogStore.GetNextRequestSequence(projectRoot);
         string requestId = ConversationSequence.ToId(nextRequestSequence);
         string compressionRequestId = requestId + "c";
-        ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message, artifactIds);
+
+        // Long-term conversations also send the most recent 5 user turns (request + response) verbatim.
+        IReadOnlyList<ConversationMessageRecord> recentMessages = longTerm
+            ? GetRecentUserTurns(projectRoot, 5)
+            : [];
+        ContextBuildResult context = contextBuilder.Build(projectRoot, requestId, message, artifactIds, longTerm, recentMessages);
 
         ChatProviderRequest request = new ChatProviderRequest
         {
@@ -219,7 +234,45 @@ public sealed class ChatService
             request,
             requestId,
             compressionRequestId,
-            context.ContextPackage);
+            context.ContextPackage,
+            longTerm);
+    }
+
+    /// <summary>
+    /// Gets the messages of the most recent user-initiated turns.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="turnCount">The number of recent user turns to include.</param>
+    /// <returns>The recent turn messages in chronological order.</returns>
+    private IReadOnlyList<ConversationMessageRecord> GetRecentUserTurns(string projectRoot, int turnCount)
+    {
+        IReadOnlyList<ConversationMessageRecord> allMessages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
+
+        // Walk from newest to oldest and collect the request ids of the last user turns.
+        HashSet<string> selectedTurnIds = new HashSet<string>(StringComparer.Ordinal);
+
+        for (int index = allMessages.Count - 1; index >= 0 && selectedTurnIds.Count < turnCount; index--)
+        {
+            ConversationMessageRecord message = allMessages[index];
+
+            if (string.Equals(message.Role, "user", StringComparison.OrdinalIgnoreCase))
+            {
+                selectedTurnIds.Add(message.RequestId);
+            }
+        }
+
+        // Include all messages (user and assistant) of the selected turns in chronological order.
+        List<ConversationMessageRecord> window = [];
+
+        foreach (ConversationMessageRecord message in allMessages)
+        {
+            if (selectedTurnIds.Contains(message.RequestId))
+            {
+                window.Add(message);
+            }
+        }
+
+        return window;
     }
 
     /// <summary>
@@ -452,11 +505,13 @@ public sealed class ChatService
     {
         ConversationImportanceParseResult importanceResult = ConversationImportanceParser.Parse(response.Content);
         response.Content = importanceResult.Content;
-        response.ImportanceWeight = importanceResult.ImportanceWeight;
+
+        // One-time conversations fix every importance weight to 0.
+        response.ImportanceWeight = preparedRequest.LongTerm ? importanceResult.ImportanceWeight : 0;
         conversationLogStore.UpdateRequestImportanceWeight(
             projectRoot,
             preparedRequest.RequestId,
-            importanceResult.ImportanceWeight);
+            response.ImportanceWeight);
     }
 
     /// <summary>
@@ -660,13 +715,15 @@ public sealed class ChatService
     /// <param name="RequestId">The request identifier.</param>
     /// <param name="CompressionRequestId">The compression request identifier.</param>
     /// <param name="ContextPackage">The context package.</param>
+    /// <param name="LongTerm">Whether the project uses long-term conversations.</param>
     private sealed record PreparedChatRequest(
         IChatProvider Provider,
         ProviderSettings Settings,
         ChatProviderRequest Request,
         string RequestId,
         string CompressionRequestId,
-        ContextPackage ContextPackage)
+        ContextPackage ContextPackage,
+        bool LongTerm)
     {
     }
 

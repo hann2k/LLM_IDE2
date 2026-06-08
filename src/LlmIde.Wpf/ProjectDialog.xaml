@@ -17,6 +17,8 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="120" />
@@ -74,8 +76,32 @@
                     Click="BrowsePathButton_Click" />
         </Grid>
 
-        <TextBlock x:Name="DeleteNoticeText"
+        <TextBlock x:Name="ProjectApiKeyLabel"
                    Grid.Row="3"
+                   Grid.Column="0"
+                   Visibility="Collapsed"
+                   Text="API 키"
+                   FontSize="16"
+                   VerticalAlignment="Center"
+                   Margin="0,0,12,12" />
+        <TextBox x:Name="ProjectApiKeyTextBox"
+                 Grid.Row="3"
+                 Grid.Column="1"
+                 Visibility="Collapsed"
+                 FontSize="16"
+                 Margin="0,0,0,12" />
+
+        <CheckBox x:Name="ConversationTypeCheckBox"
+                  Grid.Row="4"
+                  Grid.ColumnSpan="2"
+                  Visibility="Collapsed"
+                  IsChecked="True"
+                  Content="대화종류: 장기 대화 (체크 해제 시 1회성 대화)"
+                  FontSize="14"
+                  Margin="0,0,0,12" />
+
+        <TextBlock x:Name="DeleteNoticeText"
+                   Grid.Row="5"
                    Grid.ColumnSpan="2"
                    Visibility="Collapsed"
                    Text="안내: 정말 삭제하시겠습니까? 이 결정은 되돌릴 수 없습니다."
@@ -84,7 +110,7 @@
                    Margin="0,4,0,12" />
 
         <TextBlock x:Name="DeleteApiKeyNoticeText"
-                   Grid.Row="4"
+                   Grid.Row="6"
                    Grid.ColumnSpan="2"
                    Visibility="Collapsed"
                    Text="사용중인 API 키도 같이 삭제됩니다."
@@ -93,14 +119,14 @@
                    Margin="0,0,0,8" />
 
         <CheckBox x:Name="ConfirmApiKeyCheckBox"
-                  Grid.Row="5"
+                  Grid.Row="7"
                   Grid.ColumnSpan="2"
                   Visibility="Collapsed"
                   Content="사용중인 API 키도 같이 삭제됩니다."
                   FontSize="14"
                   Margin="0,0,0,12" />
 
-        <StackPanel Grid.Row="6"
+        <StackPanel Grid.Row="8"
                     Grid.ColumnSpan="2"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
