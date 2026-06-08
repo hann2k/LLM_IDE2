@@ -86,6 +86,11 @@ public static class LlmIdeLayout
     public const string RequestsFileName = "requests.jsonl";
 
     /// <summary>
+    /// Gets the agent tool call log file name.
+    /// </summary>
+    public const string ToolCallsFileName = "tool-calls.jsonl";
+
+    /// <summary>
     /// Gets the context packages directory name.
     /// </summary>
     public const string ContextPackagesDirectoryName = "context-packages";

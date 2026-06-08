@@ -136,6 +136,17 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Appends an agent tool call record to the JSONL tool call log.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="toolCall">The tool call record.</param>
+    public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
+    {
+        string toolCallPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.ToolCallsFileName);
+        AppendJsonLine(toolCallPath, toolCall);
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from the JSONL message log.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

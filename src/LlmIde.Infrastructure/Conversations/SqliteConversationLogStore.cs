@@ -206,6 +206,51 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Appends an agent tool call record to SQLite.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="toolCall">The tool call record.</param>
+    public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
+    {
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = """
+            insert into agent_tool_calls
+            (
+                request_id,
+                sequence,
+                tool,
+                target,
+                ok,
+                result_summary,
+                error_message,
+                created_at
+            )
+            values
+            (
+                $request_id,
+                $sequence,
+                $tool,
+                $target,
+                $ok,
+                $result_summary,
+                $error_message,
+                $created_at
+            );
+            """;
+        command.Parameters.AddWithValue("$request_id", toolCall.RequestId);
+        command.Parameters.AddWithValue("$sequence", toolCall.Sequence);
+        command.Parameters.AddWithValue("$tool", toolCall.Tool);
+        command.Parameters.AddWithValue("$target", toolCall.Target);
+        command.Parameters.AddWithValue("$ok", toolCall.Ok ? 1 : 0);
+        command.Parameters.AddWithValue("$result_summary", toolCall.ResultSummary);
+        command.Parameters.AddWithValue("$error_message", toolCall.ErrorMessage);
+        command.Parameters.AddWithValue("$created_at", toolCall.CreatedAt.ToString("O"));
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from SQLite.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -304,6 +349,19 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
                 request_id text primary key,
                 created_at text not null,
                 package_json text not null
+            );
+
+            create table if not exists agent_tool_calls
+            (
+                id integer primary key autoincrement,
+                request_id text not null,
+                sequence integer not null,
+                tool text not null,
+                target text not null default '',
+                ok integer not null default 0,
+                result_summary text not null default '',
+                error_message text not null default '',
+                created_at text not null
             );
             """;
         command.ExecuteNonQuery();

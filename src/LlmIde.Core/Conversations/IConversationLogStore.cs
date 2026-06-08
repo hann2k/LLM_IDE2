@@ -50,6 +50,13 @@ public interface IConversationLogStore
     void AppendMessage(string projectRoot, ConversationMessageRecord message);
 
     /// <summary>
+    /// Appends an agent tool call record.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="toolCall">The tool call record.</param>
+    void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall);
+
+    /// <summary>
     /// Gets recent conversation messages in chronological order.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

@@ -124,7 +124,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         List<AgentToolResult> toolResults = [];
-        ChatProviderResponse response = await ResolveWithToolsAsync(preparedRequest, toolResults, cancellationToken);
+        ChatProviderResponse response = await ResolveWithToolsAsync(projectRoot, preparedRequest, toolResults, cancellationToken);
         response.SentRequest = preparedRequest.Request;
         response.RequestId = preparedRequest.RequestId;
         response.ToolResults = toolResults;
@@ -181,6 +181,7 @@ public sealed class ChatService
 
         List<AgentToolResult> toolResults = [];
         string finalContent = await StreamWithToolsAsync(
+            projectRoot,
             preparedRequest,
             onChunk,
             toolResults,
@@ -222,11 +223,13 @@ public sealed class ChatService
     /// <summary>
     /// Sends the request, resolving tool discovery and tool requests, until a final answer is produced.
     /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="toolResults">The collected tool results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The final provider response.</returns>
     private async Task<ChatProviderResponse> ResolveWithToolsAsync(
+        string projectRoot,
         PreparedChatRequest preparedRequest,
         List<AgentToolResult> toolResults,
         CancellationToken cancellationToken)
@@ -240,7 +243,7 @@ public sealed class ChatService
                 preparedRequest.Settings,
                 cancellationToken);
 
-            (bool handled, _) = await HandleAgentTurnAsync(preparedRequest, response.Content, toolResults, cancellationToken);
+            (bool handled, _) = await HandleAgentTurnAsync(projectRoot, preparedRequest, response.Content, toolResults, cancellationToken);
 
             if (!handled)
             {
@@ -254,6 +257,7 @@ public sealed class ChatService
     /// <summary>
     /// Streams the request, resolving tool discovery and tool requests, until a final answer is produced.
     /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="onChunk">Callback invoked for every streamed chunk.</param>
     /// <param name="toolResults">The collected tool results.</param>
@@ -261,6 +265,7 @@ public sealed class ChatService
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The final answer content.</returns>
     private async Task<string> StreamWithToolsAsync(
+        string projectRoot,
         PreparedChatRequest preparedRequest,
         Action<string> onChunk,
         List<AgentToolResult> toolResults,
@@ -281,7 +286,7 @@ public sealed class ChatService
             }
 
             string text = content.ToString();
-            (bool handled, string? label) = await HandleAgentTurnAsync(preparedRequest, text, toolResults, cancellationToken);
+            (bool handled, string? label) = await HandleAgentTurnAsync(projectRoot, preparedRequest, text, toolResults, cancellationToken);
 
             if (!handled)
             {
@@ -297,12 +302,14 @@ public sealed class ChatService
     /// <summary>
     /// Handles one model turn: tool discovery (list_tools) or a tool request. Returns whether to continue.
     /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="content">The model response content.</param>
     /// <param name="toolResults">The collected tool results.</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>True with a label when handled (continue); false when the content is a final answer.</returns>
     private async Task<(bool Handled, string? Label)> HandleAgentTurnAsync(
+        string projectRoot,
         PreparedChatRequest preparedRequest,
         string content,
         List<AgentToolResult> toolResults,
@@ -352,9 +359,47 @@ public sealed class ChatService
         }
 
         toolResults.Add(toolResult);
+        LogToolCall(projectRoot, preparedRequest.RequestId, toolResults.Count, toolResult);
         preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
         preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolResult(toolResult) });
         return (true, DescribeStep(toolResult));
+    }
+
+    /// <summary>
+    /// Records an agent tool execution to the conversation tool call log (sanitized, no secrets).
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="requestId">The chat request identifier.</param>
+    /// <param name="sequence">The execution order within the request.</param>
+    /// <param name="toolResult">The tool result.</param>
+    private void LogToolCall(string projectRoot, string requestId, int sequence, AgentToolResult toolResult)
+    {
+        string target = string.Empty;
+        string summary = string.Empty;
+
+        if (toolResult.Result is FetchUrlResult fetchResult)
+        {
+            // Log host only, never the full URL (avoids leaking query-string secrets).
+            target = Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri) ? uri.Host : string.Empty;
+            summary = $"status={fetchResult.StatusCode}, chars={fetchResult.Text.Length}, truncated={fetchResult.Truncated}";
+        }
+        else if (toolResult.Result is WebSearchResult searchResult)
+        {
+            target = searchResult.Query;
+            summary = $"results={searchResult.Results.Count}";
+        }
+
+        conversationLogStore.AppendToolCall(projectRoot, new ConversationToolCallRecord
+        {
+            RequestId = requestId,
+            Sequence = sequence,
+            Tool = toolResult.Tool,
+            Target = target,
+            Ok = toolResult.Ok,
+            ResultSummary = summary,
+            ErrorMessage = toolResult.ErrorMessage,
+            CreatedAt = DateTimeOffset.UtcNow
+        });
     }
 
     /// <summary>
@@ -415,6 +460,16 @@ public sealed class ChatService
             Messages = context.Messages
         };
 
+        // Inject the current time so the model can reason about "now" (before the user message).
+        if (request.Messages.Count > 0)
+        {
+            request.Messages.Insert(request.Messages.Count - 1, new ChatMessage
+            {
+                Role = "system",
+                Content = BuildCurrentTimeMessage()
+            });
+        }
+
         // When tools are available, tell the model how to request them (before the user message).
         if (ToolsEnabled && request.Messages.Count > 0)
         {
@@ -433,6 +488,16 @@ public sealed class ChatService
             compressionRequestId,
             context.ContextPackage,
             longTerm);
+    }
+
+    /// <summary>
+    /// Builds the system message that provides the current local date and time to the model.
+    /// </summary>
+    /// <returns>The current-time system message content.</returns>
+    private static string BuildCurrentTimeMessage()
+    {
+        DateTimeOffset now = DateTimeOffset.Now;
+        return "현재 시각: " + now.ToString("yyyy-MM-dd HH:mm:ss zzz") + " (참고용)";
     }
 
     /// <summary>

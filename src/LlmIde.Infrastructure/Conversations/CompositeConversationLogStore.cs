@@ -129,6 +129,19 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Appends an agent tool call record to all stores.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="toolCall">The tool call record.</param>
+    public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
+    {
+        foreach (IConversationLogStore store in stores)
+        {
+            store.AppendToolCall(projectRoot, toolCall);
+        }
+    }
+
+    /// <summary>
     /// Gets recent conversation messages from the primary readable store.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
