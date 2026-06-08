@@ -1,63 +1,132 @@
 # LLM IDE2
 
-LLM IDE2는 API 기반 LLM 개발 보조 IDE를 목표로 하는 .NET 프로젝트다.
-현재 단계에서는 GUI보다 CLI 기반 핵심 기능을 먼저 구현한다.
+LLM IDE2는 stateless LLM Provider 위에 stateful Project Runtime을 얹는 API 기반 LLM 개발 보조 IDE다.
+IDE가 프로젝트 상태, 기준, 대화 로그, 맥락 요약, 산출물을 보존하고, LLM은 매 요청마다 IDE가 조립한 맥락을 받아 응답한다.
 
-이 프로젝트는 DeepSeek API 사용을 기준으로 만들어졌다.
-DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 발급받아 로컬 설정 파일에 입력해야 한다.
+현재 개발 단계는 Phase 9 WPF GUI 적용 단계다.
+Phase 1~8.5의 Core/CLI 기반 MVP 기능은 구현되어 있고, WPF에서 같은 Core와 같은 `.llmide` 데이터를 사용하는 GUI 기능을 연결하는 중이다.
 
-## 프로젝트 개요
+## 현재 상태
 
-현재 구현 범위:
+완료된 단계:
 
-* 프로젝트 이름 기반 초기화 및 목록 관리
-* 프로젝트별 `.llmide` 메타데이터 폴더 생성
-* DeepSeek 제공자 기반 CLI 대화
-* 프로젝트 단위 SQLite 대화 저장소
-* JSONL/JSON 보조 대화 로그
-* 최근 대화 맥락 자동 주입
-* DeepSeek 모델 목록 조회 및 기본 모델 교체
-* 기준 생성, 수정, 삭제, 활성/비활성 관리
-* 활성 기준 자동 주입
-* 프로젝트 상태 조회, 수정, 목록 항목 관리
-* 프로젝트 상태 자동 주입
-* 롤링 맥락 요약 생성 및 저장
-* 이전 대화 원문 대신 압축 맥락을 다음 요청에 주입
-* 맥락 빌더 기반 요청 맥락 조립
-* 대용량 응답 스트리밍 출력
-* Markdown 표와 코드 블록 원문 출력
-* CLI chat debug 출력
+* Phase 1: 프로젝트 초기화와 프로젝트 등록소 관리
+* Phase 2: DeepSeek Provider 기반 대화
+* Phase 3: SQLite + JSONL/JSON 대화 로그 저장
+* Phase 4: Criteria 관리와 활성 기준 주입
+* Phase 5: 프로젝트 상태 관리와 상태 주입
+* Phase 6: Rolling Context Compression
+* Phase 7: 맥락 빌더 v1
+* Phase 8: 산출물 저장과 명시 태그 기반 추출
+* Phase 8.5: Agent Loop v1, `web_search`, `fetch_url` 읽기 도구
 
-프로젝트는 이름을 키로 관리한다.
-프로젝트 이름 저장소는 실행 프로그램 하부의 고정 `project/projects.json`에 저장되고, 실제 프로젝트 데이터는 각 프로젝트 폴더의 `.llmide` 아래에 저장된다.
+진행 중인 단계:
 
-대화 기록은 프로젝트별로 다음 위치에 저장된다.
+* Phase 9: WPF GUI 적용
+
+Phase 9에서 현재 확인되는 GUI 범위:
+
+* 프로젝트 등록소, 생성, 이름 변경, 복제, 삭제
+* 채팅 화면과 스트리밍 응답 표시
+* 독립 팝업 채팅 입력창
+* Provider 선택과 프로젝트 생성 시 API Key 입력
+* Criteria 편집
+* 대화 목록, 중요도 표시, 개별 대화 삭제
+* 수동 대화 추가
+* 응답 선택 영역을 산출물로 추출
+* 산출물 목록, 편집, Markdown/코드 뷰어, 삭제
+* Agent 도구 관리 화면
+
+남은 Phase 9 항목은 Provider/Model 설정 화면, 프로젝트 상태 편집, Rolling Context/맥락 패키지/Request Log 조회 기능의 정리와 보강이다.
+
+## 핵심 원칙
+
+이 프로젝트는 다음 원칙을 따른다.
+
+* IDE가 프로젝트를 기억한다.
+* LLM 호출은 요청 단위로 독립 실행한다.
+* Core 비즈니스 로직은 UI 계층에 두지 않는다.
+* CLI와 WPF는 같은 Core와 같은 `.llmide` 데이터를 사용한다.
+* AI는 제안하고, IDE는 기록하며, 최종 변경 권한은 사용자에게 있다.
+* 도구 호출은 읽기 전용으로 시작하고, 호출 이력은 대화 메시지와 분리해 기록한다.
+
+## 솔루션 구조
+
+```text
+LlmIde.slnx
+├─ src/
+│  ├─ LlmIde.Core/
+│  ├─ LlmIde.Infrastructure/
+│  ├─ LlmIde.Cli/
+│  └─ LlmIde.Wpf/
+├─ tests/
+│  └─ LlmIde.Tests/
+├─ policies/
+└─ Docs/
+```
+
+계층 책임:
+
+* `LlmIde.Core`: 프로젝트, Criteria, 상태, 맥락 빌더, 대화 흐름, 산출물, Agent Loop 모델과 인터페이스
+* `LlmIde.Infrastructure`: 파일/JSON/JSONL/SQLite 저장소, DeepSeek Provider, Agent 도구 구현
+* `LlmIde.Cli`: CLI 어댑터와 검증용 실행 환경
+* `LlmIde.Wpf`: WPF GUI 어댑터
+* `LlmIde.Tests`: Core/Infrastructure 중심 회귀 테스트
+
+## 저장 구조
+
+프로젝트 등록소는 실행 프로그램 루트 아래에 저장된다.
+
+```text
+<IdeProgramRoot>/project/projects.json
+```
+
+등록소는 `pID`, 표시 이름 `name`, 프로젝트 경로를 분리해서 관리한다.
+CLI에서 프로젝트를 지정할 때는 `pID`를 사용한다.
+
+실제 프로젝트 데이터는 각 프로젝트 루트의 `.llmide` 아래에 저장된다.
 
 ```text
 <ProjectRoot>/
- └─ .llmide/
-     ├─ conversations/
-     │   ├─ conversation.db
-     │   ├─ messages.jsonl
-     │   ├─ requests.jsonl
-     │   ├─ context-packages/
-     │   └─ rolling-context/
-     │       ├─ current.md
-     │       ├─ history/
-     │       └─ index.jsonl
-     └─ settings/
-         └─ providers.json
+└─ .llmide/
+   ├─ project.json
+   ├─ init-progress.json
+   ├─ project-state.json
+   ├─ criteria.json
+   ├─ policies/
+   ├─ conversations/
+   │  ├─ conversation.db
+   │  ├─ messages.jsonl
+   │  ├─ requests.jsonl
+   │  ├─ tool-calls.jsonl
+   │  ├─ context-packages/
+   │  └─ rolling-context/
+   │     ├─ current.md
+   │     ├─ history/
+   │     └─ index.jsonl
+   ├─ artifacts/
+   │  └─ artifacts.index.json
+   └─ settings/
+      └─ providers.json
 ```
+
+`conversation.db`가 주 저장소이고, JSONL/JSON은 디버그, 감사, 요청 재현용 보조 기록이다.
 
 ## 개발 환경
 
 필요 환경:
 
+* Windows
 * .NET 10 SDK
 * C#
-* Microsoft.Data.Sqlite 10.0.8
+* WPF
 
-## 프로젝트 빌드 방법
+주요 패키지:
+
+* `Microsoft.Data.Sqlite 10.0.8`
+* `Markdig.Wpf 0.5.0.1`
+
+## 빌드와 테스트
 
 루트 폴더에서 실행한다.
 
@@ -65,92 +134,142 @@ DeepSeek API Key는 저장소에 포함되지 않으며, 사용자가 별도로 
 dotnet build LlmIde.slnx -c Debug -v:minimal
 ```
 
-빌드 결과물은 다음 위치에 생성된다.
+테스트 실행:
+
+```bash
+dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
+```
+
+CLI 출력은 기본적으로 다음 위치에 생성된다.
 
 ```text
 bin/Debug/net10.0/
 ```
 
-실행 파일은 빌드 출력 폴더의 `llmide`다.
+WPF 출력은 다음 위치에 생성된다.
+
+```text
+bin/Debug/net10.0-windows/
+```
+
+WPF 프로젝트는 CLI 런타임을 같은 출력 폴더로 복사해서 GUI와 CLI가 같은 program root와 프로젝트 등록소를 공유할 수 있게 한다.
+
+## 실행
+
+CLI:
+
+```bash
+dotnet run --project src/LlmIde.Cli/LlmIde.Cli.csproj -- <command>
+```
+
+빌드 결과물에서 직접 실행:
 
 ```bash
 cd bin/Debug/net10.0
 ./llmide
 ```
 
-테스트 실행 명령:
+WPF:
 
 ```bash
-dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
+dotnet run --project src/LlmIde.Wpf/LlmIde.Wpf.csproj -c Debug
 ```
 
-## 프로젝트 사용법
+또는 빌드 후 `bin/Debug/net10.0-windows/` 아래의 WPF 실행 파일을 실행한다.
 
-### 도움말 출력
+## CLI 사용 예시
 
-옵션 없이 실행하면 사용법을 출력한다.
-
-```bash
-./llmide
-```
-
-### 프로젝트 생성
-
-이름 없이 생성하면 `DefaultProject`가 사용된다.
+프로젝트 생성:
 
 ```bash
 ./llmide init
+./llmide init --pid MyProject --name "내 프로젝트"
+./llmide init --pid MyProject --name "내 프로젝트" --path C:\Work\MyProject
 ```
 
-이름을 지정해서 생성한다.
-
-```bash
-./llmide init --name MyProject
-```
-
-경로를 지정해서 생성한다.
-
-```bash
-./llmide init --name MyProject --path /Users/me/Projects/MyProject
-```
-
-### 프로젝트 목록과 관리
+프로젝트 관리:
 
 ```bash
 ./llmide projects list
 ./llmide projects open MyProject
-./llmide projects rename MyProject NewProjectName
-./llmide projects move MyProject /Users/me/Projects/NewPath
-```
-
-`remove`는 프로젝트 목록에서만 제거하고 실제 프로젝트 폴더는 삭제하지 않는다.
-
-```bash
+./llmide projects rename MyProject "새 표시 이름"
+./llmide projects repid MyProject NewProjectId
+./llmide projects move MyProject C:\Work\NewPath
 ./llmide projects remove MyProject
-```
-
-`delete`는 실제 프로젝트 폴더까지 삭제한다.
-삭제는 위험하므로 프로젝트 이름 재확인이 필요하다.
-
-```bash
 ./llmide projects delete MyProject --confirm MyProject
 ```
 
-프로젝트에 API Key가 있으면 추가 확인 옵션이 필요하다.
+프로젝트에 API Key가 있으면 삭제 시 추가 확인이 필요하다.
 
 ```bash
 ./llmide projects delete MyProject --confirm MyProject --confirm-api-key-delete
 ```
 
-### DeepSeek API Key 설정
+모델 관리:
 
-프로젝트 생성 후 다음 파일이 생성된다.
+```bash
+./llmide models list MyProject
+./llmide models set MyProject deepseek-reasoner
+```
+
+Criteria 관리:
+
+```bash
+./llmide criteria add MyProject --title "Korean" --description "항상 한국어로 답한다" --priority high
+./llmide criteria list MyProject
+./llmide criteria update MyProject <criterion-id> --description "한국어를 기본으로 사용한다"
+./llmide criteria deactivate MyProject <criterion-id>
+./llmide criteria activate MyProject <criterion-id>
+./llmide criteria remove MyProject <criterion-id>
+```
+
+프로젝트 상태 관리:
+
+```bash
+./llmide state show MyProject
+./llmide state set MyProject --stage phase9 --current-task "WPF GUI 적용"
+./llmide state set MyProject --last-decision "상태 변경은 사용자가 승인한다"
+./llmide state add MyProject completed "Phase 8.5 Agent Loop 완료"
+./llmide state add MyProject next-action "Phase 9 GUI 보강"
+./llmide state add MyProject blocker "없음"
+./llmide state remove MyProject blocker "없음"
+```
+
+채팅:
+
+```bash
+./llmide chat MyProject "안녕"
+./llmide chat MyProject "표와 코드 예제를 보여줘" --no-stream
+./llmide chat MyProject "전송 맥락을 확인해줘" --debug
+./llmide chat MyProject "이 산출물을 요약해줘" --artifact art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+Agent Loop 실행:
+
+```bash
+./llmide agent-run MyProject "공식 문서를 찾아 요약해줘"
+```
+
+산출물 관리:
+
+```bash
+./llmide artifacts extract MyProject --content "<artifact type=\"markdown\" title=\"README 초안\"># README</artifact>"
+./llmide artifacts add MyProject --title "README 초안" --type markdown --content "# README"
+./llmide artifacts list MyProject
+./llmide artifacts show MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+./llmide artifacts update MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx --content "# Updated"
+./llmide artifacts remove MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+```
+
+## Provider 설정
+
+신규 프로젝트 생성 후 다음 파일이 생성된다.
 
 ```text
 <ProjectRoot>/.llmide/settings/providers.json
 ```
 
-처음 생성되는 API Key 값은 빈 문자열이다.
+예시:
 
 ```json
 {
@@ -166,144 +285,47 @@ dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
 }
 ```
 
-DeepSeek API Key를 별도로 발급받은 뒤 `api_key`에 입력해야 대화 기능을 사용할 수 있다.
-API Key가 들어간 파일은 개인 로컬 데이터이므로 커밋하지 않는다.
+DeepSeek API Key는 저장소에 포함하지 않는다.
+사용자가 별도로 발급받아 프로젝트 생성 화면이나 로컬 `providers.json`에 입력한다.
 
-### 모델 목록 조회와 교체
+## Agent 도구
 
-DeepSeek API에서 현재 사용할 수 있는 모델 목록을 조회한다.
-이 명령은 프로젝트의 `providers.json`에 입력된 API Key를 사용한다.
+Phase 8.5에서 읽기 전용 Agent 도구가 추가되었다.
 
-```bash
-./llmide models list MyProject
-```
+* `web_search`: DuckDuckGo HTML 기반 검색
+* `fetch_url`: HTTP/HTTPS URL 본문 조회
 
-프로젝트 기본 모델을 교체한다.
-변경된 모델은 `<ProjectRoot>/.llmide/settings/providers.json`에 저장된다.
-
-```bash
-./llmide models set MyProject deepseek-reasoner
-```
-
-### Criteria 관리
-
-Criteria는 프로젝트가 응답에서 지켜야 할 기준이다.
-활성 Criteria는 매 대화 요청마다 자동으로 Provider 메시지에 포함된다.
-
-```bash
-./llmide criteria add MyProject --title "Korean" --description "항상 한국어로 답한다" --priority high
-./llmide criteria list MyProject
-./llmide criteria update MyProject <criterion-id> --description "한국어를 기본으로 사용한다"
-./llmide criteria deactivate MyProject <criterion-id>
-./llmide criteria activate MyProject <criterion-id>
-./llmide criteria remove MyProject <criterion-id>
-```
-
-### 프로젝트 상태 관리
-
-프로젝트 상태는 현재 단계, 작업, 완료 항목, 다음 작업, 차단 요소를 저장하는 프로젝트 상태 정보다.
-저장 위치는 `<ProjectRoot>/.llmide/project-state.json`이다.
-
-```bash
-./llmide state show MyProject
-./llmide state set MyProject --stage phase5 --current-task "프로젝트 상태 관리"
-./llmide state set MyProject --last-decision "상태 변경은 사용자가 승인한다"
-./llmide state add MyProject completed "Phase 4 기준 관리 완료"
-./llmide state add MyProject next-action "Phase 6 롤링 맥락 압축 시작"
-./llmide state add MyProject blocker "없음"
-./llmide state remove MyProject blocker "없음"
-```
-
-프로젝트 상태는 매 대화 요청마다 Provider 메시지에 포함된다.
-
-### 대화 실행
-
-```bash
-./llmide chat MyProject "안녕"
-```
-
-`chat`은 활성 기준이 하나 이상 있어야 실행된다.
-활성 기준이 없으면 Provider API로 전송하지 않고 중단한다.
-활성 기준과 프로젝트 상태는 Provider 요청의 system 메시지로 함께 전달된다.
-
-기본 `chat` 명령은 응답을 스트리밍으로 출력한다.
-긴 응답, 표, 코드 블록도 도착하는 대로 CLI에 표시되며 Markdown 원문 형식을 보존한다.
-
-같은 프로젝트에서 대화를 이어가면 chat 응답 이후 롤링 맥락 요약이 생성된다.
-다음 요청에는 이전 대화 원문 전체가 아니라 압축된 `current.md`와 현재 발화가 포함된다.
-시스템 규칙, 활성 기준, 프로젝트 상태, 롤링 맥락 요약은 맥락 빌더가 조립한다.
-롤링 맥락 요약이 아직 없으면, 첫 압축은 누적 원본 대화 로그 전체를 압축 대상으로 사용한다.
-맥락 빌더는 `.llmide/policies/`의 정책 파일을 읽어 시스템 규칙, 압축 규칙, 산출물 태그 요청을 조립한다.
-
-```bash
-./llmide chat MyProject "세계에서 가장 높은 산은?"
-./llmide chat MyProject "두 번째로 높은 산은?"
-./llmide chat MyProject "그 산의 높이는?"
-```
-
-스트리밍을 끄고 전체 응답을 받은 뒤 출력하려면 `--no-stream`을 사용한다.
-
-```bash
-./llmide chat MyProject "표와 코드 예제를 보여줘" --no-stream
-```
-
-저장된 산출물을 요청 맥락에 첨부하려면 `--artifact`를 사용한다.
-
-```bash
-./llmide chat MyProject "이 산출물을 요약해줘" --artifact art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
-
-### 산출물 관리
-
-AI 응답 안의 `<artifact>` 태그는 산출물 저장 후보일 뿐이며 자동 저장되지 않는다.
-사용자가 명령을 실행해야 `.llmide/artifacts/` 아래에 확정 저장된다.
-정책 문구는 코드 내부가 아니라 프로젝트 정책 파일에 둔다.
-신규 프로젝트 생성 시 실행 파일 옆의 기본 템플릿 전체를 프로젝트 정책 파일로 복사한다.
+도구는 모델이 `list_tools`로 사용 가능 목록을 요청한 뒤 `tool_request`로 호출한다.
+도구 호출 이력은 다음 위치에 남는다.
 
 ```text
-<IdeProgramRoot>/policies/
-<ProjectRoot>/.llmide/policies/
+<ProjectRoot>/.llmide/conversations/tool-calls.jsonl
+conversation.db의 agent_tool_calls 테이블
 ```
 
-예시:
+전역 allowlist는 다음 파일로 제한할 수 있다.
 
-```md
-응답에 재사용 가능한 중요한 산출물 후보가 있으면 해당 내용을 명시적인 산출물 태그로 감싼다.
-다음 형식을 사용한다.
-<artifact type="markdown" title="짧은 제목" path="선택/대상/경로">
-산출물 내용
-</artifact>
-프로젝트에서 재사용할 가치가 있는 내용만 태그로 표시한다.
-태그가 붙은 내용은 저장 후보일 뿐이며, 저장되었다고 말하지 않는다.
+```text
+<IdeProgramRoot>/settings/agent-tools.json
 ```
 
-```bash
-./llmide artifacts extract MyProject --content "<artifact type=\"markdown\" title=\"README 초안\"># README</artifact>"
-./llmide artifacts add MyProject --title "README 초안" --type markdown --content "# README"
-./llmide artifacts list MyProject
-./llmide artifacts show MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-./llmide artifacts update MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx --content "# Updated"
-./llmide artifacts remove MyProject art_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
-```
+빈 allowlist는 전체 허용을 의미한다.
 
-### 디버그 출력
+## 주요 문서
 
-실제로 Provider API에 전달되는 데이터를 확인하려면 `--debug` 옵션을 사용한다.
+개발 기준 문서:
 
-```bash
-./llmide chat MyProject "그 산의 높이는?" --debug
-./llmide chat MyProject "그 산의 높이는?" --debug --no-stream
-```
+* `Docs/1.Product_Principles.md`
+* `Docs/2.Architecture_Baseline.md`
+* `Docs/3.Development_Roadmap.md`
+* `Docs/4.Change_Decision_Log.md`
+* `Docs/Code_Convention.md`
 
-디버그 출력에는 `request_id`, provider, model, messages가 표시된다.
-chat 응답 이후 실행되는 압축 요청은 `compression_debug`로 별도 출력된다.
-스트리밍 chat에서 `--debug`를 사용하면 압축 요청 본문을 먼저 출력하고, 압축 응답은 `compression_response` 아래에 chunk 단위로 출력한다.
-응답에서 산출물 태그 후보가 발견되면 디버그 출력에 `artifact_candidates`로 표시된다.
-한국어는 사람이 읽을 수 있는 형태로 출력된다.
+개발 중 로드맵이나 구조가 바뀌면 기준 문서를 먼저 갱신하고, 프로그램과 테스트를 함께 수정한 뒤 빌드와 테스트를 통과시킨다.
 
 ## 주의사항
 
-* 이 프로젝트는 현재 DeepSeek API 기준으로 작성되어 있다.
-* DeepSeek API Key는 사용자가 별도로 발급받아야 한다.
-* API Key와 빌드 결과물은 저장소에 커밋하지 않는다.
-* `bin/`, `obj/`, `backup/` 폴더는 커밋 대상에서 제외된다.
+* API Key와 개인 프로젝트 데이터는 커밋하지 않는다.
+* `bin/`, `obj/`, `backup/` 폴더는 커밋 대상에서 제외한다.
+* `.llmide`는 프로젝트별 로컬 메타데이터 저장소다.
+* 현재 기준 Provider는 DeepSeek이며, Core는 Provider 교체 가능한 구조를 유지한다.
