@@ -68,6 +68,11 @@ public partial class MainWindow : Window
     private readonly IConversationLogStore conversationLogStore;
 
     /// <summary>
+    /// The agent tool host (provides the list of tools the LLM can use).
+    /// </summary>
+    private readonly IAgentToolHost agentToolHost;
+
+    /// <summary>
     /// The criteria service.
     /// </summary>
     private readonly CriteriaService criteriaService;
@@ -131,7 +136,7 @@ public partial class MainWindow : Window
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
+        agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
         chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -462,6 +467,20 @@ public partial class MainWindow : Window
     private void ImportanceRuleMenuItem_Click(object sender, RoutedEventArgs e)
     {
         EditPolicyFile(LlmIdeLayout.ImportanceRuleFileName);
+    }
+
+    /// <summary>
+    /// Opens the read-only tool management window listing the tools the LLM can use.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ToolManagerMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ToolManagerDialog dialog = new ToolManagerDialog(agentToolHost.ListTools())
+        {
+            Owner = this
+        };
+        dialog.ShowDialog();
     }
 
     /// <summary>

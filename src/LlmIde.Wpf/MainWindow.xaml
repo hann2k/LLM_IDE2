@@ -121,6 +121,8 @@
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="ImportanceRuleMenuItem_Click" />
                 </MenuItem>
+                <MenuItem Header="도구관리"
+                          Click="ToolManagerMenuItem_Click" />
             </Menu>
         </Border>
 
