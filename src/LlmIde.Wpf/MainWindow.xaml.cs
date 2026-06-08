@@ -8,9 +8,12 @@ using System.Windows.Controls;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
+using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
+using LlmIde.Infrastructure.Providers;
+using Microsoft.Data.Sqlite;
 
 namespace LlmIde.Wpf;
 
@@ -45,6 +48,11 @@ public partial class MainWindow : Window
     private readonly ArtifactService artifactService;
 
     /// <summary>
+    /// The provider settings store.
+    /// </summary>
+    private readonly IProviderSettingsStore providerSettingsStore;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -57,6 +65,7 @@ public partial class MainWindow : Window
         projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
         artifactService = new ArtifactService(new FileArtifactStore());
+        providerSettingsStore = new JsonProviderSettingsStore();
         DataContext = viewModel;
     }
 
@@ -94,7 +103,7 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private void CreateProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
-        ProjectCreateDialog dialog = new ProjectCreateDialog
+        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Create)
         {
             Owner = this
         };
@@ -133,7 +142,7 @@ public partial class MainWindow : Window
         }
 
         ProjectListItem selectedProject = viewModel.SelectedProject;
-        ProjectRenameDialog dialog = new ProjectRenameDialog(selectedProject.DisplayName)
+        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Rename, selectedProject.DisplayName)
         {
             Owner = this
         };
@@ -156,6 +165,220 @@ public partial class MainWindow : Window
         {
             System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 이름변경 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>
+    /// Opens the project delete dialog and deletes the selected project when confirmed.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void DeleteProjectMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        ProjectListItem selectedProject = viewModel.SelectedProject;
+        bool hasApiKey = HasApiKey(selectedProject.Path);
+        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Delete, selectedProject.DisplayName, hasApiKey)
+        {
+            Owner = this
+        };
+
+        bool? accepted = dialog.ShowDialog();
+
+        // Delete only when the confirm button was pressed and the API key checkbox is satisfied.
+        if (accepted != true || !dialog.IsApiKeyDeletionConfirmed())
+        {
+            System.Windows.MessageBox.Show(this, "프로젝트 삭제가 취소되었습니다.", "프로젝트 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        try
+        {
+            DeleteProject(selectedProject);
+            LoadProjects();
+            System.Windows.MessageBox.Show(this, "프로젝트를 삭제했습니다.", "프로젝트 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 삭제 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Deletes a project folder and removes the registry entry.
+    /// </summary>
+    /// <param name="project">The project to delete.</param>
+    private void DeleteProject(ProjectListItem project)
+    {
+        string projectRoot = System.IO.Path.GetFullPath(project.Path);
+
+        if (Directory.Exists(projectRoot))
+        {
+            // Release SQLite connection pools so the conversation database file can be removed.
+            SqliteConnection.ClearAllPools();
+            Directory.Delete(projectRoot, true);
+        }
+
+        projectRegistryService.Remove(project.PId);
+    }
+
+    /// <summary>
+    /// Determines whether a project has any stored provider API key.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>True when at least one API key exists.</returns>
+    private bool HasApiKey(string projectRoot)
+    {
+        ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
+        return settings.Providers.Any(provider => !string.IsNullOrWhiteSpace(provider.ApiKey));
+    }
+
+    /// <summary>
+    /// Opens the artifact rule file in the edit dialog.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ArtifactRuleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        EditPolicyFile(LlmIdeLayout.ArtifactRuleFileName);
+    }
+
+    /// <summary>
+    /// Opens the compression rule file in the edit dialog.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void CompressionRuleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        EditPolicyFile(LlmIdeLayout.CompressionRuleFileName);
+    }
+
+    /// <summary>
+    /// Opens the system rule file in the edit dialog.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void SystemRuleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        EditPolicyFile(LlmIdeLayout.SystemRuleFileName);
+    }
+
+    /// <summary>
+    /// Opens the importance rule file in the edit dialog.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ImportanceRuleMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        EditPolicyFile(LlmIdeLayout.ImportanceRuleFileName);
+    }
+
+    /// <summary>
+    /// Opens the edit dialog for a project policy file and saves changes.
+    /// </summary>
+    /// <param name="policyFileName">The policy file name under the policies folder.</param>
+    private void EditPolicyFile(string policyFileName)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        string policyPath = Path.Combine(
+            System.IO.Path.GetFullPath(viewModel.SelectedProject.Path),
+            LlmIdeLayout.MetadataDirectoryName,
+            LlmIdeLayout.PoliciesDirectoryName,
+            policyFileName);
+
+        try
+        {
+            string content = File.Exists(policyPath) ? File.ReadAllText(policyPath) : string.Empty;
+            EditDialog dialog = new EditDialog(policyPath, content)
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            File.WriteAllText(policyPath, dialog.EditedContent);
+            System.Windows.MessageBox.Show(this, "저장했습니다.", "편집", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "편집 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Opens the edit dialog for the project's provider API key and saves changes.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ApiKeyMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        string projectRoot = System.IO.Path.GetFullPath(viewModel.SelectedProject.Path);
+        string settingsPath = Path.Combine(
+            projectRoot,
+            LlmIdeLayout.MetadataDirectoryName,
+            LlmIdeLayout.SettingsDirectoryName,
+            LlmIdeLayout.ProvidersFileName);
+
+        try
+        {
+            ProviderSettingsDocument document = providerSettingsStore.Load(projectRoot);
+            ProviderSettings settings = GetDefaultProviderSettings(document);
+            EditDialog dialog = new EditDialog(settingsPath, settings.ApiKey)
+            {
+                Owner = this
+            };
+
+            if (dialog.ShowDialog() != true)
+            {
+                return;
+            }
+
+            settings.ApiKey = dialog.EditedContent.Trim();
+            providerSettingsStore.Save(projectRoot, document);
+            System.Windows.MessageBox.Show(this, "API 키를 저장했습니다.", "API 키 입력", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "API 키 입력 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Gets the default provider settings from a settings document.
+    /// </summary>
+    /// <param name="document">The provider settings document.</param>
+    /// <returns>The default provider settings.</returns>
+    private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument document)
+    {
+        ProviderSettings? settings = document.Providers.FirstOrDefault(provider =>
+            string.Equals(provider.Name, document.DefaultProvider, StringComparison.OrdinalIgnoreCase));
+
+        if (settings is not null)
+        {
+            return settings;
+        }
+
+        if (document.Providers.Count > 0)
+        {
+            return document.Providers[0];
+        }
+
+        throw new InvalidOperationException("프로바이더 설정이 없습니다.");
     }
 
     /// <summary>

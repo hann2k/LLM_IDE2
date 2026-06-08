@@ -89,14 +89,25 @@
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="RenameProjectMenuItem_Click" />
                     <MenuItem Header="삭제"
-                              IsEnabled="{Binding HasSelectedProject}" />
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="DeleteProjectMenuItem_Click" />
                 </MenuItem>
                 <MenuItem Header="편집">
-                    <MenuItem Header="아티팩트 룰" />
-                    <MenuItem Header="압축 룰" />
-                    <MenuItem Header="시스템 룰" />
-                    <MenuItem Header="중요도 룰" />
-                    <MenuItem Header="API 키 입력" />
+                    <MenuItem Header="아티팩트 룰"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="ArtifactRuleMenuItem_Click" />
+                    <MenuItem Header="압축 룰"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="CompressionRuleMenuItem_Click" />
+                    <MenuItem Header="시스템 룰"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="SystemRuleMenuItem_Click" />
+                    <MenuItem Header="중요도 룰"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="ImportanceRuleMenuItem_Click" />
+                    <MenuItem Header="API 키 입력"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="ApiKeyMenuItem_Click" />
                 </MenuItem>
             </Menu>
         </Border>

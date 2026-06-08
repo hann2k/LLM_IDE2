@@ -1,45 +1,39 @@
-<Window x:Class="LlmIde.Wpf.ProjectRenameDialog"
+<Window x:Class="LlmIde.Wpf.EditDialog"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        Title="프로젝트 이름변경"
-        Width="420"
-        Height="160"
-        ResizeMode="NoResize"
+        Title="편집"
+        Width="900"
+        Height="640"
+        MinWidth="520"
+        MinHeight="360"
         WindowStartupLocation="CenterOwner"
         Background="White"
         FontFamily="Malgun Gothic">
     <Grid Margin="18">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="90" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
 
-        <TextBlock Grid.Row="0"
-                   Grid.Column="0"
-                   Text="이름"
-                   FontSize="16"
-                   VerticalAlignment="Center"
-                   Margin="0,0,12,12" />
-        <TextBox x:Name="ProjectNameTextBox"
+        <TextBox x:Name="ContentTextBox"
                  Grid.Row="0"
-                 Grid.Column="1"
-                 FontSize="16"
+                 FontSize="15"
+                 FontFamily="Consolas, D2Coding, Malgun Gothic"
+                 AcceptsReturn="True"
+                 AcceptsTab="True"
+                 TextWrapping="Wrap"
+                 VerticalScrollBarVisibility="Auto"
+                 HorizontalScrollBarVisibility="Auto"
                  Margin="0,0,0,12" />
 
-        <StackPanel Grid.Row="2"
-                    Grid.ColumnSpan="2"
+        <StackPanel Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Right">
-            <Button Content="변경"
+            <Button Content="저장"
                     Width="88"
                     Height="34"
                     Margin="0,0,8,0"
-                    Click="RenameButton_Click" />
+                    Click="SaveButton_Click" />
             <Button Content="취소"
                     Width="88"
                     Height="34"
