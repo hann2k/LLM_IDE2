@@ -13,6 +13,7 @@
         PreviewKeyDown="Window_PreviewKeyDown">
     <Window.Resources>
         <SolidColorBrush x:Key="GuideBlueBrush" Color="#4D8EDB" />
+        <local:ImportanceToDeleteVisibilityConverter x:Key="ImportanceToDeleteVisibilityConverter" />
         <Style x:Key="PanelBorderStyle" TargetType="Border">
             <Setter Property="BorderBrush" Value="{StaticResource GuideBlueBrush}" />
             <Setter Property="BorderThickness" Value="1" />
@@ -193,6 +194,7 @@
                                                     FontSize="12"
                                                     Height="28"
                                                     Margin="0,12,0,0"
+                                                    Visibility="{Binding ImportanceWeight, Converter={StaticResource ImportanceToDeleteVisibilityConverter}}"
                                                     Click="DeleteConversationButton_Click" />
                                         </StackPanel>
                                     </DataTemplate>
