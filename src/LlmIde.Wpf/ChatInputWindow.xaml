@@ -14,8 +14,8 @@
     <Grid Margin="14">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition x:Name="UserRow" Height="*" />
+            <RowDefinition x:Name="AssistantRow" Height="0" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -55,7 +55,7 @@
               Margin="0,8,0,0">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
-                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
             </Grid.RowDefinitions>
             <TextBlock Grid.Row="0"
                        Text="assistant:"
@@ -64,8 +64,7 @@
                        Margin="0,0,0,4" />
             <TextBox x:Name="AssistantInput"
                      Grid.Row="1"
-                     MinHeight="80"
-                     MaxHeight="180"
+                     MinHeight="60"
                      FontSize="16"
                      AcceptsReturn="True"
                      TextWrapping="Wrap"

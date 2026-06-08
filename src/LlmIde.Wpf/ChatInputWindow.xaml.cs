@@ -141,6 +141,10 @@ public partial class ChatInputWindow : Window
         bool manual = IsManualMode;
         AssistantInputArea.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         RegisterButton.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
+
+        // In manual mode, split the user and assistant inputs evenly (50/50).
+        AssistantRow.Height = manual ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+
         HintText.Text = manual
             ? "수동대화: Enter=줄바꿈, [등록]으로 추가, ESC: 닫기"
             : "Enter: 전송   Shift+Enter: 줄바꿈   ESC: 닫기";
