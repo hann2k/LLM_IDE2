@@ -1,6 +1,7 @@
 <Window x:Class="LlmIde.Wpf.ArtifactViewer"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:markdig="clr-namespace:Markdig.Wpf;assembly=Markdig.Wpf"
         Title="아티팩트 뷰어"
         Width="820"
         Height="600"
@@ -15,15 +16,23 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <TextBox x:Name="ContentTextBox"
+        <!-- Markdown rendering for prose artifacts (Markdown, Table, Plan, Review, ...). -->
+        <markdig:MarkdownViewer x:Name="MarkdownContent"
+                                Grid.Row="0"
+                                FontSize="15"
+                                Margin="0,0,0,12" />
+
+        <!-- Fixed-width code viewer for code artifacts (Code, Json, Patch, Command, Config, Log). -->
+        <TextBox x:Name="CodeContent"
                  Grid.Row="0"
-                 FontSize="15"
+                 FontSize="14"
                  FontFamily="Consolas, D2Coding, Malgun Gothic"
                  IsReadOnly="True"
                  AcceptsReturn="True"
-                 TextWrapping="Wrap"
+                 TextWrapping="NoWrap"
                  VerticalScrollBarVisibility="Auto"
                  HorizontalScrollBarVisibility="Auto"
+                 Visibility="Collapsed"
                  Margin="0,0,0,12" />
 
         <StackPanel Grid.Row="1"

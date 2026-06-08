@@ -11,6 +11,10 @@
     <Content Include="..\..\policies\**\*" Link="policies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+  <ItemGroup>
+    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
+  </ItemGroup>
+
   <!-- Copy the CLI runtime into the WPF output so 'llmide' shares the same program root and project registry. -->
   <Target Name="CopyCliIntoWpfOutput" AfterTargets="Build">
     <ItemGroup>
@@ -19,10 +23,7 @@
       <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.runtimeconfig.json" />
       <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.deps.json" />
     </ItemGroup>
-    <Copy SourceFiles="@(CliOutputFiles)"
-          DestinationFolder="$(OutDir)"
-          SkipUnchangedFiles="true"
-          Condition="Exists('%(CliOutputFiles.Identity)')" />
+    <Copy SourceFiles="@(CliOutputFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(CliOutputFiles.Identity)')" />
   </Target>
 
   <PropertyGroup>

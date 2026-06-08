@@ -94,6 +94,9 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
 
+        // Open Markdown hyperlinks (in rendered conversation responses) in the default browser.
+        CommandBindings.Add(new System.Windows.Input.CommandBinding(Markdig.Wpf.Commands.Hyperlink, OpenMarkdownHyperlink));
+
         string ideProgramRoot = AppContext.BaseDirectory;
         viewModel = new MainWindowViewModel();
         projectStore = new JsonFileProjectStore(ideProgramRoot);
@@ -153,6 +156,23 @@ public partial class MainWindow : Window
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
         LoadProjects();
+    }
+
+    /// <summary>
+    /// Opens a clicked Markdown hyperlink (in a rendered response) in the default browser.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The command event arguments carrying the link target.</param>
+    private void OpenMarkdownHyperlink(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
+    {
+        string? url = e.Parameter as string;
+
+        if (string.IsNullOrWhiteSpace(url))
+        {
+            return;
+        }
+
+        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
     }
 
     /// <summary>
@@ -516,7 +536,8 @@ public partial class MainWindow : Window
         try
         {
             string content = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
-            EditDialog dialog = new EditDialog(filePath, content)
+            bool markdownPreview = filePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
+            EditDialog dialog = new EditDialog(filePath, content, markdownPreview)
             {
                 Owner = this
             };
@@ -1050,7 +1071,7 @@ public partial class MainWindow : Window
             string projectRoot = viewModel.SelectedProject.Path;
             Artifact artifact = artifactService.Get(projectRoot, item.ArtifactId);
             string content = artifactService.ReadContent(projectRoot, artifact);
-            ArtifactViewer viewer = new ArtifactViewer(item.Title, content)
+            ArtifactViewer viewer = new ArtifactViewer(item.Title, content, artifact.Type, artifact.TargetPath)
             {
                 Owner = this
             };
