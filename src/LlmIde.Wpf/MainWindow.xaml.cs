@@ -100,6 +100,16 @@ public partial class MainWindow : Window
     private bool suppressProviderChange;
 
     /// <summary>
+    /// The mouse position where an outline drag may have started.
+    /// </summary>
+    private System.Windows.Point outlineDragStart;
+
+    /// <summary>
+    /// The outline item under the mouse at left-button-down (drag candidate).
+    /// </summary>
+    private OutlineItem? outlineDragItem;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
     /// </summary>
     public MainWindow()
@@ -1151,6 +1161,218 @@ public partial class MainWindow : Window
         {
             item.IsSelected = true;
         }
+    }
+
+    /// <summary>
+    /// Outline drag-and-drop target relationship.
+    /// </summary>
+    private enum OutlineDrop
+    {
+        Before,
+        After,
+        Into
+    }
+
+    /// <summary>
+    /// Records the potential drag source on left-button-down.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        outlineDragStart = e.GetPosition(null);
+        outlineDragItem = e.OriginalSource is DependencyObject source
+            && FindAncestor<System.Windows.Controls.TreeViewItem>(source) is System.Windows.Controls.TreeViewItem item
+                ? item.DataContext as OutlineItem
+                : null;
+    }
+
+    /// <summary>
+    /// Begins an outline drag once the drag threshold is exceeded.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != MouseButtonState.Pressed || outlineDragItem is null || outlineDragItem.IsEditing)
+        {
+            return;
+        }
+
+        System.Windows.Point current = e.GetPosition(null);
+
+        if (Math.Abs(current.X - outlineDragStart.X) < SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - outlineDragStart.Y) < SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        OutlineItem dragged = outlineDragItem;
+        outlineDragItem = null;
+        System.Windows.DragDrop.DoDragDrop(
+            (DependencyObject)sender,
+            new System.Windows.DataObject(typeof(OutlineItem), dragged),
+            System.Windows.DragDropEffects.Move);
+    }
+
+    /// <summary>
+    /// Shows whether the current drag can be dropped at the hovered location.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        bool ok = TryResolveOutlineDrop(e, out OutlineItem dragged, out OutlineItem? target, out _)
+            && (target is null || !ReferenceEquals(dragged, target));
+        e.Effects = ok ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Moves the dragged outline item to the drop location (Shift = make child).
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!TryResolveOutlineDrop(e, out OutlineItem dragged, out OutlineItem? target, out OutlineDrop pos))
+        {
+            return;
+        }
+
+        if (target is null)
+        {
+            MoveOutlineToRootEnd(dragged);
+        }
+        else if (!ReferenceEquals(dragged, target))
+        {
+            MoveOutlineItem(dragged, target, pos);
+        }
+
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Resolves the drop target and relationship; returns false when the drop is invalid.
+    /// </summary>
+    /// <param name="e">The drag event arguments.</param>
+    /// <param name="dragged">The dragged item.</param>
+    /// <param name="target">The target item (null = empty area / root).</param>
+    /// <param name="pos">The drop relationship.</param>
+    /// <returns>True when the drop is allowed.</returns>
+    private bool TryResolveOutlineDrop(System.Windows.DragEventArgs e, out OutlineItem dragged, out OutlineItem? target, out OutlineDrop pos)
+    {
+        dragged = null!;
+        target = null;
+        pos = OutlineDrop.After;
+
+        if (!e.Data.GetDataPresent(typeof(OutlineItem)))
+        {
+            return false;
+        }
+
+        dragged = (OutlineItem)e.Data.GetData(typeof(OutlineItem));
+
+        if (e.OriginalSource is DependencyObject source
+            && FindAncestor<System.Windows.Controls.TreeViewItem>(source) is System.Windows.Controls.TreeViewItem tvi
+            && tvi.DataContext is OutlineItem candidate)
+        {
+            target = candidate;
+
+            if (IsSelfOrDescendant(dragged, candidate))
+            {
+                return false;
+            }
+
+            bool intoChild = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
+            double y = e.GetPosition(tvi).Y;
+            pos = intoChild ? OutlineDrop.Into : (y < 13 ? OutlineDrop.Before : OutlineDrop.After);
+        }
+
+        return true;
+    }
+
+    /// <summary>
+    /// Moves an item to a sibling position relative to (or as a child of) the target.
+    /// </summary>
+    /// <param name="dragged">The dragged item.</param>
+    /// <param name="target">The target item.</param>
+    /// <param name="pos">The drop relationship.</param>
+    private void MoveOutlineItem(OutlineItem dragged, OutlineItem target, OutlineDrop pos)
+    {
+        ObservableCollection<OutlineItem> source = dragged.Parent?.Children ?? viewModel.OutlineItems;
+        source.Remove(dragged);
+
+        if (pos == OutlineDrop.Into)
+        {
+            dragged.Parent = target;
+            target.Children.Add(dragged);
+            target.IsExpanded = true;
+        }
+        else
+        {
+            ObservableCollection<OutlineItem> destination = target.Parent?.Children ?? viewModel.OutlineItems;
+            int index = destination.IndexOf(target);
+
+            if (pos == OutlineDrop.After)
+            {
+                index++;
+            }
+
+            dragged.Parent = target.Parent;
+            destination.Insert(index, dragged);
+        }
+
+        RenumberOutline();
+        SaveOutline();
+        dragged.IsSelected = true;
+    }
+
+    /// <summary>
+    /// Moves an item to the end of the root level (used when dropped on empty space).
+    /// </summary>
+    /// <param name="dragged">The dragged item.</param>
+    private void MoveOutlineToRootEnd(OutlineItem dragged)
+    {
+        ObservableCollection<OutlineItem> source = dragged.Parent?.Children ?? viewModel.OutlineItems;
+
+        if (ReferenceEquals(source, viewModel.OutlineItems)
+            && viewModel.OutlineItems.IndexOf(dragged) == viewModel.OutlineItems.Count - 1)
+        {
+            return;
+        }
+
+        source.Remove(dragged);
+        dragged.Parent = null;
+        viewModel.OutlineItems.Add(dragged);
+
+        RenumberOutline();
+        SaveOutline();
+        dragged.IsSelected = true;
+    }
+
+    /// <summary>
+    /// Returns true when <paramref name="node"/> is the same as or a descendant of <paramref name="ancestor"/>.
+    /// </summary>
+    /// <param name="ancestor">The potential ancestor.</param>
+    /// <param name="node">The node to test.</param>
+    /// <returns>True when node is ancestor or within its subtree.</returns>
+    private static bool IsSelfOrDescendant(OutlineItem ancestor, OutlineItem node)
+    {
+        if (ReferenceEquals(ancestor, node))
+        {
+            return true;
+        }
+
+        foreach (OutlineItem child in ancestor.Children)
+        {
+            if (IsSelfOrDescendant(child, node))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /// <summary>

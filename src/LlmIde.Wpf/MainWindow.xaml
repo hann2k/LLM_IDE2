@@ -213,8 +213,13 @@
                             <TreeView ItemsSource="{Binding OutlineItems}"
                                       BorderThickness="0"
                                       FontSize="16"
+                                      AllowDrop="True"
                                       SelectedItemChanged="OutlineTree_SelectedItemChanged"
-                                      PreviewMouseRightButtonDown="OutlineTree_PreviewMouseRightButtonDown">
+                                      PreviewMouseRightButtonDown="OutlineTree_PreviewMouseRightButtonDown"
+                                      PreviewMouseLeftButtonDown="OutlineTree_PreviewMouseLeftButtonDown"
+                                      MouseMove="OutlineTree_MouseMove"
+                                      DragOver="OutlineTree_DragOver"
+                                      Drop="OutlineTree_Drop">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
                                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
