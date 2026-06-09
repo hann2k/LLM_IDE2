@@ -187,16 +187,39 @@
                             Style="{StaticResource PanelBorderStyle}"
                             BorderThickness="0,0,1,1">
                         <DockPanel>
-                            <TextBlock DockPanel.Dock="Top"
-                                       Text="목차"
-                                       FontWeight="Bold"
-                                       FontSize="13"
-                                       Foreground="#444444"
-                                       Margin="8,6" />
+                            <DockPanel DockPanel.Dock="Top" Margin="6,4" LastChildFill="False">
+                                <TextBlock DockPanel.Dock="Left"
+                                           Text="목차"
+                                           FontWeight="Bold"
+                                           FontSize="13"
+                                           Foreground="#444444"
+                                           VerticalAlignment="Center" />
+                                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal">
+                                    <Button Content="추가" FontSize="11" Padding="6,1" Margin="2,0,0,0" Click="OutlineAdd_Click" />
+                                    <Button Content="하위" FontSize="11" Padding="6,1" Margin="2,0,0,0" Click="OutlineAddChild_Click" />
+                                    <Button Content="이름" FontSize="11" Padding="6,1" Margin="2,0,0,0" Click="OutlineRename_Click" />
+                                    <Button Content="삭제" FontSize="11" Padding="6,1" Margin="2,0,0,0" Click="OutlineDelete_Click" />
+                                </StackPanel>
+                            </DockPanel>
                             <TreeView ItemsSource="{Binding OutlineItems}"
                                       BorderThickness="0"
                                       FontSize="14"
-                                      SelectedItemChanged="OutlineTree_SelectedItemChanged">
+                                      SelectedItemChanged="OutlineTree_SelectedItemChanged"
+                                      PreviewMouseRightButtonDown="OutlineTree_PreviewMouseRightButtonDown">
+                                <TreeView.ItemContainerStyle>
+                                    <Style TargetType="TreeViewItem">
+                                        <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
+                                        <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                    </Style>
+                                </TreeView.ItemContainerStyle>
+                                <TreeView.ContextMenu>
+                                    <ContextMenu>
+                                        <MenuItem Header="추가" Click="OutlineAdd_Click" />
+                                        <MenuItem Header="하위 추가" Click="OutlineAddChild_Click" />
+                                        <MenuItem Header="이름 변경" Click="OutlineRename_Click" />
+                                        <MenuItem Header="삭제" Click="OutlineDelete_Click" />
+                                    </ContextMenu>
+                                </TreeView.ContextMenu>
                                 <TreeView.Resources>
                                     <HierarchicalDataTemplate DataType="{x:Type local:OutlineItem}"
                                                               ItemsSource="{Binding Children}">

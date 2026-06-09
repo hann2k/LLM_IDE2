@@ -850,6 +850,187 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Adds a sibling outline item after the selected item (or at the root when none is selected).
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineAdd_Click(object sender, RoutedEventArgs e)
+    {
+        string? title = TextInputDialog.Prompt("목차 추가", "새 목차 제목:", "새 항목", this);
+
+        if (title is null)
+        {
+            return;
+        }
+
+        OutlineItem? selected = viewModel.SelectedOutlineItem;
+        ObservableCollection<OutlineItem> collection = selected?.Parent?.Children ?? viewModel.OutlineItems;
+        OutlineItem item = new OutlineItem { Id = NewOutlineId(), Title = title, Parent = selected?.Parent };
+        int index = selected is null ? collection.Count : collection.IndexOf(selected) + 1;
+        collection.Insert(index, item);
+
+        RenumberOutline();
+        item.IsSelected = true;
+    }
+
+    /// <summary>
+    /// Adds a child outline item under the selected item.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineAddChild_Click(object sender, RoutedEventArgs e)
+    {
+        OutlineItem? selected = viewModel.SelectedOutlineItem;
+
+        if (selected is null)
+        {
+            OutlineAdd_Click(sender, e);
+            return;
+        }
+
+        string? title = TextInputDialog.Prompt("하위 목차 추가", "새 하위 목차 제목:", "새 항목", this);
+
+        if (title is null)
+        {
+            return;
+        }
+
+        OutlineItem item = new OutlineItem { Id = NewOutlineId(), Title = title, Parent = selected };
+        selected.Children.Add(item);
+        selected.IsExpanded = true;
+
+        RenumberOutline();
+        item.IsSelected = true;
+    }
+
+    /// <summary>
+    /// Renames the selected outline item.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineRename_Click(object sender, RoutedEventArgs e)
+    {
+        OutlineItem? selected = viewModel.SelectedOutlineItem;
+
+        if (selected is null)
+        {
+            System.Windows.MessageBox.Show(this, "이름을 변경할 목차를 먼저 선택하세요.", "목차", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string? title = TextInputDialog.Prompt("이름 변경", "목차 제목:", selected.Title, this);
+
+        if (title is null)
+        {
+            return;
+        }
+
+        selected.Title = title;
+    }
+
+    /// <summary>
+    /// Deletes the selected outline item (and its children) after confirmation.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineDelete_Click(object sender, RoutedEventArgs e)
+    {
+        OutlineItem? selected = viewModel.SelectedOutlineItem;
+
+        if (selected is null)
+        {
+            System.Windows.MessageBox.Show(this, "삭제할 목차를 먼저 선택하세요.", "목차", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        string message = selected.Children.Count > 0
+            ? $"'{selected.Title}'와(과) 하위 목차를 모두 삭제할까요?"
+            : $"'{selected.Title}'을(를) 삭제할까요?";
+
+        if (System.Windows.MessageBox.Show(this, message, "목차 삭제", MessageBoxButton.OKCancel, MessageBoxImage.Warning) != MessageBoxResult.OK)
+        {
+            return;
+        }
+
+        ObservableCollection<OutlineItem> collection = selected.Parent?.Children ?? viewModel.OutlineItems;
+        collection.Remove(selected);
+        viewModel.SelectedOutlineItem = null;
+        RenumberOutline();
+    }
+
+    /// <summary>
+    /// Selects the right-clicked tree item so context-menu actions target it.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        if (e.OriginalSource is DependencyObject source
+            && FindAncestor<System.Windows.Controls.TreeViewItem>(source) is System.Windows.Controls.TreeViewItem item)
+        {
+            item.IsSelected = true;
+        }
+    }
+
+    /// <summary>
+    /// Generates a stable outline item id.
+    /// </summary>
+    /// <returns>The new id.</returns>
+    private static string NewOutlineId()
+    {
+        return "sec_" + Guid.NewGuid().ToString("N")[..8];
+    }
+
+    /// <summary>
+    /// Recomputes chapter/section numbers for the whole outline tree.
+    /// </summary>
+    private void RenumberOutline()
+    {
+        RenumberOutline(viewModel.OutlineItems, string.Empty);
+    }
+
+    /// <summary>
+    /// Recomputes chapter/section numbers for one level and its descendants.
+    /// </summary>
+    /// <param name="items">The items at this level.</param>
+    /// <param name="prefix">The parent number prefix.</param>
+    private static void RenumberOutline(IEnumerable<OutlineItem> items, string prefix)
+    {
+        int index = 1;
+
+        foreach (OutlineItem item in items)
+        {
+            item.Number = prefix.Length == 0 ? index.ToString() : prefix + "." + index;
+            RenumberOutline(item.Children, item.Number);
+            index++;
+        }
+    }
+
+    /// <summary>
+    /// Finds the nearest ancestor of the given type in the visual tree.
+    /// </summary>
+    /// <typeparam name="T">The ancestor type.</typeparam>
+    /// <param name="node">The starting node.</param>
+    /// <returns>The ancestor, or null.</returns>
+    private static T? FindAncestor<T>(DependencyObject node)
+        where T : DependencyObject
+    {
+        DependencyObject? current = node;
+
+        while (current is not null)
+        {
+            if (current is T match)
+            {
+                return match;
+            }
+
+            current = System.Windows.Media.VisualTreeHelper.GetParent(current);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Loads the selected project's providers into the composer's provider selector.
     /// </summary>
     private void PopulateComposerProviders()

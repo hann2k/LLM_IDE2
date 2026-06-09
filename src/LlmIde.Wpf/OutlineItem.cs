@@ -1,6 +1,7 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
+using System.Text.Json.Serialization;
 
 namespace LlmIde.Wpf;
 
@@ -13,6 +14,8 @@ public sealed class OutlineItem : INotifyPropertyChanged
 {
     private string number = string.Empty;
     private string title = string.Empty;
+    private bool isSelected;
+    private bool isExpanded = true;
 
     /// <summary>
     /// Occurs when a bindable property changes.
@@ -74,6 +77,50 @@ public sealed class OutlineItem : INotifyPropertyChanged
     /// Gets the child outline items.
     /// </summary>
     public ObservableCollection<OutlineItem> Children { get; } = [];
+
+    /// <summary>
+    /// Gets or sets the parent item (null for a root item). Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public OutlineItem? Parent { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this item is selected in the tree. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsSelected
+    {
+        get => isSelected;
+        set
+        {
+            if (isSelected == value)
+            {
+                return;
+            }
+
+            isSelected = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this item is expanded in the tree. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsExpanded
+    {
+        get => isExpanded;
+        set
+        {
+            if (isExpanded == value)
+            {
+                return;
+            }
+
+            isExpanded = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Raises the property changed event.
