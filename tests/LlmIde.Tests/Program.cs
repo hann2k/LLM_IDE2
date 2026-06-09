@@ -80,6 +80,9 @@ public static class Program
             ListFilesListsRootExcludingMetadata,
             ListFilesBlocksParentTraversal,
             ListFilesBlocksMetadataPath,
+            ArtifactsListReturnsStoredArtifacts,
+            ReadArtifactReturnsContent,
+            ReadArtifactMissingFails,
             ChatServiceRunsToolThenAnswers,
             ChatServiceRunsToolBatchWithPartialFailure,
             WebSearchParsesResults,
@@ -1413,6 +1416,87 @@ public static class Program
         return new AgentToolRequest
         {
             Tool = "list_files",
+            RequestId = "tool-001",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory
+        };
+    }
+
+    /// <summary>
+    /// Verifies artifacts_list returns the project's stored artifacts.
+    /// </summary>
+    private static void ArtifactsListReturnsStoredArtifacts()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ArtifactService service = new ArtifactService(new FileArtifactStore());
+        Artifact saved = service.Save(
+            workspace.Root,
+            new ArtifactCandidate { Title = "메모", Type = "Markdown", Content = "내용 본문" },
+            "1");
+        ArtifactsListTool tool = new ArtifactsListTool(service);
+
+        AgentToolResult result = tool.ExecuteAsync(
+            new AgentToolRequest { Tool = "artifacts_list", RequestId = "tool-001", WorkingDirectory = workspace.Root },
+            CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Ok, "artifacts_list should succeed.");
+        ArtifactsListResult list = (ArtifactsListResult)result.Result!;
+        AssertEqual(1, list.Items.Count, "One artifact should be listed.");
+        AssertEqual(saved.ArtifactId, list.Items[0].ArtifactId, "Listed artifact id should match.");
+    }
+
+    /// <summary>
+    /// Verifies read_artifact returns an artifact's content by id.
+    /// </summary>
+    private static void ReadArtifactReturnsContent()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ArtifactService service = new ArtifactService(new FileArtifactStore());
+        Artifact saved = service.Save(
+            workspace.Root,
+            new ArtifactCandidate { Title = "메모", Type = "Markdown", Content = "내용 본문" },
+            "1");
+        ReadArtifactTool tool = new ReadArtifactTool(service);
+
+        AgentToolResult result = tool.ExecuteAsync(CreateArtifactRequest(workspace.Root, saved.ArtifactId), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Ok, "read_artifact should succeed.");
+        ReadArtifactResult read = (ReadArtifactResult)result.Result!;
+        AssertContains(read.Content, "내용 본문");
+    }
+
+    /// <summary>
+    /// Verifies read_artifact fails for an unknown artifact id.
+    /// </summary>
+    private static void ReadArtifactMissingFails()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ReadArtifactTool tool = new ReadArtifactTool(new ArtifactService(new FileArtifactStore()));
+
+        AgentToolResult result = tool.ExecuteAsync(CreateArtifactRequest(workspace.Root, "art_nope"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "An unknown artifact id should fail.");
+    }
+
+    /// <summary>
+    /// Creates a read_artifact tool request for an artifact id.
+    /// </summary>
+    /// <param name="workingDirectory">The project root.</param>
+    /// <param name="artifactId">The artifact identifier.</param>
+    /// <returns>The tool request.</returns>
+    private static AgentToolRequest CreateArtifactRequest(string workingDirectory, string artifactId)
+    {
+        JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { artifact_id = artifactId }));
+        return new AgentToolRequest
+        {
+            Tool = "read_artifact",
             RequestId = "tool-001",
             Arguments = arguments,
             WorkingDirectory = workingDirectory

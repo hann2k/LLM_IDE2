@@ -58,7 +58,7 @@ public static class Program
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
+        IAgentToolHost agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient, artifactService);
         IConversationLogStore conversationLogStore = new CompositeConversationLogStore(
         [
             new JsonlConversationLogStore(),

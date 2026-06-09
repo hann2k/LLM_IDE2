@@ -53,6 +53,15 @@ public sealed class ConversationToolCallRecord
             target = listResult.Path;
             summary = $"entries={listResult.Entries.Count}, truncated={listResult.Truncated}";
         }
+        else if (toolResult.Result is ArtifactsListResult artifactsList)
+        {
+            summary = $"count={artifactsList.Items.Count}";
+        }
+        else if (toolResult.Result is ReadArtifactResult artifactRead)
+        {
+            target = artifactRead.ArtifactId;
+            summary = $"type={artifactRead.Type}, chars={artifactRead.Content.Length}";
+        }
 
         return new ConversationToolCallRecord
         {

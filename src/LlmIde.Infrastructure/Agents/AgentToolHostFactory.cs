@@ -1,5 +1,6 @@
 using System.Net.Http;
 using LlmIde.Core.Agents;
+using LlmIde.Core.Artifacts;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -13,8 +14,9 @@ public static class AgentToolHostFactory
     /// </summary>
     /// <param name="ideProgramRoot">The IDE program root (for global allowlist).</param>
     /// <param name="httpClient">The HTTP client used by network tools.</param>
+    /// <param name="artifactService">The artifact service used by artifact tools.</param>
     /// <returns>The configured tool host.</returns>
-    public static IAgentToolHost Create(string ideProgramRoot, HttpClient httpClient)
+    public static IAgentToolHost Create(string ideProgramRoot, HttpClient httpClient, ArtifactService artifactService)
     {
         // All implemented tools are registered here; add new tools to this list.
         List<IAgentTool> allTools =
@@ -22,7 +24,9 @@ public static class AgentToolHostFactory
             new FetchUrlTool(httpClient),
             new WebSearchTool(httpClient),
             new ReadFileTool(),
-            new ListFilesTool()
+            new ListFilesTool(),
+            new ArtifactsListTool(artifactService),
+            new ReadArtifactTool(artifactService)
         ];
 
         AgentToolSettings settings = new JsonAgentToolSettingsStore().Load(ideProgramRoot);

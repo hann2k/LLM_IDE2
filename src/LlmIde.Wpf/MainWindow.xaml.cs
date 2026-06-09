@@ -135,7 +135,7 @@ public partial class MainWindow : Window
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
+        agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient, artifactService);
         // Records every actual LLM call (injected prompt + raw response) via the supervisor-supplied Framework.Common file logger.
         ILlmRequestLogger llmRequestLogger = new FrameworkCommonLlmRequestLogger(Path.Combine(ideProgramRoot, "Log"));
         chatService = new ChatService(
