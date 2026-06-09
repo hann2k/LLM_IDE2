@@ -904,6 +904,65 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Begins inline title editing on double-click.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
+    {
+        if (sender is FrameworkElement element && element.DataContext is OutlineItem item)
+        {
+            item.IsEditing = true;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Focuses the inline edit box when it becomes visible.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineEditBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox box && box.IsVisible)
+        {
+            box.Focus();
+            box.SelectAll();
+        }
+    }
+
+    /// <summary>
+    /// Commits or cancels inline editing on Enter/Escape.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineEditBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox box
+            && (e.Key == System.Windows.Input.Key.Enter || e.Key == System.Windows.Input.Key.Escape)
+            && box.DataContext is OutlineItem item)
+        {
+            item.RevertTitleIfEmpty();
+            item.IsEditing = false;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Ends inline editing when the edit box loses focus.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineEditBox_LostFocus(object sender, RoutedEventArgs e)
+    {
+        if (sender is System.Windows.Controls.TextBox box && box.DataContext is OutlineItem item)
+        {
+            item.RevertTitleIfEmpty();
+            item.IsEditing = false;
+        }
+    }
+
+    /// <summary>
     /// Renames the selected outline item.
     /// </summary>
     /// <param name="sender">The event sender.</param>

@@ -16,6 +16,8 @@ public sealed class OutlineItem : INotifyPropertyChanged
     private string title = string.Empty;
     private bool isSelected;
     private bool isExpanded = true;
+    private bool isEditing;
+    private string titleBackup = string.Empty;
 
     /// <summary>
     /// Occurs when a bindable property changes.
@@ -119,6 +121,42 @@ public sealed class OutlineItem : INotifyPropertyChanged
 
             isExpanded = value;
             OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether this item's title is being edited inline. Not persisted.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsEditing
+    {
+        get => isEditing;
+        set
+        {
+            if (isEditing == value)
+            {
+                return;
+            }
+
+            if (value)
+            {
+                // Snapshot the title so an empty edit can be reverted on commit.
+                titleBackup = title;
+            }
+
+            isEditing = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Restores the title captured when editing began if the current title is empty.
+    /// </summary>
+    public void RevertTitleIfEmpty()
+    {
+        if (string.IsNullOrWhiteSpace(title))
+        {
+            Title = titleBackup;
         }
     }
 

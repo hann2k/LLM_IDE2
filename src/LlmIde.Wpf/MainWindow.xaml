@@ -203,13 +203,14 @@
                             </DockPanel>
                             <TreeView ItemsSource="{Binding OutlineItems}"
                                       BorderThickness="0"
-                                      FontSize="14"
+                                      FontSize="16"
                                       SelectedItemChanged="OutlineTree_SelectedItemChanged"
                                       PreviewMouseRightButtonDown="OutlineTree_PreviewMouseRightButtonDown">
                                 <TreeView.ItemContainerStyle>
                                     <Style TargetType="TreeViewItem">
                                         <Setter Property="IsSelected" Value="{Binding IsSelected, Mode=TwoWay}" />
                                         <Setter Property="IsExpanded" Value="{Binding IsExpanded, Mode=TwoWay}" />
+                                        <EventSetter Event="MouseDoubleClick" Handler="OutlineItem_MouseDoubleClick" />
                                     </Style>
                                 </TreeView.ItemContainerStyle>
                                 <TreeView.ContextMenu>
@@ -224,8 +225,41 @@
                                     <HierarchicalDataTemplate DataType="{x:Type local:OutlineItem}"
                                                               ItemsSource="{Binding Children}">
                                         <StackPanel Orientation="Horizontal" Margin="0,2">
-                                            <TextBlock Text="{Binding Number}" Foreground="#666666" Margin="0,0,6,0" />
-                                            <TextBlock Text="{Binding Title}" TextWrapping="Wrap" />
+                                            <TextBlock Text="{Binding Number}"
+                                                       Foreground="#666666"
+                                                       Margin="0,0,6,0"
+                                                       VerticalAlignment="Center" />
+                                            <Grid>
+                                                <TextBlock Text="{Binding Title}"
+                                                           TextWrapping="Wrap"
+                                                           VerticalAlignment="Center">
+                                                    <TextBlock.Style>
+                                                        <Style TargetType="TextBlock">
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBlock.Style>
+                                                </TextBlock>
+                                                <TextBox Text="{Binding Title, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                         MinWidth="140"
+                                                         IsVisibleChanged="OutlineEditBox_IsVisibleChanged"
+                                                         KeyDown="OutlineEditBox_KeyDown"
+                                                         LostFocus="OutlineEditBox_LostFocus">
+                                                    <TextBox.Style>
+                                                        <Style TargetType="TextBox">
+                                                            <Setter Property="Visibility" Value="Collapsed" />
+                                                            <Style.Triggers>
+                                                                <DataTrigger Binding="{Binding IsEditing}" Value="True">
+                                                                    <Setter Property="Visibility" Value="Visible" />
+                                                                </DataTrigger>
+                                                            </Style.Triggers>
+                                                        </Style>
+                                                    </TextBox.Style>
+                                                </TextBox>
+                                            </Grid>
                                         </StackPanel>
                                     </HierarchicalDataTemplate>
                                 </TreeView.Resources>
