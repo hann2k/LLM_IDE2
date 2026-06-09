@@ -10,6 +10,11 @@
         Background="White"
         FontFamily="Malgun Gothic"
         Loaded="Window_Loaded">
+    <Window.CommandBindings>
+        <CommandBinding Command="Save"
+                        CanExecute="SaveCommand_CanExecute"
+                        Executed="SaveCommand_Executed" />
+    </Window.CommandBindings>
     <Window.Resources>
         <SolidColorBrush x:Key="GuideBlueBrush" Color="#4D8EDB" />
         <local:ImportanceToDeleteVisibilityConverter x:Key="ImportanceToDeleteVisibilityConverter" />
@@ -104,6 +109,10 @@
                     <MenuItem Header="삭제"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="DeleteProjectMenuItem_Click" />
+                    <Separator />
+                    <MenuItem Header="저장"
+                              Command="Save"
+                              InputGestureText="Ctrl+S" />
                 </MenuItem>
                 <MenuItem Header="편집">
                     <MenuItem Header="기준"

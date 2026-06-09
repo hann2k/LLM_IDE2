@@ -90,6 +90,11 @@ public partial class MainWindow : Window
     private readonly WindowLayoutStore layoutStore;
 
     /// <summary>
+    /// Persists the document outline and per-item body files under the project root.
+    /// </summary>
+    private readonly OutlineStore outlineStore = new OutlineStore();
+
+    /// <summary>
     /// Suppresses the provider-change handler while the selector is being populated.
     /// </summary>
     private bool suppressProviderChange;
@@ -162,8 +167,12 @@ public partial class MainWindow : Window
 
         DataContext = viewModel;
 
-        // Persist the panel layout when the window closes (in addition to on each splitter drag).
-        Closing += (_, _) => SaveLayout();
+        // Persist layout + the in-progress body when the window closes.
+        Closing += (_, _) =>
+        {
+            SaveCurrentBody();
+            SaveLayout();
+        };
     }
 
     /// <summary>
@@ -264,6 +273,14 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private void ProjectList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        // Save the in-progress body to the previously selected project before switching.
+        if (e.RemovedItems.Count > 0
+            && e.RemovedItems[0] is ProjectListItem previousProject
+            && viewModel.SelectedOutlineItem is OutlineItem previousItem)
+        {
+            outlineStore.WriteBody(previousProject.Path, previousItem, viewModel.BodyText);
+        }
+
         if (viewModel.SelectedProject is null)
         {
             viewModel.Conversations.Clear();
@@ -745,6 +762,18 @@ public partial class MainWindow : Window
         viewModel.Conversations.Clear();
         viewModel.Artifacts.Clear();
 
+        // Load the document outline (and reset the body editor) for this project.
+        viewModel.SelectedOutlineItem = null;
+        viewModel.BodyText = string.Empty;
+        viewModel.OutlineItems.Clear();
+
+        foreach (OutlineItem root in outlineStore.Load(project.Path))
+        {
+            viewModel.OutlineItems.Add(root);
+        }
+
+        RenumberOutline();
+
         // Importance is editable only for long-term conversation projects.
         try
         {
@@ -846,7 +875,86 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        viewModel.SelectedOutlineItem = e.NewValue as OutlineItem;
+        string? projectRoot = viewModel.SelectedProject?.Path;
+
+        // Save the previously selected item's body before switching (focus-move save).
+        if (projectRoot is not null && e.OldValue is OutlineItem previous)
+        {
+            outlineStore.WriteBody(projectRoot, previous, viewModel.BodyText);
+        }
+
+        OutlineItem? current = e.NewValue as OutlineItem;
+        viewModel.SelectedOutlineItem = current;
+
+        // Load the newly selected item's body.
+        viewModel.BodyText = projectRoot is not null && current is not null
+            ? outlineStore.ReadBody(projectRoot, current)
+            : string.Empty;
+    }
+
+    /// <summary>
+    /// Ensures the item has a linked body file (created empty) under the current project root.
+    /// </summary>
+    /// <param name="item">The outline item.</param>
+    private void PrepareBodyFile(OutlineItem item)
+    {
+        item.BodyFile = item.Id + ".md";
+
+        if (viewModel.SelectedProject is not null)
+        {
+            outlineStore.EnsureBodyFile(viewModel.SelectedProject.Path, item);
+        }
+    }
+
+    /// <summary>
+    /// Saves the outline tree to the project root.
+    /// </summary>
+    private void SaveOutline()
+    {
+        if (viewModel.SelectedProject is not null)
+        {
+            outlineStore.Save(viewModel.SelectedProject.Path, viewModel.OutlineItems);
+        }
+    }
+
+    /// <summary>
+    /// Saves the currently selected item's body text.
+    /// </summary>
+    private void SaveCurrentBody()
+    {
+        if (viewModel.SelectedProject is not null && viewModel.SelectedOutlineItem is not null)
+        {
+            outlineStore.WriteBody(viewModel.SelectedProject.Path, viewModel.SelectedOutlineItem, viewModel.BodyText);
+        }
+    }
+
+    /// <summary>
+    /// Saves the current body and the outline tree.
+    /// </summary>
+    private void SaveAll()
+    {
+        SaveCurrentBody();
+        SaveOutline();
+    }
+
+    /// <summary>
+    /// Enables the save command only when a project is selected.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void SaveCommand_CanExecute(object sender, System.Windows.Input.CanExecuteRoutedEventArgs e)
+    {
+        e.CanExecute = viewModel.SelectedProject is not null;
+    }
+
+    /// <summary>
+    /// Saves the body and outline on Ctrl+S / 프로젝트 &gt; 저장.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void SaveCommand_Executed(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
+    {
+        SaveAll();
     }
 
     /// <summary>
@@ -870,6 +978,8 @@ public partial class MainWindow : Window
         collection.Insert(index, item);
 
         RenumberOutline();
+        PrepareBodyFile(item);
+        SaveOutline();
         item.IsSelected = true;
     }
 
@@ -900,6 +1010,8 @@ public partial class MainWindow : Window
         selected.IsExpanded = true;
 
         RenumberOutline();
+        PrepareBodyFile(item);
+        SaveOutline();
         item.IsSelected = true;
     }
 
@@ -944,6 +1056,7 @@ public partial class MainWindow : Window
         {
             item.RevertTitleIfEmpty();
             item.IsEditing = false;
+            SaveOutline();
             e.Handled = true;
         }
     }
@@ -959,6 +1072,7 @@ public partial class MainWindow : Window
         {
             item.RevertTitleIfEmpty();
             item.IsEditing = false;
+            SaveOutline();
         }
     }
 
@@ -985,6 +1099,7 @@ public partial class MainWindow : Window
         }
 
         selected.Title = title;
+        SaveOutline();
     }
 
     /// <summary>
@@ -1011,10 +1126,17 @@ public partial class MainWindow : Window
             return;
         }
 
+        if (viewModel.SelectedProject is not null)
+        {
+            outlineStore.DeleteBodyFiles(viewModel.SelectedProject.Path, selected);
+        }
+
         ObservableCollection<OutlineItem> collection = selected.Parent?.Children ?? viewModel.OutlineItems;
         collection.Remove(selected);
         viewModel.SelectedOutlineItem = null;
+        viewModel.BodyText = string.Empty;
         RenumberOutline();
+        SaveOutline();
     }
 
     /// <summary>
