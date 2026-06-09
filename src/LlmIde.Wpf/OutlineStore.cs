@@ -17,8 +17,6 @@ internal sealed class OutlineNode
 
     public string BodyFile { get; set; } = string.Empty;
 
-    public string Summary { get; set; } = string.Empty;
-
     public List<OutlineNode> Children { get; set; } = [];
 }
 
@@ -191,7 +189,6 @@ public sealed class OutlineStore
             Id = item.Id,
             Title = item.Title,
             BodyFile = item.BodyFile,
-            Summary = item.Summary,
             Children = item.Children.Select(ToNode).ToList()
         };
     }
@@ -203,7 +200,6 @@ public sealed class OutlineStore
             Id = node.Id,
             Title = node.Title,
             BodyFile = node.BodyFile,
-            Summary = node.Summary,
             Parent = parent
         };
 

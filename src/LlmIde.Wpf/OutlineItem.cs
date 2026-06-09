@@ -71,11 +71,6 @@ public sealed class OutlineItem : INotifyPropertyChanged
     public string BodyFile { get; set; } = string.Empty;
 
     /// <summary>
-    /// Gets or sets the body summary shown on hover.
-    /// </summary>
-    public string Summary { get; set; } = string.Empty;
-
-    /// <summary>
     /// Gets the child outline items.
     /// </summary>
     public ObservableCollection<OutlineItem> Children { get; } = [];
