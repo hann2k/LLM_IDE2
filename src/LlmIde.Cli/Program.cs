@@ -329,7 +329,7 @@ public sealed class CliApplication
             ? agentSystemValue
             : null;
         AgentLoop loop = new AgentLoop(client, agentToolHost, agentSystem);
-        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = message }, CancellationToken.None)
+        AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = message, WorkingDirectory = project.Path }, CancellationToken.None)
             .GetAwaiter()
             .GetResult();
 

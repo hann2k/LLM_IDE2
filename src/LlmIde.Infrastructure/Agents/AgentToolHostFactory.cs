@@ -20,7 +20,9 @@ public static class AgentToolHostFactory
         List<IAgentTool> allTools =
         [
             new FetchUrlTool(httpClient),
-            new WebSearchTool(httpClient)
+            new WebSearchTool(httpClient),
+            new ReadFileTool(),
+            new ListFilesTool()
         ];
 
         AgentToolSettings settings = new JsonAgentToolSettingsStore().Load(ideProgramRoot);

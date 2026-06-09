@@ -98,7 +98,7 @@ public sealed class ChatService
     /// (the supervisor-editable text lives under the <c>chat_tool_instruction</c> key in policies/prompts.json).
     /// </summary>
     private const string DefaultChatToolInstruction =
-        "너는 web_search(실시간 웹 검색)와 fetch_url(URL 본문 가져오기) 도구를 쓸 수 있다.\n" +
+        "너는 web_search(실시간 웹 검색), fetch_url(URL 본문 가져오기), read_file(프로젝트 폴더 내 파일 읽기, 상대경로만), list_files(프로젝트 폴더 내 폴더/파일 목록) 도구를 쓸 수 있다.\n" +
         "검색·최신 정보·가격·재고·실시간 사실 확인이 필요한 요청에는 반드시 도구를 사용하라. \"실시간 검색을 할 수 없다\"거나 \"직접 확인할 수 없다\"고 거절하지 마라.\n" +
         "도구 목록이 필요하면 다른 텍스트 없이 {\"type\":\"list_tools\"} 만 출력하라.\n" +
         "도구를 호출할 때는 반드시 아래 형식으로만 출력하라. 도구가 하나여도 requests 배열에 담고, 여러 도구가 필요하면 한 응답에 모두 배열로 담아라.\n" +
@@ -475,7 +475,7 @@ public sealed class ChatService
         for (int index = 0; index < parsed.Requests.Count; index++)
         {
             string toolRequestId = $"tool-{baseCount + index + 1:000}";
-            executions.Add(ExecuteToolAsync(preparedRequest.RequestId, parsed.Requests[index], toolRequestId, cancellationToken));
+            executions.Add(ExecuteToolAsync(projectRoot, preparedRequest.RequestId, parsed.Requests[index], toolRequestId, cancellationToken));
         }
 
         AgentToolResult[] batchResults = await Task.WhenAll(executions);
@@ -496,12 +496,14 @@ public sealed class ChatService
     /// Executes one tool request (tolerating unknown/throwing tools as error results) and records its
     /// full input and output to the tool I/O diagnostic log.
     /// </summary>
+    /// <param name="projectRoot">The project root, passed to file tools as their working directory.</param>
     /// <param name="chatRequestId">The chat request identifier.</param>
     /// <param name="request">The parsed tool request.</param>
     /// <param name="toolRequestId">The tool execution identifier (tool-NNN).</param>
     /// <param name="cancellationToken">The cancellation token.</param>
     /// <returns>The tool result (never throws).</returns>
     private async Task<AgentToolResult> ExecuteToolAsync(
+        string projectRoot,
         string chatRequestId,
         ParsedToolRequest request,
         string toolRequestId,
@@ -529,7 +531,8 @@ public sealed class ChatService
                     {
                         Tool = request.Tool,
                         RequestId = toolRequestId,
-                        Arguments = request.Arguments
+                        Arguments = request.Arguments,
+                        WorkingDirectory = projectRoot
                     },
                     cancellationToken);
             }
@@ -670,6 +673,16 @@ public sealed class ChatService
         if (toolResult.Result is WebSearchResult searchResult)
         {
             return $"{toolResult.Tool} 실행: {searchResult.Query}";
+        }
+
+        if (toolResult.Result is ReadFileResult readResult)
+        {
+            return $"{toolResult.Tool} 실행: {readResult.Path}";
+        }
+
+        if (toolResult.Result is ListFilesResult listResult)
+        {
+            return $"{toolResult.Tool} 실행: {listResult.Path}";
         }
 
         return $"{toolResult.Tool} 실행";

@@ -131,7 +131,8 @@ public sealed class AgentLoop : IAgentLoop
             {
                 Tool = parsed.Tool,
                 RequestId = $"tool-{toolCounter:000}",
-                Arguments = parsed.Arguments
+                Arguments = parsed.Arguments,
+                WorkingDirectory = request.WorkingDirectory
             };
 
             AgentToolResult toolResult;

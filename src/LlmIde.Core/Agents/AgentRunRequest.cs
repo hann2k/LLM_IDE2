@@ -14,4 +14,9 @@ public sealed class AgentRunRequest
     /// Gets or sets the agent loop options.
     /// </summary>
     public AgentLoopOptions Options { get; set; } = new AgentLoopOptions();
+
+    /// <summary>
+    /// Gets or sets the working directory (the project root) passed to file tools.
+    /// </summary>
+    public string WorkingDirectory { get; set; } = string.Empty;
 }

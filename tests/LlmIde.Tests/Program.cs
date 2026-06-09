@@ -72,6 +72,14 @@ public static class Program
             FetchUrlBlocksFileScheme,
             FetchUrlTruncatesLongResponse,
             FetchUrlToolFailureDoesNotThrow,
+            ReadFileReadsUnderRoot,
+            ReadFileBlocksAbsolutePath,
+            ReadFileBlocksParentTraversal,
+            ReadFileBlocksMetadataDirectory,
+            ReadFileMissingFileFails,
+            ListFilesListsRootExcludingMetadata,
+            ListFilesBlocksParentTraversal,
+            ListFilesBlocksMetadataPath,
             ChatServiceRunsToolThenAnswers,
             ChatServiceRunsToolBatchWithPartialFailure,
             WebSearchParsesResults,
@@ -1208,6 +1216,207 @@ public static class Program
         JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
             JsonSerializer.Serialize(new { url }));
         return new AgentToolRequest { Tool = "fetch_url", RequestId = "tool-001", Arguments = arguments };
+    }
+
+    /// <summary>
+    /// Verifies read_file reads a file under the project root.
+    /// </summary>
+    private static void ReadFileReadsUnderRoot()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        File.WriteAllText(Path.Combine(workspace.Root, "note.txt"), "hello 파일 내용");
+        ReadFileTool tool = new ReadFileTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateReadRequest(workspace.Root, "note.txt"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Ok, "Reading a file under the root should succeed.");
+        ReadFileResult readResult = (ReadFileResult)result.Result!;
+        AssertContains(readResult.Text, "hello 파일 내용");
+    }
+
+    /// <summary>
+    /// Verifies read_file blocks an absolute path (security violation).
+    /// </summary>
+    private static void ReadFileBlocksAbsolutePath()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string absolute = Path.Combine(workspace.Root, "note.txt");
+        File.WriteAllText(absolute, "secret");
+        ReadFileTool tool = new ReadFileTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateReadRequest(workspace.Root, absolute), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "An absolute path must be blocked.");
+    }
+
+    /// <summary>
+    /// Verifies read_file blocks parent traversal (security violation).
+    /// </summary>
+    private static void ReadFileBlocksParentTraversal()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ReadFileTool tool = new ReadFileTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateReadRequest(workspace.Root, "../outside.txt"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "Parent traversal ('..') must be blocked.");
+    }
+
+    /// <summary>
+    /// Verifies read_file blocks the IDE system metadata folder (.llmide).
+    /// </summary>
+    private static void ReadFileBlocksMetadataDirectory()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string settingsDir = Path.Combine(workspace.Root, ".llmide", "settings");
+        Directory.CreateDirectory(settingsDir);
+        File.WriteAllText(Path.Combine(settingsDir, "providers.json"), "{\"api_key\":\"secret\"}");
+        ReadFileTool tool = new ReadFileTool();
+
+        AgentToolResult result = tool.ExecuteAsync(
+            CreateReadRequest(workspace.Root, ".llmide/settings/providers.json"),
+            CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "The .llmide system folder must be blocked.");
+    }
+
+    /// <summary>
+    /// Verifies read_file fails for a missing file.
+    /// </summary>
+    private static void ReadFileMissingFileFails()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ReadFileTool tool = new ReadFileTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateReadRequest(workspace.Root, "nope.txt"), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "A missing file should fail.");
+    }
+
+    /// <summary>
+    /// Creates a read_file tool request for a path with the given working directory.
+    /// </summary>
+    /// <param name="workingDirectory">The project root.</param>
+    /// <param name="path">The requested path.</param>
+    /// <returns>The tool request.</returns>
+    private static AgentToolRequest CreateReadRequest(string workingDirectory, string path)
+    {
+        JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { path }));
+        return new AgentToolRequest
+        {
+            Tool = "read_file",
+            RequestId = "tool-001",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory
+        };
+    }
+
+    /// <summary>
+    /// Verifies list_files lists root entries recursively while excluding the .llmide system folder.
+    /// </summary>
+    private static void ListFilesListsRootExcludingMetadata()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        Directory.CreateDirectory(Path.Combine(workspace.Root, "src"));
+        File.WriteAllText(Path.Combine(workspace.Root, "README.md"), "x");
+        File.WriteAllText(Path.Combine(workspace.Root, "src", "a.cs"), "x");
+        Directory.CreateDirectory(Path.Combine(workspace.Root, ".llmide", "settings"));
+        File.WriteAllText(Path.Combine(workspace.Root, ".llmide", "settings", "providers.json"), "{}");
+        ListFilesTool tool = new ListFilesTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateListRequest(workspace.Root, string.Empty, true), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Ok, "Listing the project root should succeed.");
+        ListFilesResult list = (ListFilesResult)result.Result!;
+        bool hasReadme = false;
+        bool hasSrcFile = false;
+        bool hasMetadata = false;
+
+        foreach (ListFilesEntry entry in list.Entries)
+        {
+            if (entry.Path == "README.md")
+            {
+                hasReadme = true;
+            }
+
+            if (entry.Path == "src/a.cs")
+            {
+                hasSrcFile = true;
+            }
+
+            if (entry.Path.StartsWith(".llmide", StringComparison.OrdinalIgnoreCase))
+            {
+                hasMetadata = true;
+            }
+        }
+
+        AssertTrue(hasReadme, "README.md should be listed.");
+        AssertTrue(hasSrcFile, "src/a.cs should be listed recursively.");
+        AssertFalse(hasMetadata, "The .llmide system folder must be excluded.");
+    }
+
+    /// <summary>
+    /// Verifies list_files blocks parent traversal.
+    /// </summary>
+    private static void ListFilesBlocksParentTraversal()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ListFilesTool tool = new ListFilesTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateListRequest(workspace.Root, "..", false), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "Parent traversal ('..') must be blocked.");
+    }
+
+    /// <summary>
+    /// Verifies list_files blocks listing the .llmide system folder.
+    /// </summary>
+    private static void ListFilesBlocksMetadataPath()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        Directory.CreateDirectory(Path.Combine(workspace.Root, ".llmide"));
+        ListFilesTool tool = new ListFilesTool();
+
+        AgentToolResult result = tool.ExecuteAsync(CreateListRequest(workspace.Root, ".llmide", false), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertFalse(result.Ok, "Listing .llmide must be blocked.");
+    }
+
+    /// <summary>
+    /// Creates a list_files tool request with the given working directory.
+    /// </summary>
+    /// <param name="workingDirectory">The project root.</param>
+    /// <param name="path">The requested directory path.</param>
+    /// <param name="recursive">Whether to list recursively.</param>
+    /// <returns>The tool request.</returns>
+    private static AgentToolRequest CreateListRequest(string workingDirectory, string path, bool recursive)
+    {
+        JsonElement arguments = JsonSerializer.Deserialize<JsonElement>(
+            JsonSerializer.Serialize(new { path, recursive }));
+        return new AgentToolRequest
+        {
+            Tool = "list_files",
+            RequestId = "tool-001",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory
+        };
     }
 
     /// <summary>

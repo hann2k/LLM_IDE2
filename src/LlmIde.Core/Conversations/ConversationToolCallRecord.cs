@@ -42,6 +42,17 @@ public sealed class ConversationToolCallRecord
             target = searchResult.Query;
             summary = $"results={searchResult.Results.Count}";
         }
+        else if (toolResult.Result is ReadFileResult readResult)
+        {
+            // The path is already project-relative (never absolute), so it is safe to record.
+            target = readResult.Path;
+            summary = $"chars={readResult.Text.Length}, truncated={readResult.Truncated}";
+        }
+        else if (toolResult.Result is ListFilesResult listResult)
+        {
+            target = listResult.Path;
+            summary = $"entries={listResult.Entries.Count}, truncated={listResult.Truncated}";
+        }
 
         return new ConversationToolCallRecord
         {
