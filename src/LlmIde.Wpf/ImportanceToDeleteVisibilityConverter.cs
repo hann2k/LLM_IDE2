@@ -7,7 +7,8 @@ namespace LlmIde.Wpf;
 
 /// <summary>
 /// Converts a conversation importance weight to the delete button visibility:
-/// the delete button is hidden once importance reaches 5 or higher.
+/// the delete button is hidden (but keeps its layout slot) once importance reaches 5 or higher,
+/// so neighbouring controls such as the importance slider do not shift position.
 /// </summary>
 public sealed class ImportanceToDeleteVisibilityConverter : IValueConverter
 {
@@ -23,11 +24,11 @@ public sealed class ImportanceToDeleteVisibilityConverter : IValueConverter
     /// <param name="targetType">The target type.</param>
     /// <param name="parameter">The converter parameter.</param>
     /// <param name="culture">The culture.</param>
-    /// <returns>Collapsed when importance is 5 or higher; otherwise Visible.</returns>
+    /// <returns>Hidden (slot reserved) when importance is 5 or higher; otherwise Visible.</returns>
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
         int importance = value is int weight ? weight : 0;
-        return importance >= HideThreshold ? Visibility.Collapsed : Visibility.Visible;
+        return importance >= HideThreshold ? Visibility.Hidden : Visibility.Visible;
     }
 
     /// <summary>

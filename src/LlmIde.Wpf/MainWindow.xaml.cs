@@ -85,9 +85,14 @@ public partial class MainWindow : Window
     private bool isSending;
 
     /// <summary>
-    /// The standalone chat input popup window (created on demand).
+    /// Persists and restores the resizable panel layout.
     /// </summary>
-    private ChatInputWindow? chatInputWindow;
+    private readonly WindowLayoutStore layoutStore;
+
+    /// <summary>
+    /// Suppresses the provider-change handler while the selector is being populated.
+    /// </summary>
+    private bool suppressProviderChange;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="MainWindow"/> class.
@@ -100,6 +105,7 @@ public partial class MainWindow : Window
         CommandBindings.Add(new System.Windows.Input.CommandBinding(Markdig.Wpf.Commands.Hyperlink, OpenMarkdownHyperlink));
 
         string ideProgramRoot = AppContext.BaseDirectory;
+        layoutStore = new WindowLayoutStore(ideProgramRoot);
         viewModel = new MainWindowViewModel();
         projectStore = new JsonFileProjectStore(ideProgramRoot);
         projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
@@ -155,6 +161,9 @@ public partial class MainWindow : Window
             new FrameworkCommonToolIoLogger(Path.Combine(ideProgramRoot, "Log")));
 
         DataContext = viewModel;
+
+        // Persist the panel layout when the window closes (in addition to on each splitter drag).
+        Closing += (_, _) => SaveLayout();
     }
 
     /// <summary>
@@ -164,7 +173,71 @@ public partial class MainWindow : Window
     /// <param name="e">The event arguments.</param>
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        ApplyLayout();
         LoadProjects();
+    }
+
+    /// <summary>
+    /// Applies the saved resizable-panel layout, if any.
+    /// </summary>
+    private void ApplyLayout()
+    {
+        WindowLayout? layout = layoutStore.Load();
+
+        if (layout is null)
+        {
+            return;
+        }
+
+        if (layout.ProjectWidth > 0)
+        {
+            ProjectColumn.Width = new GridLength(layout.ProjectWidth);
+        }
+
+        if (layout.ChatWidth > 0)
+        {
+            ChatColumn.Width = new GridLength(layout.ChatWidth);
+        }
+
+        if (layout.OutlineWidth > 0)
+        {
+            OutlineColumn.Width = new GridLength(layout.OutlineWidth);
+        }
+
+        if (layout.ArtifactHeight > 0)
+        {
+            ArtifactRow.Height = new GridLength(layout.ArtifactHeight);
+        }
+
+        if (layout.ComposerHeight > 0)
+        {
+            ComposerRow.Height = new GridLength(layout.ComposerHeight);
+        }
+    }
+
+    /// <summary>
+    /// Saves the current resizable-panel sizes.
+    /// </summary>
+    private void SaveLayout()
+    {
+        layoutStore.Save(new WindowLayout
+        {
+            ProjectWidth = ProjectColumn.ActualWidth,
+            ChatWidth = ChatColumn.ActualWidth,
+            OutlineWidth = OutlineColumn.ActualWidth,
+            ArtifactHeight = ArtifactRow.ActualHeight,
+            ComposerHeight = ComposerRow.ActualHeight
+        });
+    }
+
+    /// <summary>
+    /// Persists the layout when a panel boundary is dragged.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void LayoutSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
+    {
+        SaveLayout();
     }
 
     /// <summary>
@@ -488,22 +561,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Reloads the conversation list from disk and scrolls to the latest conversation.
-    /// </summary>
-    /// <param name="projectRoot">The project root path.</param>
-    private void ReloadConversations(string projectRoot)
-    {
-        viewModel.Conversations.Clear();
-
-        foreach (ConversationListItem conversation in ConversationLogReader.Read(projectRoot))
-        {
-            viewModel.Conversations.Add(conversation);
-        }
-
-        ScrollConversationsToEnd();
-    }
-
-    /// <summary>
     /// Opens the edit dialog for project criteria using one line per criterion.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -710,6 +767,8 @@ public partial class MainWindow : Window
 
         // After a project's conversations load, scroll to the latest one once.
         ScrollConversationsToEnd();
+
+        PopulateComposerProviders();
     }
 
     /// <summary>
@@ -733,73 +792,85 @@ public partial class MainWindow : Window
     /// </summary>
     /// <param name="sender">The event sender.</param>
     /// <param name="e">The event arguments.</param>
-    private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    /// <summary>
+    /// Sends the composer text on the 전송 button click.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ComposerSend_Click(object sender, RoutedEventArgs e)
     {
-        if (e.Key != Key.Enter)
+        SubmitComposer();
+    }
+
+    /// <summary>
+    /// Sends the composer text on Enter (Shift+Enter inserts a newline).
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ComposerInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+    {
+        if (e.Key != Key.Enter || (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
         {
             return;
         }
 
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        OpenChatInput();
         e.Handled = true;
+        SubmitComposer();
     }
 
     /// <summary>
-    /// Opens (or re-activates) the standalone chat input popup window.
+    /// Submits the composer text to the chat pipeline (outline-scoped) and clears the input.
     /// </summary>
-    private void OpenChatInput()
+    private void SubmitComposer()
     {
         if (viewModel.SelectedProject is null)
         {
             return;
         }
 
-        EnsureChatInputWindow();
-        PopulateChatInputProviders();
-        chatInputWindow!.Show();
-        chatInputWindow.Activate();
-        chatInputWindow.FocusInput();
-    }
+        string text = ComposerInput.Text.Trim();
 
-    /// <summary>
-    /// Creates the chat input window once and wires its events to the chat pipeline.
-    /// </summary>
-    private void EnsureChatInputWindow()
-    {
-        if (chatInputWindow is not null)
+        if (text.Length == 0)
         {
             return;
         }
 
-        chatInputWindow = new ChatInputWindow
-        {
-            Owner = this
-        };
-        chatInputWindow.SendRequested += text => _ = SendMessageAsync(text);
-        chatInputWindow.ManualRegisterRequested = TryRegisterManualConversation;
-        chatInputWindow.ProviderChanged += ChangeDefaultProvider;
-        chatInputWindow.Closed += (_, _) => chatInputWindow = null;
+        ComposerInput.Clear();
+        _ = SendMessageAsync(text);
     }
 
     /// <summary>
-    /// Loads the project's registered providers into the chat input window.
+    /// Loads the selected project's providers into the composer's provider selector.
     /// </summary>
-    private void PopulateChatInputProviders()
+    private void PopulateComposerProviders()
     {
-        if (chatInputWindow is null || viewModel.SelectedProject is null)
+        if (viewModel.SelectedProject is null)
         {
+            ProviderSelector.ItemsSource = null;
             return;
         }
 
         ProviderSettingsDocument document = providerSettingsStore.Load(viewModel.SelectedProject.Path);
-        chatInputWindow.SetProviders(
-            document.Providers.Select(provider => provider.Name).ToList(),
-            document.DefaultProvider);
+
+        suppressProviderChange = true;
+        ProviderSelector.ItemsSource = document.Providers.Select(provider => provider.Name).ToList();
+        ProviderSelector.SelectedItem = document.DefaultProvider;
+        suppressProviderChange = false;
+    }
+
+    /// <summary>
+    /// Applies the chosen provider as the project's default.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ProviderSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (suppressProviderChange || ProviderSelector.SelectedItem is not string providerName)
+        {
+            return;
+        }
+
+        ChangeDefaultProvider(providerName);
     }
 
     /// <summary>
@@ -823,33 +894,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, "프로바이더 변경 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Registers a manual conversation (user + assistant) without an LLM call.
-    /// </summary>
-    /// <param name="userText">The user message.</param>
-    /// <param name="assistantText">The assistant message.</param>
-    /// <returns>True when registration succeeded.</returns>
-    private bool TryRegisterManualConversation(string userText, string assistantText)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return false;
-        }
-
-        try
-        {
-            string projectRoot = viewModel.SelectedProject.Path;
-            chatService.AddManualConversation(projectRoot, userText, assistantText);
-            ReloadConversations(projectRoot);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "수동대화 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-            return false;
         }
     }
 
@@ -1010,8 +1054,7 @@ public partial class MainWindow : Window
         // When no row was added the request was never stored, so restore the input for retry.
         if (row is null)
         {
-            EnsureChatInputWindow();
-            chatInputWindow!.RestoreForRetry(text);
+            ComposerInput.Text = text;
         }
         else
         {
@@ -1346,6 +1389,35 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// Gets the project artifacts.
     /// </summary>
     public ObservableCollection<ArtifactListItem> Artifacts { get; } = [];
+
+    /// <summary>
+    /// Gets the document outline (목차) tree.
+    /// </summary>
+    public ObservableCollection<OutlineItem> OutlineItems { get; } = [];
+
+    private string bodyText = string.Empty;
+
+    /// <summary>
+    /// Gets or sets the body text of the selected outline item.
+    /// </summary>
+    public string BodyText
+    {
+        get
+        {
+            return bodyText;
+        }
+
+        set
+        {
+            if (bodyText == value)
+            {
+                return;
+            }
+
+            bodyText = value;
+            OnPropertyChanged();
+        }
+    }
 
     /// <summary>
     /// Gets or sets the selected project.
