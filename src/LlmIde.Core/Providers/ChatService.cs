@@ -297,7 +297,7 @@ public sealed class ChatService
             MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
             RequestId = requestId,
             Role = "user",
-            Content = userText,
+            Content = WrapImported(userText),
             CreatedAt = createdAt
         });
 
@@ -306,11 +306,24 @@ public sealed class ChatService
             MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
             RequestId = requestId,
             Role = "assistant",
-            Content = assistantText,
+            Content = WrapImported(assistantText),
             CreatedAt = createdAt
         });
 
         return requestId;
+    }
+
+    /// <summary>
+    /// Wraps externally-sourced (manually imported) conversation content in &lt;imported&gt; tags so it
+    /// can later be treated as untrusted DATA — never as instructions — when injected into an LLM
+    /// request. This is a prompt-injection guard: the future LLM integration must instruct the model
+    /// to treat &lt;imported&gt;…&lt;/imported&gt; content as data, not commands.
+    /// </summary>
+    /// <param name="text">The imported text.</param>
+    /// <returns>The wrapped text.</returns>
+    private static string WrapImported(string text)
+    {
+        return "<imported>\n" + text + "\n</imported>";
     }
 
     /// <summary>

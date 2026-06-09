@@ -1680,8 +1680,8 @@ public static class Program
         ConversationMessageRecord assistant = messages.First(message => message.Role == "assistant");
         AssertEqual(requestId, user.RequestId, "User message should use the new request id.");
         AssertEqual(requestId, assistant.RequestId, "Assistant message should use the new request id.");
-        AssertEqual("수동 사용자 발화", user.Content, "User content should be preserved.");
-        AssertEqual("수동 어시스턴트 응답", assistant.Content, "Assistant content should be preserved.");
+        AssertEqual("<imported>\n수동 사용자 발화\n</imported>", user.Content, "Imported user content should be wrapped in <imported> tags.");
+        AssertEqual("<imported>\n수동 어시스턴트 응답\n</imported>", assistant.Content, "Imported assistant content should be wrapped in <imported> tags.");
     }
 
     /// <summary>
