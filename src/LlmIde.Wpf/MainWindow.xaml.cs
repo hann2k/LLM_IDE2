@@ -840,6 +840,16 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Tracks the selected outline item so the body editor can gate input on it.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void OutlineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
+    {
+        viewModel.SelectedOutlineItem = e.NewValue as OutlineItem;
+    }
+
+    /// <summary>
     /// Loads the selected project's providers into the composer's provider selector.
     /// </summary>
     private void PopulateComposerProviders()
@@ -1394,6 +1404,42 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// Gets the document outline (목차) tree.
     /// </summary>
     public ObservableCollection<OutlineItem> OutlineItems { get; } = [];
+
+    private OutlineItem? selectedOutlineItem;
+
+    /// <summary>
+    /// Gets or sets the selected outline item. Body editing is only allowed while an item is selected.
+    /// </summary>
+    public OutlineItem? SelectedOutlineItem
+    {
+        get
+        {
+            return selectedOutlineItem;
+        }
+
+        set
+        {
+            if (ReferenceEquals(selectedOutlineItem, value))
+            {
+                return;
+            }
+
+            selectedOutlineItem = value;
+            OnPropertyChanged();
+            OnPropertyChanged(nameof(IsBodyEditable));
+        }
+    }
+
+    /// <summary>
+    /// Gets a value indicating whether the body editor accepts input (an outline item is selected).
+    /// </summary>
+    public bool IsBodyEditable
+    {
+        get
+        {
+            return selectedOutlineItem is not null;
+        }
+    }
 
     private string bodyText = string.Empty;
 

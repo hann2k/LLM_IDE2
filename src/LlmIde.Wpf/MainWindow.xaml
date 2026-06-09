@@ -195,7 +195,8 @@
                                        Margin="8,6" />
                             <TreeView ItemsSource="{Binding OutlineItems}"
                                       BorderThickness="0"
-                                      FontSize="14">
+                                      FontSize="14"
+                                      SelectedItemChanged="OutlineTree_SelectedItemChanged">
                                 <TreeView.Resources>
                                     <HierarchicalDataTemplate DataType="{x:Type local:OutlineItem}"
                                                               ItemsSource="{Binding Children}">
@@ -227,14 +228,34 @@
                                        FontSize="13"
                                        Foreground="#444444"
                                        Margin="8,6" />
-                            <TextBox Text="{Binding BodyText, UpdateSourceTrigger=PropertyChanged}"
-                                     AcceptsReturn="True"
-                                     AcceptsTab="True"
-                                     TextWrapping="Wrap"
-                                     VerticalScrollBarVisibility="Auto"
-                                     BorderThickness="0"
-                                     Padding="10"
-                                     FontSize="14" />
+                            <Grid>
+                                <TextBox Text="{Binding BodyText, UpdateSourceTrigger=PropertyChanged}"
+                                         IsEnabled="{Binding IsBodyEditable}"
+                                         AcceptsReturn="True"
+                                         AcceptsTab="True"
+                                         TextWrapping="Wrap"
+                                         VerticalScrollBarVisibility="Auto"
+                                         BorderThickness="0"
+                                         Padding="10"
+                                         FontSize="14" />
+                                <TextBlock Text="목차를 선택하면 본문을 편집할 수 있습니다."
+                                           Foreground="#AAAAAA"
+                                           FontSize="13"
+                                           HorizontalAlignment="Center"
+                                           VerticalAlignment="Center"
+                                           IsHitTestVisible="False">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Visibility" Value="Collapsed" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding IsBodyEditable}" Value="False">
+                                                    <Setter Property="Visibility" Value="Visible" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </DockPanel>
                     </Border>
                 </Grid>
