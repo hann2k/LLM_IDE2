@@ -46,6 +46,31 @@ public sealed class ContextBuilder
     private readonly ArtifactService artifactService;
 
     /// <summary>
+    /// The prompt template store for context intro lines (null falls back to built-in defaults).
+    /// </summary>
+    private readonly IPromptStore? promptStore;
+
+    /// <summary>
+    /// The fallback intro before the active project criteria.
+    /// </summary>
+    private const string DefaultCriteriaIntro = "이번 응답에서는 다음 활성 프로젝트 기준을 따른다.";
+
+    /// <summary>
+    /// The fallback intro before the project state.
+    /// </summary>
+    private const string DefaultStateIntro = "현재 프로젝트 상태를 맥락으로 사용한다.";
+
+    /// <summary>
+    /// The fallback intro before the rolling context summary.
+    /// </summary>
+    private const string DefaultRollingIntro = "압축된 이전 대화 맥락을 사용한다.";
+
+    /// <summary>
+    /// The fallback intro before user-attached artifacts.
+    /// </summary>
+    private const string DefaultArtifactsIntro = "사용자가 첨부한 다음 산출물을 맥락으로 사용한다.";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ContextBuilder"/> class.
     /// </summary>
     /// <param name="criteriaService">The criteria service.</param>
@@ -55,6 +80,7 @@ public sealed class ContextBuilder
     /// <param name="artifactRuleStore">The artifact rule store.</param>
     /// <param name="importanceRuleStore">The importance rule store.</param>
     /// <param name="artifactService">The artifact service.</param>
+    /// <param name="promptStore">The prompt template store (defaults to built-in intros).</param>
     public ContextBuilder(
         CriteriaService criteriaService,
         ProjectStateService projectStateService,
@@ -62,7 +88,8 @@ public sealed class ContextBuilder
         ISystemRuleStore systemRuleStore,
         IArtifactRuleStore artifactRuleStore,
         IImportanceRuleStore importanceRuleStore,
-        ArtifactService artifactService)
+        ArtifactService artifactService,
+        IPromptStore? promptStore = null)
     {
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
@@ -71,6 +98,7 @@ public sealed class ContextBuilder
         this.artifactRuleStore = artifactRuleStore;
         this.importanceRuleStore = importanceRuleStore;
         this.artifactService = artifactService;
+        this.promptStore = promptStore;
     }
 
     /// <summary>
@@ -120,11 +148,26 @@ public sealed class ContextBuilder
             LoadAttachedArtifacts(projectRoot, artifactIds ?? []),
             recentList);
 
+        IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+
         return new ContextBuildResult
         {
             ContextPackage = contextPackage,
-            Messages = BuildProviderMessages(contextPackage, recentList)
+            Messages = BuildProviderMessages(contextPackage, recentList, prompts)
         };
+    }
+
+    /// <summary>
+    /// Resolves a prompt template, falling back to a built-in default when missing or empty.
+    /// </summary>
+    /// <param name="prompts">The loaded prompt templates.</param>
+    /// <param name="key">The prompt key.</param>
+    /// <param name="fallback">The built-in fallback text.</param>
+    /// <returns>The resolved prompt text.</returns>
+    private static string Resolve(IReadOnlyDictionary<string, string> prompts, string key, string fallback)
+    {
+        return prompts.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value) ? value : fallback;
     }
 
     /// <summary>
@@ -132,19 +175,21 @@ public sealed class ContextBuilder
     /// </summary>
     /// <param name="contextPackage">The context package.</param>
     /// <param name="recentMessages">The recent conversation window messages.</param>
+    /// <param name="prompts">The loaded prompt templates for context intro lines.</param>
     /// <returns>The provider messages.</returns>
     private static List<ChatMessage> BuildProviderMessages(
         ContextPackage contextPackage,
-        IReadOnlyList<ConversationMessageRecord> recentMessages)
+        IReadOnlyList<ConversationMessageRecord> recentMessages,
+        IReadOnlyDictionary<string, string> prompts)
     {
         List<ChatMessage> messages = [];
         AppendSystemMessage(messages, contextPackage.SystemRule);
-        AppendSystemMessage(messages, BuildCriteriaMessage(contextPackage.ActiveCriteria));
-        AppendSystemMessage(messages, BuildProjectStateMessage((ProjectState)contextPackage.ProjectState));
-        AppendSystemMessage(messages, BuildRollingContextMessage(contextPackage.RollingContextSummary));
+        AppendSystemMessage(messages, BuildCriteriaMessage(contextPackage.ActiveCriteria, Resolve(prompts, PromptKeys.ContextCriteriaIntro, DefaultCriteriaIntro)));
+        AppendSystemMessage(messages, BuildProjectStateMessage((ProjectState)contextPackage.ProjectState, Resolve(prompts, PromptKeys.ContextStateIntro, DefaultStateIntro)));
+        AppendSystemMessage(messages, BuildRollingContextMessage(contextPackage.RollingContextSummary, Resolve(prompts, PromptKeys.ContextRollingIntro, DefaultRollingIntro)));
         AppendSystemMessage(messages, contextPackage.ArtifactRule);
         AppendSystemMessage(messages, contextPackage.ImportanceRule);
-        AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts));
+        AppendSystemMessage(messages, BuildAttachedArtifactsMessage(contextPackage.AttachedArtifacts, Resolve(prompts, PromptKeys.ContextArtifactsIntro, DefaultArtifactsIntro)));
 
         // Include the recent conversation window as raw turns before the current request.
         foreach (ConversationMessageRecord recent in recentMessages)
@@ -169,8 +214,9 @@ public sealed class ContextBuilder
     /// Builds the attached artifacts system message.
     /// </summary>
     /// <param name="attachedArtifacts">The attached artifacts.</param>
+    /// <param name="intro">The intro line resolved from the prompt store.</param>
     /// <returns>The attached artifacts system message.</returns>
-    private static string BuildAttachedArtifactsMessage(IReadOnlyList<string> attachedArtifacts)
+    private static string BuildAttachedArtifactsMessage(IReadOnlyList<string> attachedArtifacts, string intro)
     {
         if (attachedArtifacts.Count == 0)
         {
@@ -178,7 +224,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("사용자가 첨부한 다음 산출물을 맥락으로 사용한다.");
+        builder.AppendLine(intro);
 
         foreach (string artifact in attachedArtifacts)
         {
@@ -212,8 +258,9 @@ public sealed class ContextBuilder
     /// Builds the criteria system message.
     /// </summary>
     /// <param name="activeCriteria">The active criteria strings.</param>
+    /// <param name="intro">The intro line resolved from the prompt store.</param>
     /// <returns>The system message content.</returns>
-    private static string BuildCriteriaMessage(IReadOnlyList<string> activeCriteria)
+    private static string BuildCriteriaMessage(IReadOnlyList<string> activeCriteria, string intro)
     {
         if (activeCriteria.Count == 0)
         {
@@ -221,7 +268,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("이번 응답에서는 다음 활성 프로젝트 기준을 따른다.");
+        builder.AppendLine(intro);
 
         foreach (string criterion in activeCriteria)
         {
@@ -236,11 +283,12 @@ public sealed class ContextBuilder
     /// Builds the project state system message.
     /// </summary>
     /// <param name="projectState">The project state.</param>
+    /// <param name="intro">The intro line resolved from the prompt store.</param>
     /// <returns>The system message content.</returns>
-    private static string BuildProjectStateMessage(ProjectState projectState)
+    private static string BuildProjectStateMessage(ProjectState projectState, string intro)
     {
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("현재 프로젝트 상태를 맥락으로 사용한다.");
+        builder.AppendLine(intro);
         AppendStateValue(builder, "단계", projectState.Stage);
         AppendStateValue(builder, "현재 작업", projectState.CurrentTask);
         AppendStateList(builder, "완료 항목", projectState.CompletedItems);
@@ -255,8 +303,9 @@ public sealed class ContextBuilder
     /// Builds the rolling context system message.
     /// </summary>
     /// <param name="rollingContextSummary">The rolling context summary.</param>
+    /// <param name="intro">The intro line resolved from the prompt store.</param>
     /// <returns>The system message content.</returns>
-    private static string BuildRollingContextMessage(string rollingContextSummary)
+    private static string BuildRollingContextMessage(string rollingContextSummary, string intro)
     {
         if (string.IsNullOrWhiteSpace(rollingContextSummary))
         {
@@ -264,7 +313,7 @@ public sealed class ContextBuilder
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("압축된 이전 대화 맥락을 사용한다.");
+        builder.AppendLine(intro);
         builder.AppendLine(rollingContextSummary);
         return builder.ToString();
     }

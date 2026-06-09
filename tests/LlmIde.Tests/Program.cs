@@ -66,12 +66,14 @@ public static class Program
             AgentLoopMaxTurnsExceeded,
             AgentLoopUnknownToolInvalid,
             AgentLoopInvalidJsonFails,
+            ParserExtractsFirstBalancedObject,
             FetchUrlBlocksLocalhost,
             FetchUrlBlocksPrivateIp,
             FetchUrlBlocksFileScheme,
             FetchUrlTruncatesLongResponse,
             FetchUrlToolFailureDoesNotThrow,
             ChatServiceRunsToolThenAnswers,
+            ChatServiceRunsToolBatchWithPartialFailure,
             WebSearchParsesResults,
             WebSearchEmptyQueryFails,
             ConversationDeleteRemovesTurnAndMessages,
@@ -1098,6 +1100,31 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies the parser extracts the first complete JSON object despite a wrapper tag, a stray
+    /// trailing brace, or a following object — so a malformed-but-recoverable tool call is not dropped.
+    /// </summary>
+    private static void ParserExtractsFirstBalancedObject()
+    {
+        // Wrapper tag + an extra trailing '}' (the real-world deepseek-v4-pro failure).
+        ParsedModelMessage trailing = AgentMessageParser.Parse(
+            "열어볼게요.\n\n<tool_call>\n{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://a.com\"}}]}}\n</tool_call>");
+        AssertTrue(trailing.Kind == ModelMessageKind.ToolRequest, "Trailing-brace tool request should still parse.");
+        AssertEqual(1, trailing.Requests.Count, "The single fetch_url request should be recovered.");
+        AssertEqual("fetch_url", trailing.Requests[0].Tool, "Recovered tool should be fetch_url.");
+
+        // Two separate objects: only the first complete object is taken.
+        ParsedModelMessage multiple = AgentMessageParser.Parse(
+            "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"web_search\",\"arguments\":{}}]}\n{\"type\":\"list_tools\"}");
+        AssertTrue(multiple.Kind == ModelMessageKind.ToolRequest, "First object should be parsed when multiple are present.");
+        AssertEqual("web_search", multiple.Requests[0].Tool, "First object's tool should be web_search.");
+
+        // A brace inside a string value must not end the object early.
+        ParsedModelMessage stringBrace = AgentMessageParser.Parse(
+            "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"web_search\",\"arguments\":{\"query\":\"a } b { c\"}}]}");
+        AssertTrue(stringBrace.Kind == ModelMessageKind.ToolRequest, "Braces inside strings must not break extraction.");
+    }
+
+    /// <summary>
     /// Verifies fetch_url blocks localhost.
     /// </summary>
     private static void FetchUrlBlocksLocalhost()
@@ -1434,6 +1461,69 @@ public static class Program
             .GetResult();
 
         AssertEqual(1, response.ToolResults.Count, "fetch_url should run once during chat.");
+        AssertContains(response.Content, "Hello World");
+    }
+
+    /// <summary>
+    /// Verifies a tool_request batch runs every request and tolerates a partial (unknown-tool) failure.
+    /// </summary>
+    private static void ChatServiceRunsToolBatchWithPartialFailure()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string root = workspace.Root;
+        ProjectInitializer initializer = CreateProjectInitializer(root);
+        ProjectInitializationResult init = initializer.Initialize(new ProjectInitializationRequest
+        {
+            PId = "ToolBatch",
+            HasExplicitPId = true
+        });
+        string projectRoot = init.ProjectRoot;
+
+        CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
+        criteriaService.Add(projectRoot, "기준", string.Empty, "normal");
+        ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
+        FileRollingContextStore rollingContextStore = new FileRollingContextStore(root);
+        ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
+        ContextBuilder contextBuilder = new ContextBuilder(
+            criteriaService,
+            projectStateService,
+            rollingContextStore,
+            new FileSystemRuleStore(),
+            new FileArtifactRuleStore(),
+            new FileImportanceRuleStore(root),
+            artifactService);
+        FetchUrlTool fetchTool = new FetchUrlTool(
+            new HttpClient(new FakeHttpMessageHandler("<html><body>Hello World</body></html>", "text/html", 200)));
+        ScriptedChatProvider provider = new ScriptedChatProvider(
+            "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://example.com\"}},{\"tool\":\"nope\",\"arguments\":{}}]}",
+            "요약: Hello World");
+        ChatService chatService = new ChatService(
+            new JsonProviderSettingsStore(),
+            new Dictionary<string, IChatProvider>
+            {
+                ["deepseek"] = provider
+            },
+            new CompositeConversationLogStore(
+            [
+                new JsonlConversationLogStore(),
+                new SqliteConversationLogStore()
+            ]),
+            contextBuilder,
+            rollingContextStore,
+            artifactService,
+            new JsonFileProjectStore(root),
+            new AgentToolHost([fetchTool]));
+
+        ChatProviderResponse response = chatService.SendAsync(
+            projectRoot,
+            "두 도구를 한 번에 실행",
+            CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertEqual(2, response.ToolResults.Count, "Both batch requests should run.");
+        AssertTrue(response.ToolResults[0].Ok, "First batch request (fetch_url) should succeed.");
+        AssertTrue(!response.ToolResults[1].Ok, "Second batch request (unknown tool) should fail without aborting the batch.");
         AssertContains(response.Content, "Hello World");
     }
 

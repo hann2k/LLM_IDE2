@@ -39,4 +39,28 @@ public static class AgentProtocol
         };
         return JsonSerializer.Serialize(envelope, AgentJson.Options);
     }
+
+    /// <summary>
+    /// Builds the batched tool_result envelope returned after a tool_request batch runs. Each entry
+    /// carries its own ok/result/error so partial failures are reported without aborting the batch.
+    /// </summary>
+    /// <param name="toolResults">The tool results in execution order.</param>
+    /// <returns>The tool_result JSON with a results array.</returns>
+    public static string ToolResults(IReadOnlyList<AgentToolResult> toolResults)
+    {
+        var results = toolResults.Select(toolResult => new
+        {
+            tool = toolResult.Tool,
+            requestId = toolResult.RequestId,
+            ok = toolResult.Ok,
+            result = toolResult.Result,
+            errorMessage = string.IsNullOrEmpty(toolResult.ErrorMessage) ? null : toolResult.ErrorMessage
+        });
+        var envelope = new
+        {
+            type = "tool_result",
+            results
+        };
+        return JsonSerializer.Serialize(envelope, AgentJson.Options);
+    }
 }

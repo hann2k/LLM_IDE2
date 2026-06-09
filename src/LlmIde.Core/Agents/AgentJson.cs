@@ -1,3 +1,4 @@
+using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -13,6 +14,9 @@ public static class AgentJson
     /// </summary>
     public static JsonSerializerOptions Options { get; } = new JsonSerializerOptions
     {
+        // Keep non-ASCII (Korean) readable instead of \uXXXX escapes, both in the payload sent to the
+        // model and in the diagnostic log. The output is JSON for an LLM, never HTML, so relaxed escaping is safe.
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
         PropertyNameCaseInsensitive = true,
         DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull

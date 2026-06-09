@@ -1,15 +1,18 @@
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
+using LlmIde.Core.Diagnostics;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Agents;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
+using LlmIde.Infrastructure.Diagnostics;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
+using System.IO;
 using System.Net.Http;
 using System.Text.Json;
 
@@ -34,6 +37,7 @@ public static class Program
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
         ArtifactService artifactService = new ArtifactService(new FileArtifactStore());
+        FilePromptStore promptStore = new FilePromptStore(ideProgramRoot);
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
@@ -41,7 +45,8 @@ public static class Program
             new FileSystemRuleStore(),
             new FileArtifactRuleStore(),
             new FileImportanceRuleStore(ideProgramRoot),
-            artifactService);
+            artifactService,
+            promptStore);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
@@ -59,6 +64,7 @@ public static class Program
             new JsonlConversationLogStore(),
             new SqliteConversationLogStore()
         ]);
+        ILlmRequestLogger llmRequestLogger = new FrameworkCommonLlmRequestLogger(Path.Combine(ideProgramRoot, "Log"));
         ChatService chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -70,7 +76,10 @@ public static class Program
             rollingContextStore,
             artifactService,
             projectStore,
-            agentToolHost);
+            agentToolHost,
+            llmRequestLogger,
+            promptStore,
+            new FrameworkCommonToolIoLogger(Path.Combine(ideProgramRoot, "Log")));
         ProviderSettingsService providerSettingsService = new ProviderSettingsService(
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
@@ -315,7 +324,11 @@ public sealed class CliApplication
         }
 
         IChatModelClient client = new DeepSeekChatModelClient(provider, settings);
-        AgentLoop loop = new AgentLoop(client, agentToolHost);
+        IReadOnlyDictionary<string, string> agentPrompts = new FilePromptStore().Load(project.Path);
+        string? agentSystem = agentPrompts.TryGetValue(PromptKeys.AgentSystem, out string? agentSystemValue)
+            ? agentSystemValue
+            : null;
+        AgentLoop loop = new AgentLoop(client, agentToolHost, agentSystem);
         AgentRunResult result = loop.RunAsync(new AgentRunRequest { UserInput = message }, CancellationToken.None)
             .GetAwaiter()
             .GetResult();

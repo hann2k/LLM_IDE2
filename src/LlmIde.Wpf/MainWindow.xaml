@@ -211,10 +211,16 @@
                                                        Foreground="#666666" />
                                             <TextBlock Text="{Binding CreatedAtText}"
                                                        FontSize="12" />
-                                            <TextBlock Text="{Binding UserContent}"
-                                                       FontSize="12"
-                                                       TextWrapping="Wrap"
-                                                       Margin="0,12,0,0" />
+                                            <TextBox Text="{Binding UserContent, Mode=OneWay}"
+                                                     IsReadOnly="True"
+                                                     TextWrapping="Wrap"
+                                                     BorderThickness="0"
+                                                     Background="Transparent"
+                                                     Padding="0"
+                                                     Margin="0,12,0,0"
+                                                     FontSize="12"
+                                                     VerticalScrollBarVisibility="Disabled"
+                                                     HorizontalScrollBarVisibility="Disabled" />
                                         </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
@@ -224,23 +230,46 @@
                                                     Width="*">
                                 <DataGridTemplateColumn.CellTemplate>
                                     <DataTemplate>
-                                        <RichTextBox local:MarkdownText.Text="{Binding AssistantContent}"
-                                                     IsReadOnly="True"
-                                                     IsDocumentEnabled="True"
-                                                     BorderThickness="0"
-                                                     Background="Transparent"
-                                                     Padding="0"
-                                                     Margin="6"
-                                                     FontSize="12"
-                                                     VerticalScrollBarVisibility="Disabled"
-                                                     HorizontalScrollBarVisibility="Disabled">
-                                            <RichTextBox.ContextMenu>
-                                                <ContextMenu>
-                                                    <MenuItem Header="아티팩트로 추출"
-                                                              Click="ExtractArtifactMenuItem_Click" />
-                                                </ContextMenu>
-                                            </RichTextBox.ContextMenu>
-                                        </RichTextBox>
+                                        <StackPanel>
+                                            <TextBlock Text="{Binding StatusText}"
+                                                       FontSize="11"
+                                                       FontWeight="Bold"
+                                                       Margin="6,4,6,0">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="#2E7D32" />
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="답변중">
+                                                                <Setter Property="Foreground" Value="#C25E00" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="실패">
+                                                                <Setter Property="Foreground" Value="#C62828" />
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding StatusText}" Value="답변완료 · 빈 응답">
+                                                                <Setter Property="Foreground" Value="#C62828" />
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <RichTextBox local:MarkdownText.Text="{Binding AssistantContent}"
+                                                         IsReadOnly="True"
+                                                         IsDocumentEnabled="True"
+                                                         BorderThickness="0"
+                                                         Background="Transparent"
+                                                         Padding="0"
+                                                         Margin="6"
+                                                         FontSize="12"
+                                                         VerticalScrollBarVisibility="Disabled"
+                                                         HorizontalScrollBarVisibility="Disabled">
+                                                <RichTextBox.ContextMenu>
+                                                    <ContextMenu>
+                                                        <MenuItem Header="아티팩트로 추출"
+                                                                  Click="ExtractArtifactMenuItem_Click" />
+                                                    </ContextMenu>
+                                                </RichTextBox.ContextMenu>
+                                            </RichTextBox>
+                                        </StackPanel>
                                     </DataTemplate>
                                 </DataGridTemplateColumn.CellTemplate>
                             </DataGridTemplateColumn>

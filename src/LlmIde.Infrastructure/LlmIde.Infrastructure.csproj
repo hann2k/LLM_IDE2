@@ -6,6 +6,15 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <!-- Required transitive dependency of the local Framework.Common.dll (not auto-resolved for a bare DLL reference). -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Supervisor-supplied local library (file logging via Framework.Common.Logger.Log; TCP comm for later use). -->
+    <Reference Include="Framework.Common">
+      <HintPath>$(MSBuildThisFileDirectory)..\..\package\Lib.Net10\Framework.Common.dll</HintPath>
+    </Reference>
   </ItemGroup>
 
   <PropertyGroup>

@@ -19,14 +19,23 @@ public sealed class AgentLoop : IAgentLoop
     private readonly IAgentToolHost toolHost;
 
     /// <summary>
+    /// The agent system instructions injected at the start of the loop.
+    /// </summary>
+    private readonly string systemInstructions;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="AgentLoop"/> class.
     /// </summary>
     /// <param name="modelClient">The model client.</param>
     /// <param name="toolHost">The tool host.</param>
-    public AgentLoop(IChatModelClient modelClient, IAgentToolHost toolHost)
+    /// <param name="systemInstructions">The agent system instructions (defaults to the built-in instructions).</param>
+    public AgentLoop(IChatModelClient modelClient, IAgentToolHost toolHost, string? systemInstructions = null)
     {
         this.modelClient = modelClient;
         this.toolHost = toolHost;
+        this.systemInstructions = string.IsNullOrWhiteSpace(systemInstructions)
+            ? DefaultSystemInstructions
+            : systemInstructions;
     }
 
     /// <summary>
@@ -43,7 +52,7 @@ public sealed class AgentLoop : IAgentLoop
         List<AgentToolResult> toolCalls = [];
         List<ChatMessage> messages =
         [
-            new ChatMessage { Role = "system", Content = BuildSystemInstructions() },
+            new ChatMessage { Role = "system", Content = systemInstructions },
             new ChatMessage { Role = "user", Content = request.UserInput }
         ];
         turns.Add(new AgentTurn { Role = AgentTurnRole.User, Content = request.UserInput });
@@ -157,39 +166,36 @@ public sealed class AgentLoop : IAgentLoop
     }
 
     /// <summary>
-    /// Builds the agent system instructions.
+    /// The fallback agent system instructions used when no external prompt is supplied
+    /// (the supervisor-editable prompt lives under the <c>agent_system</c> key in policies/prompts.json).
     /// </summary>
-    /// <returns>The system instructions.</returns>
-    private static string BuildSystemInstructions()
-    {
-        return """
-            너는 LLM_IDE의 에이전트다.
+    private const string DefaultSystemInstructions = """
+        너는 LLM_IDE의 에이전트다.
 
-            규칙:
-            - 너는 URL을 직접 열 수 없다.
-            - URL 내용이 필요하면 반드시 tool_request JSON을 반환하라.
-            - 도구 결과가 제공되면 그 내용만 근거로 답하라.
-            - 도구 결과 없이 URL 내용을 추측하지 마라.
-            - 최종 답변은 final JSON으로 반환하라.
+        규칙:
+        - 너는 URL을 직접 열 수 없다.
+        - URL 내용이 필요하면 반드시 tool_request JSON을 반환하라.
+        - 도구 결과가 제공되면 그 내용만 근거로 답하라.
+        - 도구 결과 없이 URL 내용을 추측하지 마라.
+        - 최종 답변은 final JSON으로 반환하라.
 
-            너는 항상 아래 JSON 중 하나만 반환한다. 다른 텍스트는 출력하지 마라.
+        너는 항상 아래 JSON 중 하나만 반환한다. 다른 텍스트는 출력하지 마라.
 
-            도구 목록 요청:
-            {"type":"list_tools"}
+        도구 목록 요청:
+        {"type":"list_tools"}
 
-            도구 사용 요청:
-            {"type":"tool_request","tool":"<도구이름>","arguments":{ ... }}
+        도구 사용 요청:
+        {"type":"tool_request","tool":"<도구이름>","arguments":{ ... }}
 
-            최종 답변:
-            {"type":"final","answer":"사용자에게 보여줄 최종 답변"}
+        최종 답변:
+        {"type":"final","answer":"사용자에게 보여줄 최종 답변"}
 
-            절차:
-            - 도구가 필요하면 먼저 list_tools로 도구 목록을 요청하라.
-            - tool_list 응답에서 도구 이름과 인자를 확인한 뒤 tool_request로 사용하라.
-            - tool_result가 제공되면 그 내용만 근거로 답하라. 결과 없이 추측하지 마라.
-            - 충분하면 final로 종료하라.
-            """;
-    }
+        절차:
+        - 도구가 필요하면 먼저 list_tools로 도구 목록을 요청하라.
+        - tool_list 응답에서 도구 이름과 인자를 확인한 뒤 tool_request로 사용하라.
+        - tool_result가 제공되면 그 내용만 근거로 답하라. 결과 없이 추측하지 마라.
+        - 충분하면 final로 종료하라.
+        """;
 
     /// <summary>
     /// Builds a failed agent run result.

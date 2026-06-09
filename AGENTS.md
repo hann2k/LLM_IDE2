@@ -17,6 +17,11 @@
 2. 프로그램을 수정하고
 3. 테스트 코드를 수정하고
 4. 빌드 및 테스트를 수행한다.
+
+dotnet build src/LlmIde.Wpf/LlmIde.Wpf.csproj -c Debug
+
+dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
+
 5. 빌드오류 및 테스트 오류가 발생하면 2단계부터 재실행한다.
 6. 2회 이상 재반복이 실시되면 빌드를 멈추고 보고한다.
 

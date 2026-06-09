@@ -1,6 +1,7 @@
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
+using LlmIde.Core.Diagnostics;
 using LlmIde.Core.Projects;
 using System.Text;
 using System.Text.Json;
@@ -53,18 +54,58 @@ public sealed class ChatService
     private readonly IAgentToolHost toolHost;
 
     /// <summary>
+    /// The diagnostic logger that records every actual LLM provider call (injected prompt and raw response).
+    /// </summary>
+    private readonly ILlmRequestLogger llmRequestLogger;
+
+    /// <summary>
+    /// The diagnostic logger that records every tool execution's full input and output.
+    /// </summary>
+    private readonly IToolIoLogger toolIoLogger;
+
+    /// <summary>
+    /// The prompt template store for the in-chat tool instruction and compression prompts (null falls back to built-in defaults).
+    /// </summary>
+    private readonly IPromptStore? promptStore;
+
+    /// <summary>
+    /// The fallback intro before the active project criteria in a compression request.
+    /// </summary>
+    private const string DefaultCompressionCriteriaIntro = "다음 활성 프로젝트 기준을 따른다.";
+
+    /// <summary>
+    /// The fallback compression prompt merging the previous summary with the current turn.
+    /// </summary>
+    private const string DefaultCompressionMerge =
+        "[이전 롤링 맥락 요약]\n{previous_summary}\n\n" +
+        "[현재 사용자 메시지]\n{user_message}\n\n" +
+        "[현재 AI 응답]\n{assistant_message}\n\n" +
+        "[작업]\n위 내용을 병합하여 다음 요청에 사용할 롤링 맥락 요약을 갱신하라.";
+
+    /// <summary>
+    /// The fallback bootstrap compression prompt summarizing the raw conversation log.
+    /// </summary>
+    private const string DefaultCompressionBootstrap =
+        "[원본 대화 로그]\n{conversation_log}[작업]\n위 전체 원본 대화 로그를 다음 요청에 사용할 롤링 맥락 요약으로 압축하라.";
+
+    /// <summary>
     /// The maximum number of tool resolution turns per chat request.
     /// </summary>
     private const int MaxToolTurns = 4;
 
     /// <summary>
-    /// The in-chat tool instruction injected when tools are available.
+    /// The fallback in-chat tool instruction used when no external prompt is available
+    /// (the supervisor-editable text lives under the <c>chat_tool_instruction</c> key in policies/prompts.json).
     /// </summary>
-    private const string ToolInstruction =
-        "도구가 필요하면 먼저 다른 텍스트 없이 {\"type\":\"list_tools\"} 만 출력해 도구 목록을 요청하라.\n" +
-        "tool_list 응답에서 도구 이름과 인자를 확인한 뒤 {\"type\":\"tool_request\",\"tool\":\"<이름>\",\"arguments\":{ ... }} 로 사용하라.\n" +
-        "tool_result가 제공되면 그 내용만 근거로 평소 형식대로 답하라. 결과 없이 추측하지 마라.\n" +
-        "외부 정보가 필요 없으면 평소대로 바로 답하라.";
+    private const string DefaultChatToolInstruction =
+        "너는 web_search(실시간 웹 검색)와 fetch_url(URL 본문 가져오기) 도구를 쓸 수 있다.\n" +
+        "검색·최신 정보·가격·재고·실시간 사실 확인이 필요한 요청에는 반드시 도구를 사용하라. \"실시간 검색을 할 수 없다\"거나 \"직접 확인할 수 없다\"고 거절하지 마라.\n" +
+        "도구 목록이 필요하면 다른 텍스트 없이 {\"type\":\"list_tools\"} 만 출력하라.\n" +
+        "도구를 호출할 때는 반드시 아래 형식으로만 출력하라. 도구가 하나여도 requests 배열에 담고, 여러 도구가 필요하면 한 응답에 모두 배열로 담아라.\n" +
+        "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"<이름>\",\"arguments\":{ ... }},{\"tool\":\"<이름>\",\"arguments\":{ ... }}]}\n" +
+        "JSON 객체를 여러 개 따로 출력하지 마라. 반드시 requests 배열 하나로만 출력하라.\n" +
+        "tool_result의 results 배열 각 항목만 근거로 평소 형식대로 자연스럽게 답하라. 결과 없이 추측하지 마라.\n" +
+        "도구가 정말 필요 없는 일반 대화나 의견 요청이면 평소대로 바로 답하라.";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
@@ -77,6 +118,9 @@ public sealed class ChatService
     /// <param name="artifactService">The artifact service.</param>
     /// <param name="projectStore">The project metadata store.</param>
     /// <param name="toolHost">The agent tool host for in-chat tool calls.</param>
+    /// <param name="llmRequestLogger">The diagnostic logger for actual LLM calls (defaults to a no-op logger).</param>
+    /// <param name="promptStore">The prompt template store for the tool instruction and compression prompts (defaults to built-in prompts).</param>
+    /// <param name="toolIoLogger">The diagnostic logger for tool execution input/output (defaults to a no-op logger).</param>
     public ChatService(
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IChatProvider> providers,
@@ -85,7 +129,10 @@ public sealed class ChatService
         IRollingContextStore rollingContextStore,
         ArtifactService artifactService,
         IProjectStore projectStore,
-        IAgentToolHost toolHost)
+        IAgentToolHost toolHost,
+        ILlmRequestLogger? llmRequestLogger = null,
+        IPromptStore? promptStore = null,
+        IToolIoLogger? toolIoLogger = null)
     {
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
@@ -95,6 +142,9 @@ public sealed class ChatService
         this.artifactService = artifactService;
         this.projectStore = projectStore;
         this.toolHost = toolHost;
+        this.llmRequestLogger = llmRequestLogger ?? NullLlmRequestLogger.Instance;
+        this.promptStore = promptStore;
+        this.toolIoLogger = toolIoLogger ?? NullToolIoLogger.Instance;
     }
 
     /// <summary>
@@ -282,10 +332,23 @@ public sealed class ChatService
 
         for (int turn = 0; turn <= MaxToolTurns; turn++)
         {
-            response = await preparedRequest.Provider.SendAsync(
-                preparedRequest.Request,
-                preparedRequest.Settings,
-                cancellationToken);
+            DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+            IReadOnlyList<LlmRequestLogMessage> sentMessages = SnapshotMessages(preparedRequest.Request.Messages);
+
+            try
+            {
+                response = await preparedRequest.Provider.SendAsync(
+                    preparedRequest.Request,
+                    preparedRequest.Settings,
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                LogLlmCall(preparedRequest.RequestId, "chat", turn, preparedRequest, false, sentMessages, string.Empty, startedAt, ex.Message);
+                throw;
+            }
+
+            LogLlmCall(preparedRequest.RequestId, "chat", turn, preparedRequest, false, sentMessages, response.Content, startedAt, null);
 
             (bool handled, _) = await HandleAgentTurnAsync(projectRoot, preparedRequest, response.Content, toolResults, step, cancellationToken);
 
@@ -321,17 +384,29 @@ public sealed class ChatService
         for (int turn = 0; turn <= MaxToolTurns; turn++)
         {
             StringBuilder content = new StringBuilder();
+            DateTimeOffset startedAt = DateTimeOffset.UtcNow;
+            IReadOnlyList<LlmRequestLogMessage> sentMessages = SnapshotMessages(preparedRequest.Request.Messages);
 
-            await foreach (string chunk in preparedRequest.Provider.StreamAsync(
-                preparedRequest.Request,
-                preparedRequest.Settings,
-                cancellationToken))
+            try
             {
-                content.Append(chunk);
-                onChunk(chunk);
+                await foreach (string chunk in preparedRequest.Provider.StreamAsync(
+                    preparedRequest.Request,
+                    preparedRequest.Settings,
+                    cancellationToken))
+                {
+                    content.Append(chunk);
+                    onChunk(chunk);
+                }
+            }
+            catch (Exception ex)
+            {
+                LogLlmCall(preparedRequest.RequestId, "chat", turn, preparedRequest, true, sentMessages, content.ToString(), startedAt, ex.Message);
+                throw;
             }
 
             string text = content.ToString();
+            LogLlmCall(preparedRequest.RequestId, "chat", turn, preparedRequest, true, sentMessages, text, startedAt, null);
+
             (bool handled, string? label) = await HandleAgentTurnAsync(projectRoot, preparedRequest, text, toolResults, step, cancellationToken);
 
             if (!handled)
@@ -386,41 +461,105 @@ public sealed class ChatService
             return (true, "도구 목록 요청");
         }
 
-        if (parsed.Kind != ModelMessageKind.ToolRequest || !toolHost.HasTool(parsed.Tool))
+        if (parsed.Kind != ModelMessageKind.ToolRequest)
         {
             return (false, null);
         }
 
-        AgentToolRequest toolRequest = new AgentToolRequest
-        {
-            Tool = parsed.Tool,
-            RequestId = $"tool-{toolResults.Count + 1:000}",
-            Arguments = parsed.Arguments
-        };
+        // Assign tool ids up front (stable order), run the whole batch concurrently, then collect results
+        // in request order and send them back together in one tool_result message. Partial failure is
+        // tolerated: an unknown or throwing tool becomes an error result without aborting the batch.
+        int baseCount = toolResults.Count;
+        List<Task<AgentToolResult>> executions = [];
 
+        for (int index = 0; index < parsed.Requests.Count; index++)
+        {
+            string toolRequestId = $"tool-{baseCount + index + 1:000}";
+            executions.Add(ExecuteToolAsync(preparedRequest.RequestId, parsed.Requests[index], toolRequestId, cancellationToken));
+        }
+
+        AgentToolResult[] batchResults = await Task.WhenAll(executions);
+
+        foreach (AgentToolResult toolResult in batchResults)
+        {
+            toolResults.Add(toolResult);
+            step[0]++;
+            LogToolCall(projectRoot, preparedRequest.RequestId, step[0], toolResult);
+        }
+
+        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
+        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolResults(batchResults) });
+        return (true, DescribeBatch(batchResults));
+    }
+
+    /// <summary>
+    /// Executes one tool request (tolerating unknown/throwing tools as error results) and records its
+    /// full input and output to the tool I/O diagnostic log.
+    /// </summary>
+    /// <param name="chatRequestId">The chat request identifier.</param>
+    /// <param name="request">The parsed tool request.</param>
+    /// <param name="toolRequestId">The tool execution identifier (tool-NNN).</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The tool result (never throws).</returns>
+    private async Task<AgentToolResult> ExecuteToolAsync(
+        string chatRequestId,
+        ParsedToolRequest request,
+        string toolRequestId,
+        CancellationToken cancellationToken)
+    {
+        DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         AgentToolResult toolResult;
 
-        try
-        {
-            toolResult = await toolHost.ExecuteAsync(toolRequest, cancellationToken);
-        }
-        catch (Exception ex)
+        if (!toolHost.HasTool(request.Tool))
         {
             toolResult = new AgentToolResult
             {
-                Tool = toolRequest.Tool,
-                RequestId = toolRequest.RequestId,
+                Tool = request.Tool,
+                RequestId = toolRequestId,
                 Ok = false,
-                ErrorMessage = ex.Message
+                ErrorMessage = $"알 수 없는 도구입니다: {request.Tool}"
             };
         }
+        else
+        {
+            try
+            {
+                toolResult = await toolHost.ExecuteAsync(
+                    new AgentToolRequest
+                    {
+                        Tool = request.Tool,
+                        RequestId = toolRequestId,
+                        Arguments = request.Arguments
+                    },
+                    cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                toolResult = new AgentToolResult
+                {
+                    Tool = request.Tool,
+                    RequestId = toolRequestId,
+                    Ok = false,
+                    ErrorMessage = ex.Message
+                };
+            }
+        }
 
-        toolResults.Add(toolResult);
-        step[0]++;
-        LogToolCall(projectRoot, preparedRequest.RequestId, step[0], toolResult);
-        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "assistant", Content = content });
-        preparedRequest.Request.Messages.Add(new ChatMessage { Role = "user", Content = AgentProtocol.ToolResult(toolResult) });
-        return (true, DescribeStep(toolResult));
+        // Record the full tool input and output (no summary, no truncation) to SystemLog at [Debug].
+        toolIoLogger.Log(new ToolIoLogRecord
+        {
+            RequestId = chatRequestId,
+            ToolRequestId = toolRequestId,
+            Tool = request.Tool,
+            Arguments = request.Arguments,
+            Result = toolResult.Result,
+            Ok = toolResult.Ok,
+            Error = toolResult.ErrorMessage,
+            StartedAt = startedAt,
+            DurationMs = (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds
+        });
+
+        return toolResult;
     }
 
     /// <summary>
@@ -435,6 +574,84 @@ public sealed class ChatService
         conversationLogStore.AppendToolCall(
             projectRoot,
             ConversationToolCallRecord.Create(requestId, sequence, toolResult, DateTimeOffset.UtcNow));
+    }
+
+    /// <summary>
+    /// Records one actual LLM provider call (the exact injected prompt and the raw response) to the diagnostic logger.
+    /// </summary>
+    /// <param name="requestId">The conversation request identifier (or compression request identifier).</param>
+    /// <param name="purpose">The call purpose ("chat" or "compression").</param>
+    /// <param name="turn">The zero-based turn index within the agent loop.</param>
+    /// <param name="preparedRequest">The prepared request (provides provider and model).</param>
+    /// <param name="stream">Whether the call was a streaming call.</param>
+    /// <param name="messages">The snapshot of messages sent to the model.</param>
+    /// <param name="response">The raw model response (an empty string is recorded verbatim).</param>
+    /// <param name="startedAt">The time the call started.</param>
+    /// <param name="error">The error message when the call failed, or null on success.</param>
+    private void LogLlmCall(
+        string requestId,
+        string purpose,
+        int turn,
+        PreparedChatRequest preparedRequest,
+        bool stream,
+        IReadOnlyList<LlmRequestLogMessage> messages,
+        string response,
+        DateTimeOffset startedAt,
+        string? error)
+    {
+        string safeResponse = response ?? string.Empty;
+        llmRequestLogger.Log(new LlmRequestLogRecord
+        {
+            RequestId = requestId,
+            Purpose = purpose,
+            Turn = turn,
+            Provider = preparedRequest.Settings.Name,
+            Model = preparedRequest.Request.Model,
+            Stream = stream,
+            Messages = messages,
+            Response = safeResponse,
+            ResponseChars = safeResponse.Length,
+            StartedAt = startedAt,
+            DurationMs = (DateTimeOffset.UtcNow - startedAt).TotalMilliseconds,
+            Error = error ?? string.Empty
+        });
+    }
+
+    /// <summary>
+    /// Copies the current messages into an immutable snapshot for logging (so later mutation of the
+    /// request's message list does not change what was recorded).
+    /// </summary>
+    /// <param name="messages">The messages to snapshot.</param>
+    /// <returns>The message snapshot.</returns>
+    private static IReadOnlyList<LlmRequestLogMessage> SnapshotMessages(IReadOnlyList<ChatMessage> messages)
+    {
+        List<LlmRequestLogMessage> snapshot = new List<LlmRequestLogMessage>(messages.Count);
+
+        foreach (ChatMessage message in messages)
+        {
+            snapshot.Add(new LlmRequestLogMessage
+            {
+                Role = message.Role,
+                Content = message.Content
+            });
+        }
+
+        return snapshot;
+    }
+
+    /// <summary>
+    /// Builds a short label describing a tool batch (one step label, or a count and tool names for many).
+    /// </summary>
+    /// <param name="results">The batch tool results.</param>
+    /// <returns>The batch label.</returns>
+    private static string DescribeBatch(IReadOnlyList<AgentToolResult> results)
+    {
+        if (results.Count == 1)
+        {
+            return DescribeStep(results[0]);
+        }
+
+        return $"도구 {results.Count}개 실행: " + string.Join(", ", results.Select(result => result.Tool));
     }
 
     /// <summary>
@@ -511,7 +728,7 @@ public sealed class ChatService
             request.Messages.Insert(request.Messages.Count - 1, new ChatMessage
             {
                 Role = "system",
-                Content = ToolInstruction
+                Content = ResolveToolInstruction(projectRoot)
             });
         }
 
@@ -523,6 +740,19 @@ public sealed class ChatService
             compressionRequestId,
             context.ContextPackage,
             longTerm);
+    }
+
+    /// <summary>
+    /// Resolves the in-chat tool instruction from the prompt store (chat_tool_instruction key),
+    /// falling back to the built-in default when no store is configured or the key is empty.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The tool instruction text to inject.</returns>
+    private string ResolveToolInstruction(string projectRoot)
+    {
+        IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        return ResolvePrompt(prompts, PromptKeys.ChatToolInstruction, DefaultChatToolInstruction);
     }
 
     /// <summary>
@@ -631,9 +861,13 @@ public sealed class ChatService
     {
         string previousRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId;
         string compressionRule = rollingContextStore.LoadCompressionRule(projectRoot);
-        string compressionPrompt = BuildCompressionPrompt(projectRoot, preparedRequest, userMessage, assistantMessage);
+        IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
+            ?? new Dictionary<string, string>(StringComparer.Ordinal);
+        string compressionPrompt = BuildCompressionPrompt(projectRoot, preparedRequest, userMessage, assistantMessage, prompts);
         IReadOnlyList<string> activeCriteria = preparedRequest.ContextPackage.ActiveCriteria;
-        string activeCriteriaMessage = BuildActiveCriteriaMessage(activeCriteria);
+        string activeCriteriaMessage = BuildActiveCriteriaMessage(
+            activeCriteria,
+            ResolvePrompt(prompts, PromptKeys.CompressionCriteriaIntro, DefaultCompressionCriteriaIntro));
         List<ChatMessage> compressionMessages = [];
 
         // Always send active criteria with the compression request.
@@ -671,6 +905,9 @@ public sealed class ChatService
                 activeCriteria));
         onCompressionRequestReady?.Invoke(CreateCompressionPreviewResponse(preparedRequest, compressionRequest));
 
+        DateTimeOffset compressionStartedAt = DateTimeOffset.UtcNow;
+        IReadOnlyList<LlmRequestLogMessage> compressionSentMessages = SnapshotMessages(compressionRequest.Messages);
+
         try
         {
             string compressionContent = await SendCompressionAsync(
@@ -678,6 +915,16 @@ public sealed class ChatService
                 compressionRequest,
                 cancellationToken,
                 onCompressionChunk);
+            LogLlmCall(
+                preparedRequest.CompressionRequestId,
+                "compression",
+                0,
+                preparedRequest,
+                onCompressionChunk is not null,
+                compressionSentMessages,
+                compressionContent,
+                compressionStartedAt,
+                null);
             RollingContextSummary summary = rollingContextStore.SaveCompleted(
                 projectRoot,
                 preparedRequest.RequestId,
@@ -708,6 +955,16 @@ public sealed class ChatService
         }
         catch (Exception ex)
         {
+            LogLlmCall(
+                preparedRequest.CompressionRequestId,
+                "compression",
+                0,
+                preparedRequest,
+                onCompressionChunk is not null,
+                compressionSentMessages,
+                string.Empty,
+                compressionStartedAt,
+                ex.Message);
             RollingContextSummary failedSummary = rollingContextStore.SaveFailed(
                 projectRoot,
                 preparedRequest.RequestId,
@@ -818,58 +1075,62 @@ public sealed class ChatService
     /// <param name="preparedRequest">The prepared request.</param>
     /// <param name="userMessage">The current user message.</param>
     /// <param name="assistantMessage">The current assistant message.</param>
+    /// <param name="prompts">The loaded prompt templates.</param>
     /// <returns>The compression prompt.</returns>
     private string BuildCompressionPrompt(
         string projectRoot,
         PreparedChatRequest preparedRequest,
         string userMessage,
-        string assistantMessage)
+        string assistantMessage,
+        IReadOnlyDictionary<string, string> prompts)
     {
         if (string.IsNullOrWhiteSpace(preparedRequest.ContextPackage.RollingContextSummary))
         {
-            return BuildBootstrapCompressionPrompt(projectRoot);
+            return BuildBootstrapCompressionPrompt(projectRoot, prompts);
         }
 
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("[이전 롤링 맥락 요약]");
-        builder.AppendLine(preparedRequest.ContextPackage.RollingContextSummary);
-        builder.AppendLine();
-        builder.AppendLine("[현재 사용자 메시지]");
-        builder.AppendLine(userMessage);
-        builder.AppendLine();
-        builder.AppendLine("[현재 AI 응답]");
-        builder.AppendLine(assistantMessage);
-        builder.AppendLine();
-        builder.AppendLine("[작업]");
-        builder.AppendLine("위 내용을 병합하여 다음 요청에 사용할 롤링 맥락 요약을 갱신하라.");
-        return builder.ToString();
+        return ResolvePrompt(prompts, PromptKeys.CompressionMerge, DefaultCompressionMerge)
+            .Replace("{previous_summary}", preparedRequest.ContextPackage.RollingContextSummary)
+            .Replace("{user_message}", userMessage)
+            .Replace("{assistant_message}", assistantMessage);
+    }
+
+    /// <summary>
+    /// Resolves a prompt template, falling back to a built-in default when missing or empty.
+    /// </summary>
+    /// <param name="prompts">The loaded prompt templates.</param>
+    /// <param name="key">The prompt key.</param>
+    /// <param name="fallback">The built-in fallback text.</param>
+    /// <returns>The resolved prompt text.</returns>
+    private static string ResolvePrompt(IReadOnlyDictionary<string, string> prompts, string key, string fallback)
+    {
+        return prompts.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value) ? value : fallback;
     }
 
     /// <summary>
     /// Builds the first compression prompt from the accumulated raw conversation log.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
+    /// <param name="prompts">The loaded prompt templates.</param>
     /// <returns>The bootstrap compression prompt.</returns>
-    private string BuildBootstrapCompressionPrompt(string projectRoot)
+    private string BuildBootstrapCompressionPrompt(string projectRoot, IReadOnlyDictionary<string, string> prompts)
     {
         IReadOnlyList<ConversationMessageRecord> messages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
-        StringBuilder builder = new StringBuilder();
-        builder.AppendLine("[원본 대화 로그]");
+        StringBuilder logBuilder = new StringBuilder();
 
         foreach (ConversationMessageRecord message in messages)
         {
-            builder.Append('[');
-            builder.Append(message.CreatedAt.ToString("O"));
-            builder.Append("] ");
-            builder.Append(message.Role);
-            builder.Append(": ");
-            builder.AppendLine(message.Content);
-            builder.AppendLine();
+            logBuilder.Append('[');
+            logBuilder.Append(message.CreatedAt.ToString("O"));
+            logBuilder.Append("] ");
+            logBuilder.Append(message.Role);
+            logBuilder.Append(": ");
+            logBuilder.AppendLine(message.Content);
+            logBuilder.AppendLine();
         }
 
-        builder.AppendLine("[작업]");
-        builder.AppendLine("위 전체 원본 대화 로그를 다음 요청에 사용할 롤링 맥락 요약으로 압축하라.");
-        return builder.ToString();
+        return ResolvePrompt(prompts, PromptKeys.CompressionBootstrap, DefaultCompressionBootstrap)
+            .Replace("{conversation_log}", logBuilder.ToString());
     }
 
     /// <summary>
@@ -906,8 +1167,9 @@ public sealed class ChatService
     /// Builds the active criteria system message.
     /// </summary>
     /// <param name="activeCriteria">The active criteria.</param>
+    /// <param name="intro">The intro line resolved from the prompt store.</param>
     /// <returns>The active criteria system message.</returns>
-    private static string BuildActiveCriteriaMessage(IReadOnlyList<string> activeCriteria)
+    private static string BuildActiveCriteriaMessage(IReadOnlyList<string> activeCriteria, string intro)
     {
         if (activeCriteria.Count == 0)
         {
@@ -915,7 +1177,7 @@ public sealed class ChatService
         }
 
         StringBuilder builder = new StringBuilder();
-        builder.AppendLine("다음 활성 프로젝트 기준을 따른다.");
+        builder.AppendLine(intro);
 
         foreach (string criterion in activeCriteria)
         {

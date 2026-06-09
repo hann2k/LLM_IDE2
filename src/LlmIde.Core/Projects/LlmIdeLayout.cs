@@ -56,6 +56,11 @@ public static class LlmIdeLayout
     public const string ImportanceRuleFileName = "importance-rule.md";
 
     /// <summary>
+    /// Gets the combined prompt templates file name (key to instruction text).
+    /// </summary>
+    public const string PromptsFileName = "prompts.json";
+
+    /// <summary>
     /// Gets the context policy file name.
     /// </summary>
     public const string ContextPolicyFileName = "context-policy.json";

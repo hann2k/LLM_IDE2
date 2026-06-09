@@ -112,8 +112,15 @@ public sealed class WebSearchTool : IAgentTool
 
         try
         {
-            string url = SearchEndpoint + "?q=" + Uri.EscapeDataString(query);
-            using HttpRequestMessage httpRequest = new HttpRequestMessage(HttpMethod.Get, url);
+            // The DuckDuckGo HTML endpoint blocks GET (returns a 202 challenge page with no results);
+            // only a form-urlencoded POST returns the actual result markup.
+            using HttpRequestMessage httpRequest = new HttpRequestMessage(HttpMethod.Post, SearchEndpoint)
+            {
+                Content = new FormUrlEncodedContent(
+                [
+                    new KeyValuePair<string, string>("q", query)
+                ])
+            };
 
             // Some search frontends require a browser-like user agent.
             httpRequest.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0 (compatible; LlmIde/1.0)");

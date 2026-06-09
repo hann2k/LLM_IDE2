@@ -10,11 +10,13 @@ using System.Windows.Input;
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Conversations;
+using LlmIde.Core.Diagnostics;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using LlmIde.Infrastructure.Agents;
 using LlmIde.Infrastructure.Artifacts;
 using LlmIde.Infrastructure.Conversations;
+using LlmIde.Infrastructure.Diagnostics;
 using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
@@ -109,6 +111,7 @@ public partial class MainWindow : Window
         criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
+        FilePromptStore promptStore = new FilePromptStore(ideProgramRoot);
         ContextBuilder contextBuilder = new ContextBuilder(
             criteriaService,
             projectStateService,
@@ -116,7 +119,8 @@ public partial class MainWindow : Window
             new FileSystemRuleStore(),
             new FileArtifactRuleStore(),
             new FileImportanceRuleStore(ideProgramRoot),
-            artifactService);
+            artifactService,
+            promptStore);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
         conversationLogStore = new CompositeConversationLogStore(
         [
@@ -132,6 +136,8 @@ public partial class MainWindow : Window
             Timeout = TimeSpan.FromSeconds(15)
         };
         agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient);
+        // Records every actual LLM call (injected prompt + raw response) via the supervisor-supplied Framework.Common file logger.
+        ILlmRequestLogger llmRequestLogger = new FrameworkCommonLlmRequestLogger(Path.Combine(ideProgramRoot, "Log"));
         chatService = new ChatService(
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
@@ -143,7 +149,10 @@ public partial class MainWindow : Window
             rollingContextStore,
             artifactService,
             projectStore,
-            agentToolHost);
+            agentToolHost,
+            llmRequestLogger,
+            promptStore,
+            new FrameworkCommonToolIoLogger(Path.Combine(ideProgramRoot, "Log")));
 
         DataContext = viewModel;
     }
@@ -901,7 +910,8 @@ public partial class MainWindow : Window
             ImportanceWeight = 0,
             CreatedAtText = ConversationLogReader.FormatTimestamp(sentAt),
             UserContent = userText,
-            AssistantContent = string.Empty
+            AssistantContent = string.Empty,
+            StatusText = "답변중"
         };
         viewModel.Conversations.Add(row);
         ConversationGrid.ScrollIntoView(row);
@@ -956,6 +966,9 @@ public partial class MainWindow : Window
         // Artifact blocks are separated out and replaced with their extracted name.
         row.AssistantContent = ArtifactTagParser.ReplaceArtifactsWithTitles(response.Content);
         row.ImportanceWeight = response.ImportanceWeight;
+
+        // An empty final answer means the model returned nothing (e.g. after tool use); surface it explicitly.
+        row.StatusText = string.IsNullOrWhiteSpace(response.Content) ? "답변완료 · 빈 응답" : "답변완료";
         ConversationGrid.ScrollIntoView(row);
     }
 
@@ -999,6 +1012,10 @@ public partial class MainWindow : Window
         {
             EnsureChatInputWindow();
             chatInputWindow!.RestoreForRetry(text);
+        }
+        else
+        {
+            row.StatusText = "실패";
         }
 
         System.Windows.MessageBox.Show(this, ex.Message, "전송 오류", MessageBoxButton.OK, MessageBoxImage.Error);
@@ -1422,6 +1439,11 @@ public sealed class ConversationListItem : INotifyPropertyChanged
     private string assistantContent = string.Empty;
 
     /// <summary>
+    /// The response status text ("답변중" while streaming, "답변완료" when done).
+    /// </summary>
+    private string statusText = "답변완료";
+
+    /// <summary>
     /// Occurs when a bindable property changes.
     /// </summary>
     public event PropertyChangedEventHandler? PropertyChanged;
@@ -1481,6 +1503,28 @@ public sealed class ConversationListItem : INotifyPropertyChanged
             }
 
             assistantContent = value;
+            OnPropertyChanged();
+        }
+    }
+
+    /// <summary>
+    /// Gets or sets the response status text shown in the LLM response column ("답변중" / "답변완료").
+    /// </summary>
+    public string StatusText
+    {
+        get
+        {
+            return statusText;
+        }
+
+        set
+        {
+            if (statusText == value)
+            {
+                return;
+            }
+
+            statusText = value;
             OnPropertyChanged();
         }
     }
