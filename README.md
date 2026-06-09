@@ -131,6 +131,82 @@ Instead, it continuously structures the current state and next actions so that u
 
 ---
 
+# LLM IDE2 Documentation
+
+This directory contains internal design documents for LLM IDE2.
+
+Most documents are currently written in Korean because the project is being actively developed by the author. English summaries will be added gradually as the project stabilizes.
+
+## Documents
+
+### 1. Product Principles
+
+Defines the product direction, core assumptions, and design boundaries of LLM IDE2.
+
+Key topics:
+
+* Stateful project runtime for stateless LLM providers
+* IDE-owned project memory
+* Provider independence
+* Human-in-the-loop workflow
+* Separation from coding agents
+
+### 2. Architecture Baseline
+
+Describes the baseline architecture of the project.
+
+Key topics:
+
+* Core-centered architecture
+* CLI and WPF sharing the same Core
+* Local `.llmide` project storage
+* Context Builder
+* Provider abstraction
+* Conversation, artifacts, and rolling context storage
+
+### 3. Development Roadmap
+
+Tracks the current development direction and planned implementation steps.
+
+Key topics:
+
+* Core / CLI MVP
+* WPF integration
+* Provider settings
+* Rolling context compression
+* Artifact extraction
+* Agent loop and tool isolation
+
+### 4. Change Decision Log
+
+Records important architectural and product decisions made during development.
+
+Key topics:
+
+* Why certain features were added, postponed, or removed
+* Why the project changed direction
+* Design trade-offs
+* Criteria updates
+
+### 5. Code Convention
+
+Defines development rules and coding conventions.
+
+Key topics:
+
+* Core logic must not be placed in the UI layer
+* API keys and personal project data must not be committed
+* Build and tests should pass before changes are finalized
+* Documentation should be updated when the architecture changes
+
+## Language Note
+
+The main README is written in English for public portfolio and international collaboration purposes.
+
+Detailed internal documents may remain in Korean while the project is under active development. This reflects the current development workflow, not a limitation of the architecture.
+
+---
+
 ## Design Principles
 
 ### 1. IDE Owns the Memory
