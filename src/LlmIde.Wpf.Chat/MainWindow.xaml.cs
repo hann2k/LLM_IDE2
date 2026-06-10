@@ -28,7 +28,7 @@ namespace LlmIde.Wpf.Chat;
 /// <summary>
 /// Provides the first WPF shell for the LLM IDE.
 /// </summary>
-public partial class MainWindow : Window
+public partial class MainWindow : WorkspaceWindowBase
 {
     /// <summary>
     /// The main window view model.
@@ -202,261 +202,6 @@ public partial class MainWindow : Window
         LoadProjectDetails(viewModel.SelectedProject);
     }
 
-    /// <summary>
-    /// Opens the project creation dialog and creates a project when accepted.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void CreateProjectMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Create)
-        {
-            Owner = this
-        };
-
-        bool? accepted = dialog.ShowDialog();
-
-        if (accepted != true)
-        {
-            return;
-        }
-
-        try
-        {
-            // pID is auto-generated; the chosen path is the start location and the folder name uses the pID.
-            string pId = projectRegistryService.NextProjectPId();
-            string startLocation = dialog.ProjectStartLocation;
-            string projectPath = string.IsNullOrWhiteSpace(startLocation)
-                ? string.Empty
-                : System.IO.Path.Combine(startLocation, pId);
-            ProjectInitializationRequest request = new ProjectInitializationRequest
-            {
-                PId = pId,
-                Name = dialog.ProjectName,
-                Path = projectPath,
-                HasExplicitPId = true,
-                HasExplicitName = !string.IsNullOrWhiteSpace(dialog.ProjectName)
-            };
-            ProjectInitializationResult result = projectInitializer.Initialize(request);
-
-            // Store the conversation type selected during project creation.
-            ProjectInfo projectInfo = result.ProjectInfo;
-            projectInfo.LongTermConversation = dialog.IsLongTermConversation;
-            projectStore.SaveProjectInfo(result.ProjectRoot, projectInfo);
-
-            // Store the API key entered during project creation.
-            string apiKey = dialog.ProjectApiKey;
-
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                ProviderSettingsDocument settings = providerSettingsStore.Load(result.ProjectRoot);
-                GetDefaultProviderSettings(settings).ApiKey = apiKey;
-                providerSettingsStore.Save(result.ProjectRoot, settings);
-            }
-
-            LoadProjects();
-            SelectProjectByRoot(result.ProjectRoot);
-            System.Windows.MessageBox.Show(this, "프로젝트를 생성했습니다.", "프로젝트 생성", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 생성 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Clones the selected project into a new project with an incremented pID.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void CloneProjectMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        ProjectListItem source = viewModel.SelectedProject;
-
-        try
-        {
-            string sourceRoot = System.IO.Path.GetFullPath(source.Path);
-            string startLocation = System.IO.Path.GetDirectoryName(sourceRoot) ?? AppContext.BaseDirectory;
-            string newPId = projectRegistryService.NextProjectPId();
-            string destinationRoot = System.IO.Path.Combine(startLocation, newPId);
-
-            // Release SQLite pools so the source database file can be copied.
-            SqliteConnection.ClearAllPools();
-            CopyDirectory(sourceRoot, destinationRoot);
-            projectRegistryService.Add(new ProjectRegistryEntry
-            {
-                PId = newPId,
-                Name = source.DisplayName,
-                Path = destinationRoot,
-                CreatedAt = DateTimeOffset.UtcNow
-            });
-            LoadProjects();
-            SelectProjectByPId(newPId);
-            System.Windows.MessageBox.Show(this, "프로젝트를 복제했습니다.", "프로젝트 복제", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 복제 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Recursively copies a directory and all of its contents.
-    /// </summary>
-    /// <param name="sourceDirectory">The source directory.</param>
-    /// <param name="destinationDirectory">The destination directory.</param>
-    private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
-    {
-        Directory.CreateDirectory(destinationDirectory);
-
-        foreach (string filePath in Directory.GetFiles(sourceDirectory))
-        {
-            string fileName = System.IO.Path.GetFileName(filePath);
-            File.Copy(filePath, System.IO.Path.Combine(destinationDirectory, fileName), true);
-        }
-
-        foreach (string directoryPath in Directory.GetDirectories(sourceDirectory))
-        {
-            string directoryName = System.IO.Path.GetFileName(directoryPath);
-            CopyDirectory(directoryPath, System.IO.Path.Combine(destinationDirectory, directoryName));
-        }
-    }
-
-    /// <summary>
-    /// Opens the project rename dialog and renames the selected project when accepted.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void RenameProjectMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        ProjectListItem selectedProject = viewModel.SelectedProject;
-        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Rename, selectedProject.DisplayName)
-        {
-            Owner = this
-        };
-
-        bool? accepted = dialog.ShowDialog();
-
-        if (accepted != true)
-        {
-            return;
-        }
-
-        try
-        {
-            projectRegistryService.Rename(selectedProject.PId, dialog.ProjectName);
-            LoadProjects();
-            SelectProjectByPId(selectedProject.PId);
-            System.Windows.MessageBox.Show(this, "프로젝트 이름을 변경했습니다.", "프로젝트 이름변경", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 이름변경 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Opens the project delete dialog and deletes the selected project when confirmed.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void DeleteProjectMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        ProjectListItem selectedProject = viewModel.SelectedProject;
-        bool hasApiKey = HasApiKey(selectedProject.Path);
-        ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Delete, selectedProject.DisplayName, hasApiKey)
-        {
-            Owner = this
-        };
-
-        bool? accepted = dialog.ShowDialog();
-
-        // Delete only when the confirm button was pressed and the API key checkbox is satisfied.
-        if (accepted != true || !dialog.IsApiKeyDeletionConfirmed())
-        {
-            System.Windows.MessageBox.Show(this, "프로젝트 삭제가 취소되었습니다.", "프로젝트 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
-            return;
-        }
-
-        try
-        {
-            DeleteProject(selectedProject);
-            LoadProjects();
-            System.Windows.MessageBox.Show(this, "프로젝트를 삭제했습니다.", "프로젝트 삭제", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "프로젝트 삭제 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Deletes a project folder and removes the registry entry.
-    /// </summary>
-    /// <param name="project">The project to delete.</param>
-    private void DeleteProject(ProjectListItem project)
-    {
-        string projectRoot = System.IO.Path.GetFullPath(project.Path);
-
-        if (Directory.Exists(projectRoot))
-        {
-            // Release SQLite connection pools so the conversation database file can be removed.
-            SqliteConnection.ClearAllPools();
-            Directory.Delete(projectRoot, true);
-        }
-
-        projectRegistryService.Remove(project.PId);
-    }
-
-    /// <summary>
-    /// Determines whether a project has any stored provider API key.
-    /// </summary>
-    /// <param name="projectRoot">The project root path.</param>
-    /// <returns>True when at least one API key exists.</returns>
-    private bool HasApiKey(string projectRoot)
-    {
-        ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
-        return settings.Providers.Any(provider => !string.IsNullOrWhiteSpace(provider.ApiKey));
-    }
-
-    /// <summary>
-    /// Opens the common LLM provider manager.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void LlmMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ProviderManagerDialog.Show(providerSettingsStore, this);
-    }
-
-    /// <summary>
-    /// Opens the read-only tool management window listing the tools the LLM can use.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ToolManagerMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        ToolManagerDialog dialog = new ToolManagerDialog(agentToolHost.ListTools())
-        {
-            Owner = this
-        };
-        dialog.ShowDialog();
-    }
 
     /// <summary>
     /// Reloads the conversation list from disk and scrolls to the latest conversation.
@@ -474,77 +219,38 @@ public partial class MainWindow : Window
         ScrollConversationsToEnd();
     }
 
-    /// <summary>
-    /// Opens the edit dialog for project criteria using one line per criterion.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void CriteriaMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
 
-        string projectRoot = viewModel.SelectedProject.Path;
-        string criteriaPath = Path.Combine(
-            System.IO.Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.CriteriaFileName);
+    /// <inheritdoc />
+    protected override ProjectRegistryService ProjectRegistry => projectRegistryService;
 
-        try
-        {
-            // Present one criterion title per line instead of the raw JSON file.
-            IReadOnlyList<Criterion> existing = criteriaService.List(projectRoot);
-            string initialText = string.Join(Environment.NewLine, existing.Select(criterion => criterion.Title));
-            EditDialog dialog = new EditDialog(criteriaPath, initialText)
-            {
-                Owner = this
-            };
+    /// <inheritdoc />
+    protected override ProjectInitializer Initializer => projectInitializer;
 
-            if (dialog.ShowDialog() != true)
-            {
-                return;
-            }
+    /// <inheritdoc />
+    protected override IProjectStore ProjectStore => projectStore;
 
-            // Each line becomes one criterion; the program rebuilds criteria.json.
-            string[] lines = dialog.EditedContent.Split('\n');
-            criteriaService.ReplaceFromLines(projectRoot, lines);
-            System.Windows.MessageBox.Show(this, "기준을 저장했습니다.", "기준 편집", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "기준 편집 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
+    /// <inheritdoc />
+    protected override IProviderSettingsStore ProviderSettingsStore => providerSettingsStore;
 
-    /// <summary>
-    /// Gets the default provider settings from a settings document.
-    /// </summary>
-    /// <param name="document">The provider settings document.</param>
-    /// <returns>The default provider settings.</returns>
-    private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument document)
-    {
-        ProviderSettings? settings = document.Providers.FirstOrDefault(provider =>
-            string.Equals(provider.Name, document.DefaultProvider, StringComparison.OrdinalIgnoreCase));
+    /// <inheritdoc />
+    protected override IAgentToolHost AgentToolHost => agentToolHost;
 
-        if (settings is not null)
-        {
-            return settings;
-        }
+    /// <inheritdoc />
+    protected override CriteriaService Criteria => criteriaService;
 
-        if (document.Providers.Count > 0)
-        {
-            return document.Providers[0];
-        }
+    /// <inheritdoc />
+    protected override WorkspaceProject? CurrentProject =>
+        viewModel.SelectedProject is { } project
+            ? new WorkspaceProject(project.Path, project.DisplayName, project.PId)
+            : null;
 
-        throw new InvalidOperationException("프로바이더 설정이 없습니다.");
-    }
+    /// <inheritdoc />
+    protected override void ReleaseProjectFileLocks() => SqliteConnection.ClearAllPools();
 
     /// <summary>
     /// Loads registered projects into the project list.
     /// </summary>
-    private void LoadProjects()
+    protected override void LoadProjects()
     {
         viewModel.Projects.Clear();
         IReadOnlyList<ProjectRegistryEntry> projects = projectRegistryService.List();
@@ -568,7 +274,7 @@ public partial class MainWindow : Window
     /// Selects a project by project root path.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
-    private void SelectProjectByRoot(string projectRoot)
+    protected override void SelectProjectByRoot(string projectRoot)
     {
         string normalizedProjectRoot = System.IO.Path.GetFullPath(projectRoot);
 
@@ -588,7 +294,7 @@ public partial class MainWindow : Window
     /// Selects a project by project identifier.
     /// </summary>
     /// <param name="pId">The project identifier.</param>
-    private void SelectProjectByPId(string pId)
+    protected override void SelectProjectByPId(string pId)
     {
         foreach (ProjectListItem project in viewModel.Projects)
         {

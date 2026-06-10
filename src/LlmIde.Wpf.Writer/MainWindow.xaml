@@ -1,4 +1,4 @@
-<Window x:Class="LlmIde.Wpf.Writer.MainWindow"
+<lib:WorkspaceWindowBase x:Class="LlmIde.Wpf.Writer.MainWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:local="clr-namespace:LlmIde.Wpf.Writer"
@@ -11,12 +11,12 @@
         Background="White"
         FontFamily="Malgun Gothic"
         Loaded="Window_Loaded">
-    <Window.CommandBindings>
+    <lib:WorkspaceWindowBase.CommandBindings>
         <CommandBinding Command="Save"
                         CanExecute="SaveCommand_CanExecute"
                         Executed="SaveCommand_Executed" />
-    </Window.CommandBindings>
-    <Window.Resources>
+    </lib:WorkspaceWindowBase.CommandBindings>
+    <lib:WorkspaceWindowBase.Resources>
         <SolidColorBrush x:Key="GuideBlueBrush" Color="#4D8EDB" />
         <lib:ImportanceToDeleteVisibilityConverter x:Key="ImportanceToDeleteVisibilityConverter" />
         <local:WidthFractionConverter x:Key="WidthFractionConverter" />
@@ -86,7 +86,7 @@
                 </Trigger>
             </Style.Triggers>
         </Style>
-    </Window.Resources>
+    </lib:WorkspaceWindowBase.Resources>
 
     <Grid>
         <Grid.RowDefinitions>
@@ -566,4 +566,4 @@
             </Border>
         </Grid>
     </Grid>
-</Window>
+</lib:WorkspaceWindowBase>
