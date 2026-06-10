@@ -90,7 +90,8 @@ public static class Program
             ConversationDeleteRemovesTurnAndMessages,
             ManualConversationIsStoredAsCompletedTurn,
             UpdateAssistantMessageContentReplacesContent,
-            MarkdownSelectionMatchesAcrossMarkers
+            MarkdownSelectionMatchesAcrossMarkers,
+            ImportanceParserHandlesFencedAndUnclosedTag
         ];
 
         foreach (Action test in tests)
@@ -1591,6 +1592,25 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies the importance parser tolerates the tag wrapped in a code fence and a missing closing tag,
+    /// stripping the whole marker from the saved content.
+    /// </summary>
+    private static void ImportanceParserHandlesFencedAndUnclosedTag()
+    {
+        // The reported bug: tag inside a ```text fence with no closing tag.
+        var fenced = LlmIde.Core.Conversations.ConversationImportanceParser.Parse(
+            "직전 대화를 본문에 반영했다.\n\n```text\n<llmide_importance_weight>1\n```");
+        AssertEqual(1, fenced.ImportanceWeight, "Fenced unclosed tag should still yield the weight.");
+        AssertEqual("직전 대화를 본문에 반영했다.", fenced.Content, "Fence and tag should be stripped from content.");
+
+        // A properly closed tag without a fence still works.
+        var closed = LlmIde.Core.Conversations.ConversationImportanceParser.Parse(
+            "답변 본문.\n<llmide_importance_weight>7</llmide_importance_weight>");
+        AssertEqual(7, closed.ImportanceWeight, "Closed tag should yield the weight.");
+        AssertEqual("답변 본문.", closed.Content, "Closed tag should be stripped from content.");
+    }
+
+    /// <summary>
     /// Verifies updating assistant message content replaces only the assistant message of the request.
     /// </summary>
     private static void UpdateAssistantMessageContentReplacesContent()
@@ -2486,9 +2506,11 @@ public sealed class TestWorkspace : IDisposable
         File.WriteAllText(Path.Combine(policyRoot, "artifact-rule.md"), """
             응답에 재사용 가능한 중요한 산출물 후보가 있으면 산출물 태그로 감싼다.
             """);
-        File.WriteAllText(Path.Combine(policyRoot, "importance-rule.md"), """
-            대화 중요도 측정 규칙
-            응답 마지막에 <llmide_importance_weight>N</llmide_importance_weight> 태그를 추가한다.
+        // The importance rule now lives in the common prompts.json under the "importance_rule" key.
+        File.WriteAllText(Path.Combine(policyRoot, "prompts.json"), """
+            {
+              "importance_rule": "대화 중요도 측정 규칙\n응답 마지막에 <llmide_importance_weight>N</llmide_importance_weight> 태그를 한 줄로 추가한다."
+            }
             """);
         File.WriteAllText(Path.Combine(policyRoot, "context-policy.json"), """
             {

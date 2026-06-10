@@ -64,7 +64,7 @@ public static partial class ConversationImportanceParser
     /// </summary>
     /// <returns>The regex.</returns>
     [GeneratedRegex(
-        @"\s*<llmide_importance_weight>\s*(?<weight>\d{1,2})\s*</llmide_importance_weight>\s*",
+        @"\s*(?:`{3}[a-zA-Z]*\s*)?<llmide_importance_weight>\s*(?<weight>\d{1,2})\s*(?:</llmide_importance_weight>)?\s*(?:`{3})?\s*",
         RegexOptions.IgnoreCase)]
     private static partial Regex ImportanceXmlRegex();
 

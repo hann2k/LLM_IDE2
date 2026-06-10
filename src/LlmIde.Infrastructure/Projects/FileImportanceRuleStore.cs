@@ -1,9 +1,10 @@
+using System.Text.Json;
 using LlmIde.Core.Projects;
 
 namespace LlmIde.Infrastructure.Projects;
 
 /// <summary>
-/// Loads importance scoring rules from project policy files.
+/// Loads the conversation importance scoring rule from the common prompts.json (importance_rule key).
 /// </summary>
 public sealed class FileImportanceRuleStore : IImportanceRuleStore
 {
@@ -28,8 +29,31 @@ public sealed class FileImportanceRuleStore : IImportanceRuleStore
     /// <returns>The importance scoring rule content.</returns>
     public string Load(string projectRoot)
     {
-        // Policies are common to all projects: read from the program's /policies folder.
-        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ImportanceRuleFileName);
-        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
+        // The importance rule now lives in the common prompts.json under the "importance_rule" key.
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.PromptsFileName);
+
+        if (!File.Exists(path))
+        {
+            return string.Empty;
+        }
+
+        try
+        {
+            string json = File.ReadAllText(path);
+            Dictionary<string, string>? prompts = JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+
+            if (prompts is not null
+                && prompts.TryGetValue(PromptKeys.ImportanceRule, out string? rule)
+                && !string.IsNullOrWhiteSpace(rule))
+            {
+                return rule;
+            }
+        }
+        catch (JsonException)
+        {
+            // A malformed prompts file must not break chat; importance simply defaults to 0.
+        }
+
+        return string.Empty;
     }
 }

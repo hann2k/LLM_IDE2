@@ -35,6 +35,11 @@ public static class PromptKeys
     public const string ChatBodyToolInstruction = "chat_body_tool_instruction";
 
     /// <summary>
+    /// The conversation importance scoring rule injected so the model appends an importance tag.
+    /// </summary>
+    public const string ImportanceRule = "importance_rule";
+
+    /// <summary>
     /// The intro line before the active project criteria in a chat request.
     /// </summary>
     public const string ContextCriteriaIntro = "context_criteria_intro";
