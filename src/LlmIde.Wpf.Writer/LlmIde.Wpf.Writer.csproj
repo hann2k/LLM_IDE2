@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="..\LlmIde.Wpf.Lib\LlmIde.Wpf.Lib.csproj" />
+    <ProjectReference Include="..\LlmIde.Core\LlmIde.Core.csproj" />
+    <ProjectReference Include="..\LlmIde.Infrastructure\LlmIde.Infrastructure.csproj" />
+    <!-- Build the CLI first so its output can be copied alongside the WPF app (shared program root). -->
+    <ProjectReference Include="..\LlmIde.Cli\LlmIde.Cli.csproj" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="..\..\policies\**\*" Link="policies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Markdig.Wpf" Version="0.5.0.1" />
+  </ItemGroup>
+
+  <!-- Copy the CLI runtime into the WPF output so 'llmide' shares the same program root and project registry. -->
+  <Target Name="CopyCliIntoWpfOutput" AfterTargets="Build">
+    <ItemGroup>
+      <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.dll" />
+      <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.exe" />
+      <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.runtimeconfig.json" />
+      <CliOutputFiles Include="$(MSBuildThisFileDirectory)..\..\bin\$(Configuration)\net10.0\llmide.deps.json" />
+    </ItemGroup>
+    <Copy SourceFiles="@(CliOutputFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" Condition="Exists('%(CliOutputFiles.Identity)')" />
+  </Target>
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+
+</Project>

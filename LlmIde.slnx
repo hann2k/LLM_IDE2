@@ -3,7 +3,9 @@
     <Project Path="src/LlmIde.Cli/LlmIde.Cli.csproj" />
     <Project Path="src/LlmIde.Core/LlmIde.Core.csproj" />
     <Project Path="src/LlmIde.Infrastructure/LlmIde.Infrastructure.csproj" />
-    <Project Path="src/LlmIde.Wpf/LlmIde.Wpf.csproj" />
+    <Project Path="src/LlmIde.Wpf.Chat/LlmIde.Wpf.Chat.csproj" />
+    <Project Path="src/LlmIde.Wpf.Lib/LlmIde.Wpf.Lib.csproj" />
+    <Project Path="src/LlmIde.Wpf.Writer/LlmIde.Wpf.Writer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/LlmIde.Tests/LlmIde.Tests.csproj" />
