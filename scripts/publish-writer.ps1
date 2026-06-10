@@ -19,7 +19,7 @@
   When set, also creates <OutDir>.zip for distribution.
 
 .EXAMPLE
-  pwsh scripts/publish-writer.ps1 -Zip
+  powershell -ExecutionPolicy Bypass -File scripts/publish-writer.ps1 -Zip
 #>
 param(
     [string]$Runtime = "win-x64",

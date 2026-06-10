@@ -9,9 +9,11 @@
 요구: Windows + .NET 10 SDK.
 
 ```powershell
-# 저장소 루트에서
-pwsh scripts/publish-writer.ps1 -Zip
+# 저장소 루트에서 (Windows PowerShell 5.1)
+powershell -ExecutionPolicy Bypass -File scripts/publish-writer.ps1 -Zip
 ```
+
+> PowerShell 7(`pwsh`)이 있으면 `pwsh -File scripts/publish-writer.ps1 -Zip`도 된다. 스크립트는 둘 다 호환.
 
 * 출력: `dist/LlmIde.Writer/` 폴더와 `dist/LlmIde.Writer.zip`.
 * self-contained 게시라 테스터 PC에 .NET 설치가 없어도 실행된다(폴더가 ~150MB).
