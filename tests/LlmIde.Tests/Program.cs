@@ -83,6 +83,7 @@ public static class Program
             ArtifactsListReturnsStoredArtifacts,
             ReadArtifactReturnsContent,
             ReadArtifactMissingFails,
+            ImageArtifactSavesAndReadArtifactReturnsMetadata,
             ChatServiceRunsToolThenAnswers,
             ChatServiceRunsToolBatchWithPartialFailure,
             WebSearchParsesResults,
@@ -1458,6 +1459,37 @@ public static class Program
         AssertTrue(result.Ok, "read_artifact should succeed.");
         ReadArtifactResult read = (ReadArtifactResult)result.Result!;
         AssertContains(read.Content, "내용 본문");
+    }
+
+    /// <summary>
+    /// Verifies an image file is stored as a binary image artifact and read_artifact returns
+    /// metadata (not binary bytes as text) for it.
+    /// </summary>
+    private static void ImageArtifactSavesAndReadArtifactReturnsMetadata()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        ArtifactService service = new ArtifactService(new FileArtifactStore());
+
+        // A minimal file with an image extension (bytes are irrelevant to the artifact store).
+        string sourceImage = Path.Combine(workspace.Root, "pasted.png");
+        File.WriteAllBytes(sourceImage, [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+
+        Artifact saved = service.SaveImage(workspace.Root, "그림", sourceImage);
+
+        AssertEqual("image", saved.Type, "Saved artifact type should be image.");
+        AssertTrue(saved.ContentPath.EndsWith(".png", StringComparison.Ordinal), "Image artifact should keep the .png extension.");
+        AssertTrue(ArtifactService.IsImage(saved), "Saved artifact should be recognized as an image.");
+        AssertTrue(File.Exists(service.GetContentFullPath(workspace.Root, saved)), "Image bytes should be copied into the artifacts directory.");
+
+        ReadArtifactTool tool = new ReadArtifactTool(service);
+        AgentToolResult result = tool.ExecuteAsync(CreateArtifactRequest(workspace.Root, saved.ArtifactId), CancellationToken.None)
+            .GetAwaiter()
+            .GetResult();
+
+        AssertTrue(result.Ok, "read_artifact should succeed for an image artifact.");
+        ReadArtifactResult read = (ReadArtifactResult)result.Result!;
+        AssertEqual("image", read.Type, "read_artifact should report the image type.");
+        AssertContains(read.Content, "이미지 아티팩트");
     }
 
     /// <summary>

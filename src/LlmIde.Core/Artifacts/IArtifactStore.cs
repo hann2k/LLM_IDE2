@@ -52,4 +52,23 @@ public interface IArtifactStore
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="artifactId">The artifact identifier.</param>
     void Remove(string projectRoot, string artifactId);
+
+    /// <summary>
+    /// Saves an image file as a binary (type="image") artifact, copying its bytes into the
+    /// artifacts directory and preserving the source extension.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="title">The artifact title (defaults to the source file name when empty).</param>
+    /// <param name="sourceImagePath">The absolute path of the source image file.</param>
+    /// <returns>The stored image artifact.</returns>
+    Artifact SaveImage(string projectRoot, string title, string sourceImagePath);
+
+    /// <summary>
+    /// Gets the absolute path of an artifact's content file (used to display images and to build
+    /// body image references).
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="artifact">The artifact metadata.</param>
+    /// <returns>The absolute content file path.</returns>
+    string GetContentFullPath(string projectRoot, Artifact artifact);
 }

@@ -61,7 +61,11 @@ public sealed class ReadArtifactTool : IAgentTool
         try
         {
             Artifact artifact = artifactService.Get(request.WorkingDirectory, artifactId);
-            string content = artifactService.ReadContent(request.WorkingDirectory, artifact);
+
+            // Image artifacts are binary; never read their bytes back as text. Return metadata only.
+            string content = ArtifactService.IsImage(artifact)
+                ? $"[이미지 아티팩트: {artifact.ContentPath}] 이미지 내용은 텍스트로 제공되지 않는다."
+                : artifactService.ReadContent(request.WorkingDirectory, artifact);
 
             ReadArtifactResult result = new ReadArtifactResult
             {

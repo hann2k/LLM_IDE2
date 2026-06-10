@@ -94,6 +94,39 @@ public sealed class ArtifactService
         artifactStore.Remove(projectRoot, artifactId);
     }
 
+    /// <summary>
+    /// Saves an image file as a binary (type="image") artifact.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="title">The artifact title (defaults to the source file name when empty).</param>
+    /// <param name="sourceImagePath">The absolute path of the source image file.</param>
+    /// <returns>The stored image artifact.</returns>
+    public Artifact SaveImage(string projectRoot, string title, string sourceImagePath)
+    {
+        return artifactStore.SaveImage(projectRoot, title, sourceImagePath);
+    }
+
+    /// <summary>
+    /// Gets the absolute path of an artifact's content file.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="artifact">The artifact metadata.</param>
+    /// <returns>The absolute content file path.</returns>
+    public string GetContentFullPath(string projectRoot, Artifact artifact)
+    {
+        return artifactStore.GetContentFullPath(projectRoot, artifact);
+    }
+
+    /// <summary>
+    /// Determines whether an artifact is a binary image.
+    /// </summary>
+    /// <param name="artifact">The artifact.</param>
+    /// <returns>True when the artifact type is "image".</returns>
+    public static bool IsImage(Artifact artifact)
+    {
+        return string.Equals(artifact.Type, "image", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void Validate(ArtifactCandidate candidate)
     {
         if (string.IsNullOrWhiteSpace(candidate.Title))

@@ -444,7 +444,7 @@ public partial class MainWindow : WorkspaceWindowBase
 
         foreach (Artifact artifact in artifactService.List(project.Path))
         {
-            viewModel.Artifacts.Add(new ArtifactListItem(artifact));
+            viewModel.Artifacts.Add(ToArtifactListItem(project.Path, artifact));
         }
 
         // After a project's conversations load, scroll to the latest one once.
@@ -1312,8 +1312,22 @@ public partial class MainWindow : WorkspaceWindowBase
 
         foreach (Artifact artifact in artifactService.List(projectRoot))
         {
-            viewModel.Artifacts.Add(new ArtifactListItem(artifact));
+            viewModel.Artifacts.Add(ToArtifactListItem(projectRoot, artifact));
         }
+    }
+
+    /// <summary>
+    /// Builds a list item for an artifact, resolving the absolute image path for image artifacts.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="artifact">The stored artifact.</param>
+    /// <returns>The artifact list item.</returns>
+    private ArtifactListItem ToArtifactListItem(string projectRoot, Artifact artifact)
+    {
+        string? imagePath = ArtifactService.IsImage(artifact)
+            ? artifactService.GetContentFullPath(projectRoot, artifact)
+            : null;
+        return new ArtifactListItem(artifact, imagePath);
     }
 
     /// <summary>
@@ -1567,6 +1581,13 @@ public partial class MainWindow : WorkspaceWindowBase
             return;
         }
 
+        // Image artifacts open in an image viewer, not the text artifact viewer.
+        if (item.IsImage && item.ImagePath is not null)
+        {
+            ImageViewerWindow.Show(item.Title, item.ImagePath, this);
+            return;
+        }
+
         try
         {
             string projectRoot = viewModel.SelectedProject.Path;
@@ -1588,6 +1609,191 @@ public partial class MainWindow : WorkspaceWindowBase
         {
             System.Windows.MessageBox.Show(this, ex.Message, "아티팩트 뷰어 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         }
+    }
+
+    /// <summary>The drag format that carries an artifact id from a card to the body editor.</summary>
+    private const string ArtifactDragFormat = "LlmIdeArtifactId";
+
+    /// <summary>The image file extensions accepted as image artifacts.</summary>
+    private static readonly string[] ImageExtensions =
+        [".png", ".jpg", ".jpeg", ".gif", ".bmp", ".webp", ".tif", ".tiff", ".ico"];
+
+    private System.Windows.Point artifactDragStartPoint;
+    private ArtifactListItem? artifactDragCandidate;
+
+    /// <summary>
+    /// Shows a copy cursor when image files are dragged over the artifact area.
+    /// </summary>
+    private void ArtifactArea_DragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        e.Effects = viewModel.SelectedProject is not null && HasImageFiles(e.Data)
+            ? System.Windows.DragDropEffects.Copy
+            : System.Windows.DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Adds dropped image files as image artifacts.
+    /// </summary>
+    private void ArtifactArea_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (viewModel.SelectedProject is null || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
+        {
+            return;
+        }
+
+        string projectRoot = viewModel.SelectedProject.Path;
+        string[] files = (string[])e.Data.GetData(System.Windows.DataFormats.FileDrop);
+        int added = 0;
+
+        try
+        {
+            foreach (string file in files)
+            {
+                if (IsImageFile(file))
+                {
+                    artifactService.SaveImage(projectRoot, string.Empty, file);
+                    added++;
+                }
+            }
+
+            if (added > 0)
+            {
+                ReloadArtifacts(projectRoot);
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "이미지 추가 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Records the potential start of an artifact-card drag.
+    /// </summary>
+    private void ArtifactCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+    {
+        artifactDragStartPoint = e.GetPosition(null);
+        artifactDragCandidate = (sender as FrameworkElement)?.DataContext as ArtifactListItem;
+    }
+
+    /// <summary>
+    /// Starts dragging an artifact card once the pointer moves past the drag threshold.
+    /// </summary>
+    private void ArtifactCard_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    {
+        if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed || artifactDragCandidate is null)
+        {
+            return;
+        }
+
+        System.Windows.Point current = e.GetPosition(null);
+
+        if (Math.Abs(current.X - artifactDragStartPoint.X) < System.Windows.SystemParameters.MinimumHorizontalDragDistance
+            && Math.Abs(current.Y - artifactDragStartPoint.Y) < System.Windows.SystemParameters.MinimumVerticalDragDistance)
+        {
+            return;
+        }
+
+        // The drag carries the artifact id; the body editor turns it into a markdown reference on drop.
+        System.Windows.DataObject data = new System.Windows.DataObject(ArtifactDragFormat, artifactDragCandidate.ArtifactId);
+        artifactDragCandidate = null;
+        System.Windows.DragDrop.DoDragDrop((System.Windows.DependencyObject)sender, data, System.Windows.DragDropEffects.Copy);
+    }
+
+    /// <summary>
+    /// Shows a copy cursor when an artifact is dragged over the editable body.
+    /// </summary>
+    private void BodyEditor_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
+    {
+        if (e.Data.GetDataPresent(ArtifactDragFormat) && viewModel.IsBodyEditable)
+        {
+            e.Effects = System.Windows.DragDropEffects.Copy;
+            e.Handled = true;
+        }
+    }
+
+    /// <summary>
+    /// Inserts a markdown reference (image for image artifacts) at the drop position in the body.
+    /// </summary>
+    private void BodyEditor_Drop(object sender, System.Windows.DragEventArgs e)
+    {
+        if (!e.Data.GetDataPresent(ArtifactDragFormat)
+            || viewModel.SelectedProject is null
+            || sender is not System.Windows.Controls.TextBox editor)
+        {
+            return;
+        }
+
+        string artifactId = (string)e.Data.GetData(ArtifactDragFormat);
+        string projectRoot = viewModel.SelectedProject.Path;
+
+        try
+        {
+            Artifact artifact = artifactService.Get(projectRoot, artifactId);
+            string reference = BuildArtifactReference(artifact);
+
+            // Insert at the drop position; fall back to the caret when the point maps nowhere.
+            int index = editor.GetCharacterIndexFromPoint(e.GetPosition(editor), true);
+
+            if (index < 0)
+            {
+                index = editor.CaretIndex;
+            }
+
+            string body = viewModel.BodyText ?? string.Empty;
+            index = Math.Clamp(index, 0, body.Length);
+            viewModel.BodyText = body.Insert(index, reference);
+            editor.CaretIndex = index + reference.Length;
+            e.Handled = true;
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "본문 삽입 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
+    /// Builds a project-relative markdown reference for an artifact (image syntax for images).
+    /// </summary>
+    private static string BuildArtifactReference(Artifact artifact)
+    {
+        // Body files live in the project root; reference the artifact via its project-relative path.
+        string relative = $"{LlmIdeLayout.MetadataDirectoryName}/{LlmIdeLayout.ArtifactsDirectoryName}/{artifact.ContentPath}";
+
+        return ArtifactService.IsImage(artifact)
+            ? $"![{artifact.Title}]({relative})"
+            : $"[{artifact.Title}]({relative})";
+    }
+
+    /// <summary>
+    /// Opens the body preview window (text + images rendered from markdown).
+    /// </summary>
+    private void BodyPreview_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        BodyPreviewWindow.Show(viewModel.BodyText ?? string.Empty, viewModel.SelectedProject.Path, this);
+    }
+
+    /// <summary>
+    /// Determines whether a drag payload contains at least one image file.
+    /// </summary>
+    private static bool HasImageFiles(System.Windows.IDataObject data)
+    {
+        return data.GetDataPresent(System.Windows.DataFormats.FileDrop)
+            && ((string[])data.GetData(System.Windows.DataFormats.FileDrop)).Any(IsImageFile);
+    }
+
+    /// <summary>
+    /// Determines whether a file path has an accepted image extension.
+    /// </summary>
+    private static bool IsImageFile(string path)
+    {
+        return ImageExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
     }
 
     /// <summary>
@@ -1929,12 +2135,14 @@ public sealed class ArtifactListItem
     /// Initializes a new instance of the <see cref="ArtifactListItem"/> class.
     /// </summary>
     /// <param name="artifact">The stored artifact.</param>
-    public ArtifactListItem(Artifact artifact)
+    /// <param name="imagePath">The absolute image path for image artifacts; null for text artifacts.</param>
+    public ArtifactListItem(Artifact artifact, string? imagePath = null)
     {
         ArtifactId = artifact.ArtifactId;
         Title = artifact.Title;
         Type = artifact.Type;
         SourceRequestId = artifact.SourceRequestId;
+        ImagePath = imagePath;
     }
 
     /// <summary>
@@ -1956,6 +2164,21 @@ public sealed class ArtifactListItem
     /// Gets the artifact type.
     /// </summary>
     public string Type { get; }
+
+    /// <summary>
+    /// Gets the absolute image path for image artifacts (null for text artifacts).
+    /// </summary>
+    public string? ImagePath { get; }
+
+    /// <summary>
+    /// Gets a value indicating whether this is an image artifact (card shows a thumbnail).
+    /// </summary>
+    public bool IsImage => ImagePath is not null;
+
+    /// <summary>
+    /// Gets a value indicating whether this is a text artifact (card shows source metadata).
+    /// </summary>
+    public bool IsTextArtifact => ImagePath is null;
 }
 
 /// <summary>

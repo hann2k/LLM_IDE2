@@ -103,6 +103,52 @@ public sealed class FileArtifactStore : IArtifactStore
         SaveIndex(projectRoot, artifacts);
     }
 
+    /// <inheritdoc />
+    public Artifact SaveImage(string projectRoot, string title, string sourceImagePath)
+    {
+        if (!File.Exists(sourceImagePath))
+        {
+            throw new InvalidOperationException($"이미지 파일을 찾을 수 없습니다: {sourceImagePath}");
+        }
+
+        List<Artifact> artifacts = LoadIndex(projectRoot);
+        DateTimeOffset now = DateTimeOffset.UtcNow;
+        string artifactId = $"art_{Guid.NewGuid():N}";
+
+        // Preserve the source image extension (the artifact's type is "image").
+        string extension = Path.GetExtension(sourceImagePath).ToLowerInvariant();
+
+        if (string.IsNullOrWhiteSpace(extension))
+        {
+            extension = ".png";
+        }
+
+        string fileName = $"{artifactId}{extension}";
+        Artifact artifact = new Artifact
+        {
+            ArtifactId = artifactId,
+            Title = string.IsNullOrWhiteSpace(title) ? Path.GetFileName(sourceImagePath) : title.Trim(),
+            Type = "image",
+            TargetPath = string.Empty,
+            ContentPath = fileName,
+            SourceRequestId = string.Empty,
+            CreatedAt = now,
+            UpdatedAt = now
+        };
+
+        EnsureArtifactsDirectory(projectRoot);
+        File.Copy(sourceImagePath, GetArtifactContentPath(projectRoot, fileName), true);
+        artifacts.Add(artifact);
+        SaveIndex(projectRoot, artifacts);
+        return artifact;
+    }
+
+    /// <inheritdoc />
+    public string GetContentFullPath(string projectRoot, Artifact artifact)
+    {
+        return GetArtifactContentPath(projectRoot, artifact.ContentPath);
+    }
+
     private static List<Artifact> LoadIndex(string projectRoot)
     {
         EnsureArtifactsDirectory(projectRoot);
