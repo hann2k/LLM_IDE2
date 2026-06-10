@@ -547,46 +547,6 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
-    /// Opens the artifact rule file in the edit dialog.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ArtifactRuleMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        EditPolicyFile(LlmIdeLayout.ArtifactRuleFileName);
-    }
-
-    /// <summary>
-    /// Opens the compression rule file in the edit dialog.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void CompressionRuleMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        EditPolicyFile(LlmIdeLayout.CompressionRuleFileName);
-    }
-
-    /// <summary>
-    /// Opens the system rule file in the edit dialog.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void SystemRuleMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        EditPolicyFile(LlmIdeLayout.SystemRuleFileName);
-    }
-
-    /// <summary>
-    /// Opens the importance rule file in the edit dialog.
-    /// </summary>
-    /// <param name="sender">The event sender.</param>
-    /// <param name="e">The event arguments.</param>
-    private void ImportanceRuleMenuItem_Click(object sender, RoutedEventArgs e)
-    {
-        EditPolicyFile(LlmIdeLayout.ImportanceRuleFileName);
-    }
-
-    /// <summary>
     /// Opens the read-only tool management window listing the tools the LLM can use.
     /// </summary>
     /// <param name="sender">The event sender.</param>
@@ -641,54 +601,6 @@ public partial class MainWindow : Window
         catch (Exception ex)
         {
             System.Windows.MessageBox.Show(this, ex.Message, "기준 편집 오류", MessageBoxButton.OK, MessageBoxImage.Error);
-        }
-    }
-
-    /// <summary>
-    /// Opens the edit dialog for a project policy file.
-    /// </summary>
-    /// <param name="policyFileName">The policy file name under the policies folder.</param>
-    private void EditPolicyFile(string policyFileName)
-    {
-        if (viewModel.SelectedProject is null)
-        {
-            return;
-        }
-
-        string policyPath = Path.Combine(
-            System.IO.Path.GetFullPath(viewModel.SelectedProject.Path),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.PoliciesDirectoryName,
-            policyFileName);
-        EditTextFile(policyPath);
-    }
-
-    /// <summary>
-    /// Opens the edit dialog for a text file and saves changes.
-    /// </summary>
-    /// <param name="filePath">The file path to edit.</param>
-    private void EditTextFile(string filePath)
-    {
-        try
-        {
-            string content = File.Exists(filePath) ? File.ReadAllText(filePath) : string.Empty;
-            bool markdownPreview = filePath.EndsWith(".md", StringComparison.OrdinalIgnoreCase);
-            EditDialog dialog = new EditDialog(filePath, content, markdownPreview)
-            {
-                Owner = this
-            };
-
-            if (dialog.ShowDialog() != true)
-            {
-                return;
-            }
-
-            File.WriteAllText(filePath, dialog.EditedContent);
-            System.Windows.MessageBox.Show(this, "저장했습니다.", "편집", MessageBoxButton.OK, MessageBoxImage.Information);
-        }
-        catch (Exception ex)
-        {
-            System.Windows.MessageBox.Show(this, ex.Message, "편집 오류", MessageBoxButton.OK, MessageBoxImage.Error);
         }
     }
 

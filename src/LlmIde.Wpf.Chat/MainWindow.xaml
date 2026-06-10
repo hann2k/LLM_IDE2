@@ -110,18 +110,6 @@
                     <MenuItem Header="기준"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="CriteriaMenuItem_Click" />
-                    <MenuItem Header="아티팩트 룰"
-                              IsEnabled="{Binding HasSelectedProject}"
-                              Click="ArtifactRuleMenuItem_Click" />
-                    <MenuItem Header="압축 룰"
-                              IsEnabled="{Binding HasSelectedProject}"
-                              Click="CompressionRuleMenuItem_Click" />
-                    <MenuItem Header="시스템 룰"
-                              IsEnabled="{Binding HasSelectedProject}"
-                              Click="SystemRuleMenuItem_Click" />
-                    <MenuItem Header="중요도 룰"
-                              IsEnabled="{Binding HasSelectedProject}"
-                              Click="ImportanceRuleMenuItem_Click" />
                 </MenuItem>
                 <MenuItem Header="도구관리"
                           Click="ToolManagerMenuItem_Click" />
