@@ -108,6 +108,19 @@ public sealed class ChatService
         "도구가 정말 필요 없는 일반 대화나 의견 요청이면 평소대로 바로 답하라.";
 
     /// <summary>
+    /// The fallback body-editing instruction appended only when the writing body tools are registered
+    /// (supervisor-editable text lives under the <c>chat_body_tool_instruction</c> key in policies/prompts.json).
+    /// </summary>
+    private const string DefaultChatBodyToolInstruction =
+        "[본문 편집 도구 — 글쓰기 작업실]\n" +
+        "get_body(현재 편집창 본문 조회), propose_body_edit(수정 본문 제안) 도구도 쓸 수 있다.\n" +
+        "사용자가 본문/문서를 고치거나, 새로 쓰거나, 어떤 내용을 본문에 반영해 달라고 하면(예: \"본문 고쳐줘\", \"대화 내용으로 본문 작성해줘\", \"이 내용 본문에 넣어줘\") 새 본문을 말로만 답하지 마라. 반드시 아래 도구 흐름을 따르라.\n" +
+        "1) 먼저 get_body로 현재 본문을 받는다: {\"type\":\"tool_request\",\"requests\":[{\"tool\":\"get_body\",\"arguments\":{}}]}\n" +
+        "2) 그 다음 propose_body_edit를 호출하고 body 인자에 수정된 본문 전문(일부가 아니라 전체)을 담는다: {\"type\":\"tool_request\",\"requests\":[{\"tool\":\"propose_body_edit\",\"arguments\":{\"body\":\"<수정된 본문 전체>\"}}]}\n" +
+        "본문은 파일이 아니라 편집창 내용이며, 실제 반영은 사용자가 [변경/취소]로 승인한다. 너는 제안만 한다.\n" +
+        "본문 수정·작성·반영 요청은 \"일반 대화\"가 아니므로 위 도구 흐름을 건너뛰고 말로만 답하지 마라.";
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
     /// </summary>
     /// <param name="providerSettingsStore">The provider settings store.</param>
@@ -783,8 +796,23 @@ public sealed class ChatService
     {
         IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
-        return ResolvePrompt(prompts, PromptKeys.ChatToolInstruction, DefaultChatToolInstruction);
+        string instruction = ResolvePrompt(prompts, PromptKeys.ChatToolInstruction, DefaultChatToolInstruction);
+
+        // When the writing body tools are registered (Writer app), the read-only tool list above does not
+        // mention them, so the model treats "본문 고쳐줘" as a normal chat and just narrates a rewrite.
+        // Append an explicit directive that forces the get_body → propose_body_edit tool flow.
+        if (HasBodyTools)
+        {
+            instruction += "\n" + ResolvePrompt(prompts, PromptKeys.ChatBodyToolInstruction, DefaultChatBodyToolInstruction);
+        }
+
+        return instruction;
     }
+
+    /// <summary>
+    /// Gets a value indicating whether the writing body-editing tools are registered on the tool host.
+    /// </summary>
+    private bool HasBodyTools => toolHost.ListTools().Any(descriptor => descriptor.Name == "propose_body_edit");
 
     /// <summary>
     /// Builds the system message that provides the current local date and time to the model.

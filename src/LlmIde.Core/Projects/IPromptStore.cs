@@ -29,6 +29,12 @@ public static class PromptKeys
     public const string ChatToolInstruction = "chat_tool_instruction";
 
     /// <summary>
+    /// The extra in-chat instruction appended only when the writing body tools
+    /// (get_body / propose_body_edit) are registered, forcing the body-edit tool flow.
+    /// </summary>
+    public const string ChatBodyToolInstruction = "chat_body_tool_instruction";
+
+    /// <summary>
     /// The intro line before the active project criteria in a chat request.
     /// </summary>
     public const string ContextCriteriaIntro = "context_criteria_intro";
