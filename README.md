@@ -1,48 +1,48 @@
 # LLM IDE2
 
-> **A stateful project runtime for stateless LLM providers.**  
-> Stateless LLM 위에 Stateful Project Runtime을 얹어, 모델이 바뀌어도 프로젝트의 의도와 맥락이 끊기지 않게 만드는 로컬 LLM 작업 환경.
+> **A stateful project runtime for stateless LLM providers.**
+> LLM IDE2 adds a stateful project runtime on top of stateless LLM providers, allowing project intent, decisions, context, and outputs to persist even when the underlying model changes.
 
-LLM IDE2는 또 하나의 코딩 에이전트나 코드 편집기가 아니다.
+LLM IDE2 is not another coding agent or code editor.
 
-이 프로젝트의 목적은 DeepSeek, Gemini, GPT, Claude 같은 서로 다른 LLM을 언제든 교체하더라도, 프로젝트의 기준, 결정, 상태, 산출물, 대화 맥락이 IDE 안에 남아 계속 이어지도록 하는 것이다.
+The goal of this project is to preserve a project's criteria, decisions, state, artifacts, and conversation context inside the IDE, even when switching between different LLM providers such as DeepSeek, Gemini, GPT, Claude, or other models.
 
-모델은 바뀔 수 있다.  
-Provider는 교체될 수 있다.  
-하지만 프로젝트의 기억은 IDE가 보존한다.
+Models can change.
+Providers can be replaced.
+But the project memory should remain inside the IDE.
 
 ---
 
 ## Why LLM IDE2 Exists
 
-LLM은 강력하지만 기본적으로 요청 단위로 동작한다.
+LLMs are powerful, but they are fundamentally request-based.
 
-한 세션에서는 잘 이해하던 모델도 다음 세션에서는 이전 결정을 잊고, 다른 Provider로 바꾸면 말투, 추론 방식, 코드 스타일, 작업 판단이 달라진다. 긴 대화를 계속 붙여넣는 방식은 토큰을 낭비하고, 중요한 결정이 맥락 중간에서 사라지기 쉽다.
+A model may understand a project well in one session, then forget previous decisions in the next session. When switching to another provider, the tone, reasoning style, coding style, and task judgment may also change. Copying long conversation history into every new session wastes tokens, and important decisions can easily disappear somewhere in the middle of the context.
 
-현재 많은 도구는 LLM에게 코드를 더 잘 쓰게 만드는 데 집중한다.  
-LLM IDE2는 다른 문제를 본다.
+Many current tools focus on helping LLMs write code better.
+LLM IDE2 focuses on a different problem.
 
-**코드를 누가 쓰느냐보다, 프로젝트의 의도와 결정이 어떻게 유지되는가가 더 중요하다.**
+**More important than who writes the code is how the project's intent and decisions are preserved.**
 
-LLM IDE2는 다음 질문에서 출발한다.
+LLM IDE2 starts from the following questions:
 
-- LLM이 stateless라면, 프로젝트의 기억은 어디에 있어야 하는가?
-- 여러 모델을 바꿔 쓰더라도 같은 프로젝트 맥락을 유지할 수 있는가?
-- 대화에서 나온 결정, 기준, 산출물, 다음 작업을 어떻게 잃어버리지 않을 수 있는가?
-- 코딩 에이전트에게 작업을 넘기기 전에, 무엇을 해야 하는지 어떻게 정리할 수 있는가?
-- 사용자가 최종 결정을 유지하면서도 AI의 도움을 받을 수 있는 구조는 무엇인가?
+* If LLMs are stateless, where should project memory live?
+* Can the same project context be maintained across multiple interchangeable LLM providers?
+* How can decisions, criteria, artifacts, and next actions from conversations be preserved?
+* Before handing work over to a coding agent, how should the task be organized?
+* How can users benefit from AI assistance while still keeping final decision authority?
 
-LLM IDE2의 답은 단순하다.
+The answer of LLM IDE2 is simple:
 
-> **LLM은 계산 엔진이고, 프로젝트의 기억은 IDE가 가진다.**
+> **The LLM is the computation engine. The IDE owns the project memory.**
 
 ---
 
 ## Core Idea
 
-LLM IDE2는 LLM Provider를 프로젝트 기억의 주체로 보지 않는다.
+LLM IDE2 does not treat the LLM provider as the owner of project memory.
 
-Provider는 IDE가 조립한 맥락 패키지를 받아 응답을 생성하는 실행 엔진이다. 실제 프로젝트의 기억은 IDE 내부의 `.llmide` 저장소와 `conversation.db`, Criteria, Project State, Artifacts, Rolling Context에 보존된다.
+The provider is an execution engine that receives a context package assembled by the IDE and returns a response. The actual project memory is stored inside the local `.llmide` workspace, including `conversation.db`, Criteria, Project State, Artifacts, Rolling Context, request logs, and tool logs.
 
 ```text
 Project Memory
@@ -61,72 +61,149 @@ Provider Request Package
 DeepSeek / Gemini / GPT / Claude / Other LLM
 ```
 
-이 구조에서 중요한 것은 특정 모델의 능력이 아니다.
+In this architecture, the most important factor is not the capability of a specific model.
 
-상대 LLM이 누구든, IDE가 같은 프로젝트 기억을 읽고, 현재 요청에 필요한 맥락을 재조립해 전달한다. 따라서 모델을 교체해도 작업 연속성은 LLM의 기억이 아니라 IDE의 상태 보존 능력에 의해 유지된다.
+Regardless of which LLM provider is used, the IDE reads the same project memory and rebuilds the context needed for the current request. Therefore, continuity is maintained by the IDE's state preservation mechanism, not by the model's memory.
 
 ---
 
 ## What LLM IDE2 Is
 
-LLM IDE2는 다음에 가깝다.
+LLM IDE2 is closer to the following:
 
-- LLM 작업을 위한 상태 보존형 프로젝트 런타임
-- 프로젝트 의도와 결정의 로컬 메모리
-- 여러 LLM Provider 위에서 동작하는 맥락 빌더
-- AI와 함께 프로젝트를 굴리기 위한 작업실
-- 코딩 에이전트에게 넘길 작업 맥락을 준비하는 상위 레이어
+* A stateful project runtime for LLM-based work
+* A local memory system for project intent and decisions
+* A context builder that works across multiple LLM providers
+* A workspace for running projects together with AI
+* A higher-level layer for preparing task context before handing work to coding agents
 
-LLM IDE2는 다음을 지향한다.
+LLM IDE2 is designed around the following workflow:
 
 ```text
-아이디어
- → 기준 정리
- → 프로젝트 상태 기록
- → 대화
- → 결정 보존
- → 산출물 추출
- → 맥락 압축
- → 다음 작업 정의
- → 외부 LLM 또는 코딩 에이전트에게 전달
- → 결과 검토
- → 다시 프로젝트 기억에 반영
+Idea
+ → Criteria refinement
+ → Project state recording
+ → Conversation
+ → Decision preservation
+ → Artifact extraction
+ → Context compression
+ → Next task definition
+ → Handoff to external LLMs or coding agents
+ → Result review
+ → Reflection back into project memory
 ```
 
 ---
 
 ## What LLM IDE2 Is Not
 
-LLM IDE2는 다음을 목표로 하지 않는다.
+LLM IDE2 is not intended to be:
 
-- Cursor, Claude Code, Codex, Devin 같은 코딩 에이전트의 대체재
-- 코드 자동완성 IDE
-- 대형 조직용 Jira/Linear/Confluence 클론
-- 모든 파일과 코드를 통째로 읽어주는 repo 분석기
-- LLM 응답을 자동으로 신뢰하고 적용하는 자동 개발 시스템
+* A replacement for coding agents such as Cursor, Claude Code, Codex, or Devin
+* A code-completion IDE
+* A Jira, Linear, or Confluence clone for large organizations
+* A repository analyzer that reads every file and all source code automatically
+* An autonomous development system that blindly trusts and applies LLM responses
 
-LLM IDE2는 코딩 경쟁을 하지 않는다.
+LLM IDE2 does not compete on code generation.
 
-코드는 다른 도구와 에이전트가 더 잘할 수 있다.  
-LLM IDE2는 그 위에서 **프로젝트의 기억, 기준, 결정, 맥락, 작업 전달**을 관리한다.
+Other tools and agents may write code better.
+LLM IDE2 manages what sits above them: **project memory, criteria, decisions, context, and task handoff.**
 
 ---
 
 ## Target User
 
-LLM IDE2의 첫 번째 사용자는 대형 프로젝트 방법론에 익숙한 PM이나 아키텍트가 아니다.
+The first target user of LLM IDE2 is not a project manager or architect already familiar with large-scale project methodologies.
 
-오히려 다음과 같은 사람을 상정한다.
+Instead, LLM IDE2 is designed for people such as:
 
-- 코드는 어느 정도 작성할 수 있지만, 무엇을 먼저 해야 할지 자주 흔들리는 1인 개발자
-- 하청 개발 경험은 있지만, 자기 제품의 방향과 우선순위를 잡는 데 익숙하지 않은 개발자
-- ChatGPT, Claude, Codex, Cursor 등을 오가며 작업하다가 맥락이 흩어지는 사람
-- 대화에서 나온 결정을 다시 찾느라 시간을 쓰는 사람
-- LLM에게 일을 시키기 전, 작업을 어떻게 정의해야 할지 막히는 사람
-- 프로젝트의 기준과 변경 이력을 로컬에 남기고 싶은 사람
+* Solo developers who can write code but often lose track of what to do first
+* Developers with outsourcing or implementation experience who are less familiar with defining product direction and priorities
+* People who switch between ChatGPT, Claude, Codex, Cursor, and other tools, causing project context to scatter
+* People who spend time searching for decisions made earlier in a conversation
+* People who get stuck before asking an LLM or coding agent to do a well-defined task
+* People who want to preserve project criteria and change history locally
 
-LLM IDE2는 경험 많은 PM처럼 정답을 대신 내려주는 도구가 아니다.  
-대신 사용자가 프로젝트를 잃어버리지 않도록, 현재 상태와 다음 작업을 계속 구조화하는 도구다.
+LLM IDE2 is not a tool that replaces user judgment with the authority of an experienced PM.
+
+Instead, it continuously structures the current state and next actions so that users do not lose the project.
+
+---
+
+# LLM IDE2 Documentation
+
+This directory contains internal design documents for LLM IDE2.
+
+Most documents are currently written in Korean because the project is being actively developed by the author. English summaries will be added gradually as the project stabilizes.
+
+## Documents
+
+### 1. Product Principles
+
+Defines the product direction, core assumptions, and design boundaries of LLM IDE2.
+
+Key topics:
+
+* Stateful project runtime for stateless LLM providers
+* IDE-owned project memory
+* Provider independence
+* Human-in-the-loop workflow
+* Separation from coding agents
+
+### 2. Architecture Baseline
+
+Describes the baseline architecture of the project.
+
+Key topics:
+
+* Core-centered architecture
+* CLI and WPF sharing the same Core
+* Local `.llmide` project storage
+* Context Builder
+* Provider abstraction
+* Conversation, artifacts, and rolling context storage
+
+### 3. Development Roadmap
+
+Tracks the current development direction and planned implementation steps.
+
+Key topics:
+
+* Core / CLI MVP
+* WPF integration
+* Provider settings
+* Rolling context compression
+* Artifact extraction
+* Agent loop and tool isolation
+
+### 4. Change Decision Log
+
+Records important architectural and product decisions made during development.
+
+Key topics:
+
+* Why certain features were added, postponed, or removed
+* Why the project changed direction
+* Design trade-offs
+* Criteria updates
+
+### 5. Code Convention
+
+Defines development rules and coding conventions.
+
+Key topics:
+
+* Core logic must not be placed in the UI layer
+* API keys and personal project data must not be committed
+* Build and tests should pass before changes are finalized
+* Documentation should be updated when the architecture changes
+
+## Language Note
+
+The main README is written in English for public portfolio and international collaboration purposes.
+
+Detailed internal documents may remain in Korean while the project is under active development. This reflects the current development workflow, not a limitation of the architecture.
 
 ---
 
@@ -134,198 +211,203 @@ LLM IDE2는 경험 많은 PM처럼 정답을 대신 내려주는 도구가 아�
 
 ### 1. IDE Owns the Memory
 
-프로젝트의 장기 기억은 LLM Provider가 아니라 IDE가 가진다.
+Long-term project memory belongs to the IDE, not to the LLM provider.
 
-Criteria, Project State, 대화 로그, 요청 로그, 산출물, 맥락 요약은 프로젝트별 `.llmide` 저장소에 남는다. LLM은 매 요청마다 IDE가 조립한 맥락을 받아 응답한다.
+Criteria, Project State, conversation logs, request logs, artifacts, and context summaries remain inside each project's `.llmide` workspace. The LLM receives a context package assembled by the IDE for each request.
 
 ### 2. Provider Is Replaceable
 
-Provider는 교체 가능한 계산 엔진이다.
+The provider is a replaceable computation engine.
 
-현재 구현의 기본 Provider는 DeepSeek이지만, Core는 특정 Provider에 종속되지 않도록 설계한다. Gemini, GPT, Claude 등 다른 Provider를 연결하더라도 동일한 프로젝트 기억과 맥락 빌더를 사용할 수 있어야 한다.
+The current baseline provider is DeepSeek, but the Core is designed to avoid dependency on any specific provider. Gemini, GPT, Claude, or other providers should be able to use the same project memory and context builder.
 
 ### 3. Context Is Built, Not Remembered
 
-LLM이 기억한다고 가정하지 않는다.
+LLM IDE2 does not assume that the LLM remembers.
 
-매 요청마다 Context Builder가 프로젝트 상태, 활성 Criteria, 최근 대화, Rolling Context, 관련 산출물, 사용자 요청을 조합해 Request Context Package를 만든다.
+For every request, the Context Builder combines Project State, active Criteria, recent conversation history, Rolling Context, related artifacts, and the user's request into a Request Context Package.
 
 ### 4. Preserve Semantic Commitments
 
-긴 대화에서 중요한 것은 모든 문장을 보존하는 것이 아니다.
+In long conversations, preserving every sentence is not the goal.
 
-중요한 것은 프로젝트가 지키기로 한 의미론적 약속이다.
+What matters is preserving the project's semantic commitments:
 
-- 무엇을 만들기로 했는가
-- 무엇을 하지 않기로 했는가
-- 어떤 기준을 따르기로 했는가
-- 어떤 결정이 이미 내려졌는가
-- 어떤 제약을 계속 유지해야 하는가
-- 다음 작업은 무엇인가
+* What are we building?
+* What have we decided not to build?
+* Which criteria must be followed?
+* Which decisions have already been made?
+* Which constraints must continue to hold?
+* What is the next task?
 
-Rolling Context Compression은 대화가 길어져도 이러한 핵심 약속이 사라지지 않도록 보조한다.
+Rolling Context Compression helps preserve these core commitments even as the conversation grows longer.
 
 ### 5. Human in the Loop
 
-AI는 제안하고, IDE는 기록하며, 최종 판단은 사용자가 한다.
+AI proposes, the IDE records, and the user makes the final decision.
 
-LLM IDE2는 자동 변경보다 검토 가능한 기록을 우선한다. 중요한 상태 변경, 기준 변경, 산출물 반영은 사용자가 확인할 수 있어야 한다.
+LLM IDE2 prioritizes reviewable records over automatic changes. Important state changes, criteria changes, and artifact updates should be visible and confirmable by the user.
 
 ### 6. Tool Isolation
 
-Agent 도구 호출은 Core와 분리된다.
+Agent tool calls are isolated from the Core.
 
-도구는 읽기 전용에서 시작하고, 호출 이력은 대화 메시지와 별도로 기록한다. 도구 실행은 제한 가능한 allowlist와 감사 가능한 로그를 전제로 한다.
+Tools start as read-only, and tool call history is recorded separately from conversation messages. Tool execution assumes a restrictable allowlist and auditable logs.
 
 ### 7. Core Sharing
 
-CLI와 WPF는 같은 Core와 같은 `.llmide` 데이터를 사용한다.
+CLI and WPF use the same Core and the same `.llmide` data.
 
-UI는 어댑터일 뿐이고, 프로젝트 기억과 핵심 흐름은 Core에 있다.
+The UI is only an adapter. Project memory and core workflows live in the Core.
 
 ---
 
 ## Project Memory Model
 
-LLM IDE2의 중심 객체는 코드 파일이 아니라 프로젝트 기억이다.
+The central object of LLM IDE2 is not the source code file.
+It is the project memory.
 
 ### Criteria
 
-프로젝트가 계속 지켜야 할 기준이다.
+Criteria are rules that the project must continue to follow.
 
-예시:
+Examples:
 
-- 항상 한국어로 답한다.
-- 코딩 기능은 직접 경쟁하지 않는다.
-- Core 비즈니스 로직은 UI 계층에 두지 않는다.
-- API Key와 개인 프로젝트 데이터는 저장소에 커밋하지 않는다.
-- 상태 변경은 사용자 승인 없이 자동 적용하지 않는다.
+* Always respond in Korean.
+* Do not directly compete with coding agents.
+* Do not place Core business logic inside the UI layer.
+* Do not commit API keys or personal project data.
+* Do not automatically apply state changes without user approval.
 
 ### Project State
 
-프로젝트의 현재 상태다.
+Project State represents the current state of the project.
 
-예시:
+Examples:
 
-- 현재 단계
-- 완료된 작업
-- 진행 중인 작업
-- 다음 액션
-- blocker
-- 최근 결정
+* Current phase
+* Completed work
+* Work in progress
+* Next actions
+* Blockers
+* Recent decisions
 
 ### Conversation History
 
-LLM과의 대화 기록이다.
+Conversation History stores conversations with the LLM.
 
-단순 채팅 로그가 아니라, 프로젝트 판단의 원천 데이터다.
+It is not just a chat log.
+It is source data for project judgment.
 
 ### Rolling Context
 
-긴 대화에서 핵심 맥락을 압축한 상태다.
+Rolling Context is a compressed representation of important context from long conversations.
 
-이전 대화 전체를 매번 주입하지 않고, 프로젝트에 필요한 요약된 맥락을 유지한다.
+Instead of injecting the entire previous conversation every time, LLM IDE2 maintains summarized context required for the project.
 
 ### Artifacts
 
-대화에서 추출된 산출물이다.
+Artifacts are outputs extracted from conversations.
 
-예시:
+Examples:
 
-- README 초안
-- 설계 문서
-- 결정 로그
-- 작업 지시서
-- 코드 블록
-- 분석 결과
+* README drafts
+* Design documents
+* Decision logs
+* Task instructions
+* Code blocks
+* Analysis results
 
 ### Request Logs
 
-LLM에게 어떤 맥락이 전달되었는지 재현하기 위한 기록이다.
+Request Logs record what context was sent to the LLM so that requests can be inspected or reproduced later.
 
 ### Tool Logs
 
-Agent 도구가 무엇을 호출했고 어떤 결과를 반환했는지 남기는 감사 기록이다.
+Tool Logs provide an audit trail of which agent tools were called and what results they returned.
 
 ---
 
 ## Working Loop
 
-LLM IDE2의 기본 작업 루프는 기능 목록이 아니라 다음 흐름이다.
+The basic working loop of LLM IDE2 is not a feature checklist.
+It is the following process:
 
 ```text
-1. 현재 생각이나 문제를 IDE에 입력한다.
-2. IDE가 프로젝트 기억과 Criteria를 함께 LLM에게 전달한다.
-3. LLM은 현재 맥락에 맞춰 응답한다.
-4. 사용자는 응답에서 결정, 기준, 산출물, 다음 작업을 추출한다.
-5. IDE는 이를 프로젝트 기억에 저장한다.
-6. 다음 요청에서는 저장된 기억이 다시 Context Builder에 들어간다.
+1. The user enters a thought, problem, or task into the IDE.
+2. The IDE sends the user's request together with project memory and Criteria to the LLM.
+3. The LLM responds based on the current context.
+4. The user extracts decisions, criteria, artifacts, and next actions from the response.
+5. The IDE stores them into project memory.
+6. The next request uses the stored memory again through the Context Builder.
 ```
 
-이 루프의 목적은 대화를 많이 하는 것이 아니다.
+The goal of this loop is not to have more conversations.
 
-목적은 대화에서 생긴 의미 있는 판단을 프로젝트 기억으로 승격시키고, 다음 작업으로 이어지게 만드는 것이다.
+The goal is to promote meaningful judgments from conversation into project memory and connect them to the next task.
 
 ---
 
 ## Example Use Cases
 
-### 1. 프로젝트 방향이 흔들릴 때
+### 1. When the Project Direction Becomes Unclear
 
-사용자는 현재 고민을 입력한다.
-
-```text
-코딩 기능을 직접 만들지 말고, LLM 작업 지휘 도구로 가는 게 맞을까?
-```
-
-IDE는 기존 Criteria, Project State, Decision Log, 이전 대화 요약을 함께 주입한다.  
-LLM은 이전 결정과 충돌하는지, 지금 어떤 결정을 내려야 하는지 제안한다.
-
-### 2. 다른 LLM으로 교체할 때
-
-DeepSeek으로 작업하다가 GPT나 Claude로 바꿔도, 프로젝트 기억은 Provider 내부가 아니라 `.llmide`에 남아 있다.
-
-새 Provider는 IDE가 조립한 Context Package를 받아 현재 프로젝트의 기준과 상태를 이어받는다.
-
-### 3. 외부 코딩 에이전트에게 작업을 넘길 때
-
-LLM IDE2는 코드를 직접 작성하기보다, Codex, Claude Code, Cursor 같은 외부 코딩 에이전트에게 전달할 작업 맥락을 정리하는 상위 레이어가 될 수 있다.
-
-예시 Handoff:
+The user enters a concern such as:
 
 ```text
-배경:
-현재 프로젝트는 LLM Provider 독립적인 Stateful Runtime을 목표로 한다.
-
-목표:
-Provider 설정 화면을 WPF에 추가한다.
-
-제약:
-Core 비즈니스 로직은 WPF에 두지 않는다.
-기존 .llmide/settings/providers.json 구조를 유지한다.
-API Key는 로그에 남기지 않는다.
-
-완료 기준:
-빌드와 테스트가 통과해야 한다.
-변경된 구조는 Docs에 반영해야 한다.
+Should this project avoid building coding features directly and instead become an LLM work orchestration tool?
 ```
 
-### 4. 결과를 다시 프로젝트 기억에 반영할 때
+The IDE injects existing Criteria, Project State, Decision Log, and previous conversation summaries.
+The LLM then proposes whether the new direction conflicts with previous decisions and what decision needs to be made now.
 
-외부 에이전트나 사용자가 작업을 마친 뒤, 결과를 붙여넣으면 IDE는 다음을 정리할 수 있다.
+### 2. When Switching to Another LLM
 
-- 실제로 완료된 것
-- 실패한 것
-- 새로 생긴 결정
-- 업데이트해야 할 Criteria
-- 다음 작업
-- 산출물로 저장할 내용
+Even if the user works with DeepSeek first and later switches to GPT or Claude, project memory remains inside `.llmide`, not inside the provider.
+
+The new provider receives a Context Package assembled by the IDE and continues from the current project criteria and state.
+
+### 3. When Handing Work to an External Coding Agent
+
+LLM IDE2 can act as a higher-level layer that prepares task context before handing work to external coding agents such as Codex, Claude Code, or Cursor.
+
+Example handoff:
+
+```text
+Background:
+The current project aims to provide a provider-independent stateful runtime for LLM-based work.
+
+Goal:
+Add a Provider Settings screen to the WPF application.
+
+Constraints:
+Do not place Core business logic inside the WPF layer.
+Preserve the existing .llmide/settings/providers.json structure.
+Do not write API keys to logs.
+
+Completion Criteria:
+Build and tests must pass.
+The updated structure must be reflected in Docs.
+```
+
+### 4. When Reflecting Results Back Into Project Memory
+
+After an external agent or the user completes a task, the result can be pasted back into the IDE.
+
+The IDE can then help organize:
+
+* What was actually completed
+* What failed
+* Newly created decisions
+* Criteria that need to be updated
+* Next tasks
+* Content that should be saved as artifacts
 
 ---
 
 ## Architecture
 
-LLM IDE2는 UI 중심 앱이 아니라 Core 중심 런타임이다.
+LLM IDE2 is a Core-centered runtime, not a UI-centered application.
 
 ```text
 LlmIde.slnx
@@ -342,50 +424,50 @@ LlmIde.slnx
 
 ### LlmIde.Core
 
-프로젝트 기억과 핵심 흐름을 담당한다.
+Handles project memory and core workflows.
 
-- Project
-- Criteria
-- Project State
-- Context Builder
-- Conversation Flow
-- Rolling Context
-- Artifacts
-- Agent Loop 모델과 인터페이스
+* Project
+* Criteria
+* Project State
+* Context Builder
+* Conversation Flow
+* Rolling Context
+* Artifacts
+* Agent Loop models and interfaces
 
 ### LlmIde.Infrastructure
 
-외부 시스템과 저장소를 담당한다.
+Handles external systems and storage.
 
-- SQLite 저장소
-- JSON/JSONL 저장소
-- 파일 시스템 저장소
-- Provider 구현
-- Agent 도구 구현
+* SQLite storage
+* JSON / JSONL storage
+* File system storage
+* Provider implementations
+* Agent tool implementations
 
 ### LlmIde.Cli
 
-Core 검증과 자동화에 적합한 CLI 어댑터다.
+A CLI adapter suitable for Core validation and automation.
 
 ### LlmIde.Wpf
 
-사용자가 직접 프로젝트 기억을 보고 다루기 위한 GUI 어댑터다.
+A GUI adapter that allows users to inspect and manage project memory directly.
 
 ### LlmIde.Tests
 
-Core와 Infrastructure 중심의 회귀 테스트를 담당한다.
+Regression tests focused on Core and Infrastructure behavior.
 
 ---
 
 ## Local Storage
 
-프로젝트 등록소는 실행 프로그램 루트 아래에 저장된다.
+The project registry is stored under the executable program root:
 
 ```text
 <IdeProgramRoot>/project/projects.json
 ```
 
-실제 프로젝트 데이터는 각 프로젝트 루트의 `.llmide` 아래에 저장된다.
+Actual project data is stored under `.llmide` in each project root:
 
 ```text
 <ProjectRoot>/
@@ -410,15 +492,16 @@ Core와 Infrastructure 중심의 회귀 테스트를 담당한다.
       └─ providers.json
 ```
 
-`conversation.db`가 주 저장소이고, JSONL/JSON은 디버그, 감사, 요청 재현용 보조 기록이다.
+`conversation.db` is the primary storage.
+JSONL and JSON files are auxiliary records for debugging, auditing, and request reproduction.
 
 ---
 
 ## Provider Strategy
 
-현재 기준 Provider는 DeepSeek이다.
+The current baseline provider is DeepSeek.
 
-하지만 LLM IDE2의 핵심은 특정 Provider가 아니다. Core는 Provider를 교체 가능한 인터페이스로 다루며, Provider는 IDE가 만든 요청 패키지를 받아 응답을 반환하는 역할만 한다.
+However, the core value of LLM IDE2 is not tied to a specific provider. The Core treats providers as replaceable interfaces. A provider only receives a request package assembled by the IDE and returns a response.
 
 ```text
 LlmIde.Core
@@ -430,49 +513,50 @@ LlmIde.Core
       → Other
 ```
 
-Provider별 성능과 성향은 다를 수 있다.  
-LLM IDE2가 보장하려는 것은 모든 모델의 동일한 답변이 아니라, **모델 교체로 인한 프로젝트 맥락 손실을 줄이는 것**이다.
+Provider performance and behavior may differ.
+
+What LLM IDE2 tries to preserve is not identical answers across all models, but reduced loss of project context when switching models.
 
 ---
 
 ## Development Status
 
-LLM IDE2는 현재 Core/CLI 기반 MVP 기능을 바탕으로 WPF GUI 통합을 진행 중이다.
+LLM IDE2 is currently integrating a WPF GUI on top of a Core/CLI-based MVP.
 
-이미 구현된 핵심 축은 다음과 같다.
+The following core areas have already been implemented:
 
-- 프로젝트 등록소
-- Provider 기반 대화
-- SQLite + JSONL/JSON 저장
-- Criteria 관리
-- Project State 관리
-- Rolling Context Compression
-- Context Builder v1
-- Artifacts 저장과 추출
-- 읽기 전용 Agent Loop
-- CLI와 WPF의 Core/데이터 공유
+* Project registry
+* Provider-based conversation
+* SQLite + JSONL / JSON storage
+* Criteria management
+* Project State management
+* Rolling Context Compression
+* Context Builder v1
+* Artifact storage and extraction
+* Read-only Agent Loop
+* Shared Core/data model between CLI and WPF
 
-진행 상태는 기능 목록 자체보다, 다음 방향을 기준으로 관리한다.
+Progress is managed by direction rather than by a simple feature list:
 
-> Core는 프로젝트 기억을 안정적으로 유지하고,  
-> UI는 그 기억을 사용자가 보고 수정할 수 있게 하며,  
-> Provider는 언제든 교체 가능한 실행 엔진으로 남긴다.
+> The Core must preserve project memory reliably.
+> The UI must allow the user to inspect and modify that memory.
+> The provider must remain a replaceable execution engine.
 
 ---
 
 ## Development Rules
 
-LLM IDE2 개발은 다음 규칙을 따른다.
+LLM IDE2 development follows these rules:
 
-- API Key와 개인 프로젝트 데이터는 커밋하지 않는다.
-- `.llmide`, `providers.json`, `bin`, `obj`, `backup`은 저장소에 포함하지 않는다.
-- 구조나 로드맵이 바뀌면 Docs를 먼저 갱신한다.
-- Core 비즈니스 로직을 UI 계층에 넣지 않는다.
-- CLI와 WPF는 같은 Core와 같은 데이터 구조를 사용해야 한다.
-- 새로운 기능은 빌드와 테스트를 통과해야 한다.
-- LLM 결과는 자동 적용보다 검토 가능한 기록을 우선한다.
+* Do not commit API keys or personal project data.
+* Do not include `.llmide`, `providers.json`, `bin`, `obj`, or `backup` in the repository.
+* When structure or roadmap changes, update Docs first.
+* Do not place Core business logic inside the UI layer.
+* CLI and WPF must use the same Core and the same data structure.
+* New features must pass build and tests.
+* LLM results should be recorded for review before being applied automatically.
 
-주요 문서:
+Main documents:
 
 ```text
 Docs/1.Product_Principles.md
@@ -486,32 +570,32 @@ Docs/Code_Convention.md
 
 ## Build
 
-필요 환경:
+Requirements:
 
-- Windows
-- .NET 10 SDK
-- C#
-- WPF
+* Windows
+* .NET 10 SDK
+* C#
+* WPF
 
-빌드:
+Build:
 
 ```bash
 dotnet build LlmIde.slnx -c Debug -v:minimal
 ```
 
-테스트:
+Run tests:
 
 ```bash
 dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
 ```
 
-WPF 실행:
+Run WPF:
 
 ```bash
 dotnet run --project src/LlmIde.Wpf/LlmIde.Wpf.csproj -c Debug
 ```
 
-CLI 실행:
+Run CLI:
 
 ```bash
 dotnet run --project src/LlmIde.Cli/LlmIde.Cli.csproj -- <command>
@@ -523,23 +607,21 @@ dotnet run --project src/LlmIde.Cli/LlmIde.Cli.csproj -- <command>
 
 This project is **source-available for personal and non-commercial use only**.
 
-이 프로젝트는 **개인 및 비상업적 용도에 한해 소스 열람과 사용을 허용**합니다.
+Permitted use:
 
-허용되는 사용:
+* Reading, cloning, and studying the source code
+* Personal, educational, research, and other non-commercial use
+* Personal modification for non-commercial purposes
 
-- 소스 코드 열람, 복제, 학습
-- 개인, 교육, 연구, 비상업적 목적의 사용
-- 비상업적 목적의 개인 수정
+The following uses are prohibited without prior written permission:
 
-사전 서면 승인 없이 금지되는 사용:
+* Commercial use
+* Sale, relicensing, rental, paid hosting, or paid service operation
+* Inclusion in commercial products, SaaS products, internal business tools, or paid consulting deliverables
+* Removal of copyright, license, or attribution notices
 
-- 상업적 목적의 사용
-- 판매, 재라이선스, 임대, 유료 호스팅, 유료 서비스 제공
-- 상업 제품, SaaS, 사내 업무 도구, 유료 컨설팅 산출물에 포함
-- 저작권, 라이선스, 출처 표시 제거
-
-상업적 사용은 저작자의 사전 승인이 필요합니다.
+Commercial use requires prior approval from the author.
 
 Copyright © 2026 hann2k. All rights reserved except as expressly permitted above.
 
-상업적 라이선스 문의는 저장소 소유자에게 연락하십시오.
+For commercial licensing inquiries, please contact the repository owner.
