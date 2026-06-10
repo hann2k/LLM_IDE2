@@ -547,6 +547,17 @@ public partial class MainWindow : Window
     }
 
     /// <summary>
+    /// Opens the common LLM provider manager, then refreshes the composer's provider list.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void LlmMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        ProviderManagerDialog.Show(providerSettingsStore, this);
+        PopulateComposerProviders();
+    }
+
+    /// <summary>
     /// Opens the read-only tool management window listing the tools the LLM can use.
     /// </summary>
     /// <param name="sender">The event sender.</param>

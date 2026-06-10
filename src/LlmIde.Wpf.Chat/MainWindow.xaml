@@ -110,6 +110,8 @@
                     <MenuItem Header="기준"
                               IsEnabled="{Binding HasSelectedProject}"
                               Click="CriteriaMenuItem_Click" />
+                    <MenuItem Header="LLM"
+                              Click="LlmMenuItem_Click" />
                 </MenuItem>
                 <MenuItem Header="도구관리"
                           Click="ToolManagerMenuItem_Click" />
