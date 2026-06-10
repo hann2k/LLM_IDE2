@@ -1,6 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="..\LlmIde.Wpf.Lib\LlmIde.Wpf.Lib.csproj" />
     <ProjectReference Include="..\LlmIde.Core\LlmIde.Core.csproj" />
     <ProjectReference Include="..\LlmIde.Infrastructure\LlmIde.Infrastructure.csproj" />
     <!-- Build the CLI first so its output can be copied alongside the WPF app (shared program root). -->
