@@ -621,6 +621,52 @@ public partial class MainWindow : WorkspaceWindowBase
     }
 
     /// <summary>
+    /// Exports the outline + bodies to a .docx file chosen by the user.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void ExportDocxMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (viewModel.SelectedProject is null)
+        {
+            return;
+        }
+
+        if (viewModel.OutlineItems.Count == 0)
+        {
+            System.Windows.MessageBox.Show(this, "내보낼 목차가 없습니다.", "docx 내보내기", MessageBoxButton.OK, MessageBoxImage.Information);
+            return;
+        }
+
+        // Persist the latest body edit and outline before exporting (export reads bodies from disk).
+        SaveAll();
+
+        string projectRoot = viewModel.SelectedProject.Path;
+        Microsoft.Win32.SaveFileDialog dialog = new Microsoft.Win32.SaveFileDialog
+        {
+            Title = "docx 내보내기",
+            Filter = "Word 문서 (*.docx)|*.docx",
+            DefaultExt = ".docx",
+            FileName = (string.IsNullOrWhiteSpace(viewModel.SelectedProject.DisplayName) ? "document" : viewModel.SelectedProject.DisplayName) + ".docx"
+        };
+
+        if (dialog.ShowDialog(this) != true)
+        {
+            return;
+        }
+
+        try
+        {
+            DocxExporter.Export(dialog.FileName, viewModel.OutlineItems, item => outlineStore.ReadBody(projectRoot, item));
+            System.Windows.MessageBox.Show(this, "docx로 내보냈습니다.\n" + dialog.FileName, "docx 내보내기", MessageBoxButton.OK, MessageBoxImage.Information);
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, ex.Message, "docx 내보내기 오류", MessageBoxButton.OK, MessageBoxImage.Error);
+        }
+    }
+
+    /// <summary>
     /// Enables the save command only when a project is selected.
     /// </summary>
     /// <param name="sender">The event sender.</param>

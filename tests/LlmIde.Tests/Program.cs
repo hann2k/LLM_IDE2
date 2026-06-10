@@ -92,7 +92,8 @@ public static class Program
             ManualConversationIsStoredAsCompletedTurn,
             UpdateAssistantMessageContentReplacesContent,
             MarkdownSelectionMatchesAcrossMarkers,
-            ImportanceParserHandlesFencedAndUnclosedTag
+            ImportanceParserHandlesFencedAndUnclosedTag,
+            DocxWriterProducesValidDocx
         ];
 
         foreach (Action test in tests)
@@ -1459,6 +1460,36 @@ public static class Program
         AssertTrue(result.Ok, "read_artifact should succeed.");
         ReadArtifactResult read = (ReadArtifactResult)result.Result!;
         AssertContains(read.Content, "내용 본문");
+    }
+
+    /// <summary>
+    /// Verifies DocxWriter produces a schema-valid .docx (so Word can open it) with the expected
+    /// heading and body text.
+    /// </summary>
+    private static void DocxWriterProducesValidDocx()
+    {
+        using TestWorkspace workspace = TestWorkspace.Create();
+        string path = Path.Combine(workspace.Root, "export.docx");
+
+        LlmIde.Infrastructure.Export.DocxWriter.Write(path,
+        [
+            new LlmIde.Infrastructure.Export.DocxBlock(1, "1 서론", "첫 단락.\n둘째 단락."),
+            new LlmIde.Infrastructure.Export.DocxBlock(2, "1.1 배경", "배경 본문.")
+        ]);
+
+        AssertTrue(File.Exists(path), "Export should create the .docx file.");
+
+        using DocumentFormat.OpenXml.Packaging.WordprocessingDocument doc =
+            DocumentFormat.OpenXml.Packaging.WordprocessingDocument.Open(path, false);
+
+        // Schema validation: a non-empty error list means Word would likely reject the file.
+        DocumentFormat.OpenXml.Validation.OpenXmlValidator validator = new DocumentFormat.OpenXml.Validation.OpenXmlValidator();
+        int errorCount = validator.Validate(doc).Count();
+        AssertEqual(0, errorCount, "Generated docx should have no Open XML validation errors.");
+
+        string text = doc.MainDocumentPart!.Document.Body!.InnerText;
+        AssertContains(text, "1 서론");
+        AssertContains(text, "둘째 단락.");
     }
 
     /// <summary>

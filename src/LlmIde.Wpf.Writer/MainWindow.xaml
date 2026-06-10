@@ -115,6 +115,10 @@
                     <MenuItem Header="저장"
                               Command="Save"
                               InputGestureText="Ctrl+S" />
+                    <Separator />
+                    <MenuItem Header="docx 내보내기"
+                              IsEnabled="{Binding HasSelectedProject}"
+                              Click="ExportDocxMenuItem_Click" />
                 </MenuItem>
                 <MenuItem Header="편집">
                     <MenuItem Header="기준"

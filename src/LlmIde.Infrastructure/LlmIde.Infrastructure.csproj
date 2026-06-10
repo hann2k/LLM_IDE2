@@ -6,6 +6,7 @@
 
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="10.0.8" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.1.0" />
     <!-- Required transitive dependency of the local Framework.Common.dll (not auto-resolved for a bare DLL reference). -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
