@@ -113,12 +113,15 @@ public sealed class ChatService
     /// </summary>
     private const string DefaultChatBodyToolInstruction =
         "[본문 편집 도구 — 글쓰기 작업실]\n" +
-        "get_body(현재 편집창 본문 조회), propose_body_edit(수정 본문 제안) 도구도 쓸 수 있다.\n" +
-        "사용자가 본문/문서를 고치거나, 새로 쓰거나, 어떤 내용을 본문에 반영해 달라고 하면(예: \"본문 고쳐줘\", \"대화 내용으로 본문 작성해줘\", \"이 내용 본문에 넣어줘\") 새 본문을 말로만 답하지 마라. 반드시 아래 도구 흐름을 따르라.\n" +
-        "1) 먼저 get_body로 현재 본문을 받는다: {\"type\":\"tool_request\",\"requests\":[{\"tool\":\"get_body\",\"arguments\":{}}]}\n" +
-        "2) 그 다음 propose_body_edit를 호출하고 body 인자에 수정된 본문 전문(일부가 아니라 전체)을 담는다: {\"type\":\"tool_request\",\"requests\":[{\"tool\":\"propose_body_edit\",\"arguments\":{\"body\":\"<수정된 본문 전체>\"}}]}\n" +
+        "get_body(현재 편집창 본문 조회), propose_body_edit(수정 본문 제안) 도구를 쓸 수 있다.\n" +
+        "사용자가 본문/문서를 고치거나, 새로 쓰거나, 어떤 내용을 본문에 반영해 달라고 하면(예: \"본문 고쳐줘\", \"대화 내용으로 본문 작성해줘\", \"코드와 표 만들어 본문에 넣어줘\") 설명하지 말고 곧바로 도구를 호출하라.\n" +
+        "절대 \"먼저 ~하겠다\", \"본문을 확인한다\" 같은 말만 적고 끝내지 마라. 그렇게 하면 도구가 실행되지 않아 아무 일도 일어나지 않는다.\n" +
+        "1단계 — 너의 출력은 오직 아래 JSON 하나여야 한다(앞뒤에 다른 텍스트 금지):\n" +
+        "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"get_body\",\"arguments\":{}}]}\n" +
+        "2단계 — get_body 결과(tool_result)를 받은 다음에만, 수정된 본문 전문(일부가 아니라 전체)을 담아 호출한다:\n" +
+        "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"propose_body_edit\",\"arguments\":{\"body\":\"<수정된 본문 전체>\"}}]}\n" +
         "본문은 파일이 아니라 편집창 내용이며, 실제 반영은 사용자가 [변경/취소]로 승인한다. 너는 제안만 한다.\n" +
-        "본문 수정·작성·반영 요청은 \"일반 대화\"가 아니므로 위 도구 흐름을 건너뛰고 말로만 답하지 마라.";
+        "도구를 호출하는 턴에서는 설명 문장을 먼저 쓰지 마라. 출력은 tool_request JSON 하나뿐이다.";
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ChatService"/> class.
