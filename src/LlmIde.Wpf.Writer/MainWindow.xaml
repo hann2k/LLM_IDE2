@@ -124,6 +124,10 @@
                 </MenuItem>
                 <MenuItem Header="도구관리"
                           Click="ToolManagerMenuItem_Click" />
+                <MenuItem Header="디버그">
+                    <MenuItem Header="본문수정GUI"
+                              Click="DebugBodyDiffMenuItem_Click" />
+                </MenuItem>
             </Menu>
         </Border>
 

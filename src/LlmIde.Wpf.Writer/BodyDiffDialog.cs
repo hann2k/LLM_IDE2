@@ -93,12 +93,16 @@ public sealed class BodyDiffDialog : Window
             FontSize = 13
         });
 
-        return new Border
+        Border border = new Border
         {
             BorderBrush = new System.Windows.Media.SolidColorBrush(System.Windows.Media.Color.FromRgb(0x4D, 0x8E, 0xDB)),
             BorderThickness = new Thickness(column == 0 ? 1 : 0, 1, 1, 1),
-            Margin = new Thickness(column == 0 ? 0 : 0, 0, column == 0 ? 6 : 0, 0),
+            Margin = new Thickness(0, 0, column == 0 ? 6 : 0, 0),
             Child = panel
         };
+
+        // Without this the two panes both land in column 0 and overlap into one.
+        Grid.SetColumn(border, column);
+        return border;
     }
 }

@@ -1258,6 +1258,21 @@ public partial class MainWindow : WorkspaceWindowBase
         }
     }
 
+    /// <summary>
+    /// Debug helper: opens the body before/after dialog with sample text so its layout can be
+    /// inspected without driving the LLM. Uses the current body as "before" when one is loaded.
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void DebugBodyDiffMenuItem_Click(object sender, RoutedEventArgs e)
+    {
+        string before = string.IsNullOrEmpty(viewModel.BodyText)
+            ? "이전 본문 샘플입니다.\n첫 번째 문단.\n두 번째 문단."
+            : viewModel.BodyText;
+        string after = before + "\n\n[디버그] 변경후 미리보기 — 이 줄이 수정안에 추가되었습니다.";
+        BodyDiffDialog.Confirm(before, after, this);
+    }
+
     private void FinalizeConversationRow(ConversationListItem? row, ChatProviderResponse response)
     {
         if (row is null)
