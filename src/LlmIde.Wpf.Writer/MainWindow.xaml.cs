@@ -207,6 +207,36 @@ public partial class MainWindow : WorkspaceWindowBase
     {
         ApplyLayout();
         LoadProjects();
+        WarnIfNoApiKey();
+    }
+
+    /// <summary>
+    /// On startup, nudges a first-time/pilot user to set an LLM API key (편집 &gt; LLM) when none is
+    /// configured, so it is clear why chat and body editing would otherwise fail.
+    /// </summary>
+    private void WarnIfNoApiKey()
+    {
+        try
+        {
+            // Providers are common (program root); the project argument is ignored by the store.
+            ProviderSettingsDocument providers = providerSettingsStore.Load(string.Empty);
+
+            if (providers.Providers.Any(provider => !string.IsNullOrWhiteSpace(provider.ApiKey)))
+            {
+                return;
+            }
+
+            System.Windows.MessageBox.Show(
+                this,
+                "LLM API 키가 설정되어 있지 않습니다.\n[편집 > LLM] 메뉴에서 프로바이더 API 키를 입력해야 채팅과 본문 편집이 동작합니다.",
+                "API 키 필요",
+                MessageBoxButton.OK,
+                MessageBoxImage.Information);
+        }
+        catch
+        {
+            // The startup nudge must never block the app from opening.
+        }
     }
 
     /// <summary>
