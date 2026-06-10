@@ -96,6 +96,11 @@ public partial class MainWindow : Window
     private readonly OutlineStore outlineStore = new OutlineStore();
 
     /// <summary>
+    /// Bridges the body-editing agent tools to this editor.
+    /// </summary>
+    private readonly WriterDocumentBodyBridge bodyBridge;
+
+    /// <summary>
     /// Suppresses the provider-change handler while the selector is being populated.
     /// </summary>
     private bool suppressProviderChange;
@@ -127,7 +132,7 @@ public partial class MainWindow : Window
         projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
         artifactService = new ArtifactService(new FileArtifactStore());
-        providerSettingsStore = new JsonProviderSettingsStore();
+        providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
 
         // Compose the same Core chat pipeline the CLI uses.
         criteriaService = new CriteriaService(new JsonCriteriaStore());
@@ -138,8 +143,8 @@ public partial class MainWindow : Window
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(ideProgramRoot),
+            new FileArtifactRuleStore(ideProgramRoot),
             new FileImportanceRuleStore(ideProgramRoot),
             artifactService,
             promptStore);
@@ -157,7 +162,14 @@ public partial class MainWindow : Window
         {
             Timeout = TimeSpan.FromSeconds(15)
         };
-        agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient, artifactService);
+        // Bridge the body-editing tools to this editor: read the selected section on the UI thread,
+        // and stage proposed revisions for user approval after the agent loop.
+        bodyBridge = new WriterDocumentBodyBridge(
+            Dispatcher,
+            () => viewModel.SelectedOutlineItem is OutlineItem item
+                ? new DocumentBodySnapshot { Title = item.Title, Body = viewModel.BodyText }
+                : null);
+        agentToolHost = AgentToolHostFactory.Create(ideProgramRoot, fetchHttpClient, artifactService, bodyBridge);
         // Records every actual LLM call (injected prompt + raw response) via the supervisor-supplied Framework.Common file logger.
         ILlmRequestLogger llmRequestLogger = new FrameworkCommonLlmRequestLogger(Path.Combine(ideProgramRoot, "Log"));
         chatService = new ChatService(
@@ -1523,6 +1535,7 @@ public partial class MainWindow : Window
             RunOnUi(() => FinalizeConversationRow(row, response));
             SaveResponseArtifacts(projectRoot, response);
             RunOnUi(() => ReloadArtifacts(projectRoot));
+            RunOnUi(ShowBodyProposalIfAny);
         }
         catch (Exception ex)
         {
@@ -1595,6 +1608,26 @@ public partial class MainWindow : Window
     /// </summary>
     /// <param name="row">The conversation row.</param>
     /// <param name="response">The completed chat response.</param>
+    /// <summary>
+    /// If the model proposed a body revision during the turn, shows the before/after window and applies
+    /// the change on approval (then saves). The body is only ever changed with user confirmation.
+    /// </summary>
+    private void ShowBodyProposalIfAny()
+    {
+        string? proposed = bodyBridge.TakePendingProposal();
+
+        if (proposed is null || viewModel.SelectedOutlineItem is null)
+        {
+            return;
+        }
+
+        if (BodyDiffDialog.Confirm(viewModel.BodyText, proposed, this))
+        {
+            viewModel.BodyText = proposed;
+            SaveCurrentBody();
+        }
+    }
+
     private void FinalizeConversationRow(ConversationListItem? row, ChatProviderResponse response)
     {
         if (row is null)

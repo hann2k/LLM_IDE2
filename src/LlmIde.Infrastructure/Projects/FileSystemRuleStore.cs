@@ -8,35 +8,28 @@ namespace LlmIde.Infrastructure.Projects;
 public sealed class FileSystemRuleStore : ISystemRuleStore
 {
     /// <summary>
+    /// The IDE program root containing the common policy files.
+    /// </summary>
+    private readonly string programRoot;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileSystemRuleStore"/> class.
+    /// </summary>
+    /// <param name="programRoot">The IDE program root.</param>
+    public FileSystemRuleStore(string? programRoot = null)
+    {
+        this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
+    }
+
+    /// <summary>
     /// Loads the system rule.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <returns>The system rule content.</returns>
     public string Load(string projectRoot)
     {
-        string path = GetSystemRulePath(projectRoot);
-
-        if (!File.Exists(path))
-        {
-            Directory.CreateDirectory(Path.GetDirectoryName(path) ?? string.Empty);
-            File.WriteAllText(path, string.Empty);
-            return string.Empty;
-        }
-
-        return File.ReadAllText(path);
-    }
-
-    /// <summary>
-    /// Gets the system rule file path.
-    /// </summary>
-    /// <param name="projectRoot">The project root path.</param>
-    /// <returns>The system rule file path.</returns>
-    private static string GetSystemRulePath(string projectRoot)
-    {
-        return Path.Combine(
-            Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.SystemRuleFileName);
+        // Policies are common to all projects: read from the program's /policies folder.
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName);
+        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
     }
 }

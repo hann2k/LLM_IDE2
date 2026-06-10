@@ -28,37 +28,8 @@ public sealed class FileImportanceRuleStore : IImportanceRuleStore
     /// <returns>The importance scoring rule content.</returns>
     public string Load(string projectRoot)
     {
-        string path = Path.Combine(
-            Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.ImportanceRuleFileName);
-
-        if (!File.Exists(path))
-        {
-            EnsureProjectPolicyFile(path);
-        }
-
+        // Policies are common to all projects: read from the program's /policies folder.
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ImportanceRuleFileName);
         return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
-    }
-
-    /// <summary>
-    /// Ensures the project policy file exists from the program template.
-    /// </summary>
-    /// <param name="projectPolicyPath">The project policy file path.</param>
-    private void EnsureProjectPolicyFile(string projectPolicyPath)
-    {
-        string templatePath = Path.Combine(
-            programRoot,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.ImportanceRuleFileName);
-
-        if (!File.Exists(templatePath))
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(projectPolicyPath) ?? string.Empty);
-        File.Copy(templatePath, projectPolicyPath, false);
     }
 }

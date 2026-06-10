@@ -120,21 +120,9 @@ public static class Program
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/conversation.db");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/current.md");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/index.jsonl");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/system-rule.md");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/compression-rule.md");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/artifact-rule.md");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/importance-rule.md");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/context-policy.json");
-        AssertFileExists(result.ProjectRoot, ".llmide/policies/provider-policy.json");
         AssertFileExists(workspace.Root, "project/projects.json");
 
-        string policyRoot = Path.Combine(result.ProjectRoot, ".llmide", "policies");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "system-rule.md")), "기본 응답 언어는 한국어다.");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "compression-rule.md")), "너는 대화 맥락 압축기다.");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "artifact-rule.md")), "산출물 태그");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "importance-rule.md")), "대화 중요도");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "context-policy.json")), "summary_plus_window");
-        AssertContains(File.ReadAllText(Path.Combine(policyRoot, "provider-policy.json")), "deepseek");
+        // Policies and provider settings are now common (app-root /policies, /settings); not seeded per project.
     }
 
     /// <summary>
@@ -303,7 +291,7 @@ public static class Program
         CliApplication application = CreateCliApplication(workspace.Root);
 
         application.Run(["init", "--pid", "KeyProject"]);
-        WriteApiKey(Path.Combine(workspace.Root, "KeyProject"), "secret");
+        WriteApiKey(workspace.Root, "secret");
         int firstDeleteExitCode = application.Run(["projects", "delete", "KeyProject", "--confirm", "KeyProject"]);
         int secondDeleteExitCode = application.Run(["projects", "delete", "KeyProject", "--confirm", "KeyProject", "--confirm-api-key-delete"]);
 
@@ -321,7 +309,7 @@ public static class Program
         ProjectInitializer initializer = CreateProjectInitializer(workspace.Root);
 
         ProjectInitializationResult result = initializer.Initialize(new ProjectInitializationRequest());
-        ProviderSettingsDocument settings = new JsonProviderSettingsStore().Load(result.ProjectRoot);
+        ProviderSettingsDocument settings = new JsonProviderSettingsStore(workspace.Root).Load(result.ProjectRoot);
         ProviderSettings provider = settings.Providers[0];
 
         AssertEqual("deepseek", settings.DefaultProvider, "Default provider should be DeepSeek.");
@@ -509,8 +497,10 @@ public static class Program
         {
             application.Run(["init", "--pid", "SystemRuleProject"]);
             AddDefaultCriterion(application, "SystemRuleProject");
+            // System rule is a common policy: write it to the program-root /policies.
+            Directory.CreateDirectory(Path.Combine(workspace.Root, "policies"));
             File.WriteAllText(
-                Path.Combine(workspace.Root, "SystemRuleProject", ".llmide", "policies", "system-rule.md"),
+                Path.Combine(workspace.Root, "policies", "system-rule.md"),
                 "System says: always preserve user approval boundaries.");
             Console.SetOut(output);
             int chatExitCode = application.Run(["chat", "SystemRuleProject", "hello", "--debug"]);
@@ -562,7 +552,7 @@ public static class Program
 
         application.Run(["init", "--pid", "ModelSetProject"]);
         int exitCode = application.Run(["models", "set", "ModelSetProject", "deepseek-reasoner"]);
-        ProviderSettingsDocument settings = new JsonProviderSettingsStore().Load(Path.Combine(workspace.Root, "ModelSetProject"));
+        ProviderSettingsDocument settings = new JsonProviderSettingsStore(workspace.Root).Load(Path.Combine(workspace.Root, "ModelSetProject"));
 
         AssertEqual(0, exitCode, "Models set should succeed.");
         AssertEqual("deepseek-reasoner", settings.Providers[0].Model, "Provider model should be updated.");
@@ -889,7 +879,7 @@ public static class Program
             application.Run(["init", "--pid", "AttachProject"]);
             AddDefaultCriterion(application, "AttachProject");
             WriteArtifactRule(
-                Path.Combine(workspace.Root, "AttachProject"),
+                workspace.Root,
                 "응답에 재사용 가능한 중요한 산출물 후보가 있으면 artifact 태그로 감싼다.");
             Console.SetOut(output);
             application.Run([
@@ -1650,8 +1640,8 @@ public static class Program
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(root),
+            new FileArtifactRuleStore(root),
             new FileImportanceRuleStore(root),
             artifactService);
         IConversationLogStore logStore = new CompositeConversationLogStore(
@@ -1660,7 +1650,7 @@ public static class Program
             new SqliteConversationLogStore()
         ]);
         ChatService chatService = new ChatService(
-            new JsonProviderSettingsStore(),
+            new JsonProviderSettingsStore(root),
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = new ScriptedChatProvider("unused")
@@ -1720,8 +1710,8 @@ public static class Program
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(root),
+            new FileArtifactRuleStore(root),
             new FileImportanceRuleStore(root),
             artifactService);
         FetchUrlTool fetchTool = new FetchUrlTool(
@@ -1730,7 +1720,7 @@ public static class Program
             "{\"type\":\"tool_request\",\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://example.com\"}}",
             "요약: Hello World");
         ChatService chatService = new ChatService(
-            new JsonProviderSettingsStore(),
+            new JsonProviderSettingsStore(root),
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = provider
@@ -1781,8 +1771,8 @@ public static class Program
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(root),
+            new FileArtifactRuleStore(root),
             new FileImportanceRuleStore(root),
             artifactService);
         FetchUrlTool fetchTool = new FetchUrlTool(
@@ -1791,7 +1781,7 @@ public static class Program
             "{\"type\":\"tool_request\",\"requests\":[{\"tool\":\"fetch_url\",\"arguments\":{\"url\":\"https://example.com\"}},{\"tool\":\"nope\",\"arguments\":{}}]}",
             "요약: Hello World");
         ChatService chatService = new ChatService(
-            new JsonProviderSettingsStore(),
+            new JsonProviderSettingsStore(root),
             new Dictionary<string, IChatProvider>
             {
                 ["deepseek"] = provider
@@ -1823,7 +1813,7 @@ public static class Program
     private static CliApplication CreateCliApplication(string ideProgramRoot)
     {
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
-        IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
@@ -1832,8 +1822,8 @@ public static class Program
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(ideProgramRoot),
+            new FileArtifactRuleStore(ideProgramRoot),
             new FileImportanceRuleStore(ideProgramRoot),
             artifactService);
         ProjectRegistryService registry = CreateProjectRegistryService(ideProgramRoot);
@@ -1974,12 +1964,12 @@ public static class Program
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="apiKey">The API key.</param>
-    private static void WriteApiKey(string projectRoot, string apiKey)
+    private static void WriteApiKey(string programRoot, string apiKey)
     {
-        JsonProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
-        ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
+        JsonProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(programRoot);
+        ProviderSettingsDocument settings = providerSettingsStore.Load(programRoot);
         settings.Providers[0].ApiKey = apiKey;
-        providerSettingsStore.Save(projectRoot, settings);
+        providerSettingsStore.Save(programRoot, settings);
     }
 
     /// <summary>
@@ -1987,9 +1977,11 @@ public static class Program
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="content">The artifact rule content.</param>
-    private static void WriteArtifactRule(string projectRoot, string content)
+    private static void WriteArtifactRule(string programRoot, string content)
     {
-        string path = Path.Combine(projectRoot, ".llmide", "policies", "artifact-rule.md");
+        // Artifact rule is a common policy: write it to the program-root /policies.
+        string path = Path.Combine(programRoot, "policies", "artifact-rule.md");
+        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? programRoot);
         File.WriteAllText(path, content);
     }
 

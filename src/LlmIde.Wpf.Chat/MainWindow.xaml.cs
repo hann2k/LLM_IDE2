@@ -106,7 +106,7 @@ public partial class MainWindow : Window
         projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
         artifactService = new ArtifactService(new FileArtifactStore());
-        providerSettingsStore = new JsonProviderSettingsStore();
+        providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
 
         // Compose the same Core chat pipeline the CLI uses.
         criteriaService = new CriteriaService(new JsonCriteriaStore());
@@ -117,8 +117,8 @@ public partial class MainWindow : Window
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(ideProgramRoot),
+            new FileArtifactRuleStore(ideProgramRoot),
             new FileImportanceRuleStore(ideProgramRoot),
             artifactService,
             promptStore);

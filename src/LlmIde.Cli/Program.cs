@@ -32,7 +32,7 @@ public static class Program
     {
         string ideProgramRoot = AppContext.BaseDirectory;
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
-        IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore();
+        IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());
         ProjectStateService projectStateService = new ProjectStateService(new JsonProjectStateStore());
         FileRollingContextStore rollingContextStore = new FileRollingContextStore(ideProgramRoot);
@@ -42,8 +42,8 @@ public static class Program
             criteriaService,
             projectStateService,
             rollingContextStore,
-            new FileSystemRuleStore(),
-            new FileArtifactRuleStore(),
+            new FileSystemRuleStore(ideProgramRoot),
+            new FileArtifactRuleStore(ideProgramRoot),
             new FileImportanceRuleStore(ideProgramRoot),
             artifactService,
             promptStore);

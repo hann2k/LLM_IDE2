@@ -62,6 +62,14 @@ public sealed class ConversationToolCallRecord
             target = artifactRead.ArtifactId;
             summary = $"type={artifactRead.Type}, chars={artifactRead.Content.Length}";
         }
+        else if (toolResult.Result is GetBodyResult getBody)
+        {
+            summary = $"hasSelection={getBody.HasSelection}, chars={getBody.Body.Length}";
+        }
+        else if (toolResult.Result is ProposeBodyEditResult proposeBody)
+        {
+            summary = $"chars={proposeBody.Length}";
+        }
 
         return new ConversationToolCallRecord
         {

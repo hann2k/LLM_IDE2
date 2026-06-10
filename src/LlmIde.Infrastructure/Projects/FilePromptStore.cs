@@ -30,16 +30,8 @@ public sealed class FilePromptStore : IPromptStore
     /// <returns>The prompt templates keyed by identifier (empty when none configured).</returns>
     public IReadOnlyDictionary<string, string> Load(string projectRoot)
     {
-        string path = Path.Combine(
-            Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.PromptsFileName);
-
-        if (!File.Exists(path))
-        {
-            EnsureProjectPolicyFile(path);
-        }
+        // Policies are common to all projects: read from the program's /policies folder.
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.PromptsFileName);
 
         if (!File.Exists(path))
         {
@@ -57,25 +49,5 @@ public sealed class FilePromptStore : IPromptStore
             // A malformed file must not break chat; fall back to built-in defaults at the call site.
             return new Dictionary<string, string>(StringComparer.Ordinal);
         }
-    }
-
-    /// <summary>
-    /// Ensures the project policy file exists from the program template.
-    /// </summary>
-    /// <param name="projectPolicyPath">The project policy file path.</param>
-    private void EnsureProjectPolicyFile(string projectPolicyPath)
-    {
-        string templatePath = Path.Combine(
-            programRoot,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.PromptsFileName);
-
-        if (!File.Exists(templatePath))
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(projectPolicyPath) ?? string.Empty);
-        File.Copy(templatePath, projectPolicyPath, false);
     }
 }

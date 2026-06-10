@@ -36,10 +36,6 @@ public sealed class FileRollingContextStore : IRollingContextStore
         Directory.CreateDirectory(GetHistoryDirectory(projectRoot));
         EnsureTextFile(GetCurrentPath(projectRoot), string.Empty);
         EnsureTextFile(GetIndexPath(projectRoot), string.Empty);
-        EnsureRequiredTextFile(
-            GetCompressionRulePath(projectRoot),
-            LoadProgramPolicyTemplate(LlmIdeLayout.CompressionRuleFileName));
-        EnsureContextPolicy(projectRoot);
         EnsureRollingContextTable(projectRoot);
     }
 
@@ -83,7 +79,9 @@ public sealed class FileRollingContextStore : IRollingContextStore
     public string LoadCompressionRule(string projectRoot)
     {
         EnsureInitialized(projectRoot);
-        return File.ReadAllText(GetCompressionRulePath(projectRoot));
+
+        // The compression rule is a common policy: read from the program's /policies folder.
+        return LoadProgramPolicyTemplate(LlmIdeLayout.CompressionRuleFileName);
     }
 
     /// <summary>
@@ -198,55 +196,6 @@ public sealed class FileRollingContextStore : IRollingContextStore
     }
 
     /// <summary>
-    /// Ensures the context policy file contains Phase 6 defaults when it is empty.
-    /// </summary>
-    /// <param name="projectRoot">The project root path.</param>
-    private void EnsureContextPolicy(string projectRoot)
-    {
-        string path = Path.Combine(
-            GetMetadataDirectory(projectRoot),
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.ContextPolicyFileName);
-
-        if (File.Exists(path))
-        {
-            string existingPolicy = File.ReadAllText(path);
-
-            if (!string.IsNullOrWhiteSpace(existingPolicy) && existingPolicy.Trim() != "{}")
-            {
-                return;
-            }
-        }
-
-        File.WriteAllText(path, LoadProgramPolicyTemplate(LlmIdeLayout.ContextPolicyFileName, CreateDefaultContextPolicyJson()));
-    }
-
-    /// <summary>
-    /// Creates the default context policy JSON.
-    /// </summary>
-    /// <returns>The default context policy JSON.</returns>
-    private static string CreateDefaultContextPolicyJson()
-    {
-        Dictionary<string, object> policy = new Dictionary<string, object>
-        {
-            ["context_management_strategy"] = "summary_plus_window",
-            ["include_rolling_context_summary"] = true,
-            ["rolling_context_path"] = GetCurrentRelativePath(),
-            ["recent_turn_count"] = 0,
-            ["max_recent_turn_chars"] = 0,
-            ["max_rolling_context_chars"] = 24000,
-            ["compression_enabled"] = true,
-            ["compression_provider"] = "deepseek",
-            ["compression_model"] = "deepseek-chat",
-            ["compression_after_chat"] = true,
-            ["compression_failure_strategy"] = "keep_previous",
-            ["rag_enabled"] = false
-        };
-
-        return JsonSerializer.Serialize(policy, JsonOptions.Default);
-    }
-
-    /// <summary>
     /// Loads a policy template from the program policies directory.
     /// </summary>
     /// <param name="fileName">The policy file name.</param>
@@ -274,20 +223,6 @@ public sealed class FileRollingContextStore : IRollingContextStore
     private static void EnsureTextFile(string path, string content)
     {
         if (File.Exists(path))
-        {
-            return;
-        }
-
-        Directory.CreateDirectory(Path.GetDirectoryName(path) ?? string.Empty);
-        File.WriteAllText(path, content);
-    }
-
-    /// <summary>
-    /// Ensures a required text file exists and is not empty.
-    /// </summary>
-    private static void EnsureRequiredTextFile(string path, string content)
-    {
-        if (File.Exists(path) && !string.IsNullOrWhiteSpace(File.ReadAllText(path)))
         {
             return;
         }
@@ -502,17 +437,6 @@ public sealed class FileRollingContextStore : IRollingContextStore
     private static string GetIndexPath(string projectRoot)
     {
         return Path.Combine(GetRollingContextDirectory(projectRoot), LlmIdeLayout.RollingContextIndexFileName);
-    }
-
-    /// <summary>
-    /// Gets the compression rule path.
-    /// </summary>
-    private static string GetCompressionRulePath(string projectRoot)
-    {
-        return Path.Combine(
-            GetMetadataDirectory(projectRoot),
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.CompressionRuleFileName);
     }
 
     /// <summary>

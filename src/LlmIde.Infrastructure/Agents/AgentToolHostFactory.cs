@@ -15,8 +15,9 @@ public static class AgentToolHostFactory
     /// <param name="ideProgramRoot">The IDE program root (for global allowlist).</param>
     /// <param name="httpClient">The HTTP client used by network tools.</param>
     /// <param name="artifactService">The artifact service used by artifact tools.</param>
+    /// <param name="bodyBridge">The writing editor body bridge; when provided, the body editing tools are registered.</param>
     /// <returns>The configured tool host.</returns>
-    public static IAgentToolHost Create(string ideProgramRoot, HttpClient httpClient, ArtifactService artifactService)
+    public static IAgentToolHost Create(string ideProgramRoot, HttpClient httpClient, ArtifactService artifactService, IDocumentBodyBridge? bodyBridge = null)
     {
         // All implemented tools are registered here; add new tools to this list.
         List<IAgentTool> allTools =
@@ -28,6 +29,13 @@ public static class AgentToolHostFactory
             new ArtifactsListTool(artifactService),
             new ReadArtifactTool(artifactService)
         ];
+
+        // The writing app supplies a body bridge so the model can read/propose body edits (in-memory, not files).
+        if (bodyBridge is not null)
+        {
+            allTools.Add(new GetBodyTool(bodyBridge));
+            allTools.Add(new ProposeBodyEditTool(bodyBridge));
+        }
 
         AgentToolSettings settings = new JsonAgentToolSettingsStore().Load(ideProgramRoot);
 

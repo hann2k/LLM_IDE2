@@ -7,35 +7,25 @@ namespace LlmIde.Infrastructure.Projects;
 /// </summary>
 public sealed class FileArtifactRuleStore : IArtifactRuleStore
 {
+    /// <summary>
+    /// The IDE program root containing the common policy files.
+    /// </summary>
+    private readonly string programRoot;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="FileArtifactRuleStore"/> class.
+    /// </summary>
+    /// <param name="programRoot">The IDE program root.</param>
+    public FileArtifactRuleStore(string? programRoot = null)
+    {
+        this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
+    }
+
     /// <inheritdoc />
     public string Load(string projectRoot)
     {
-        string path = GetArtifactRulePath(projectRoot);
-        EnsureFile(path);
-        return File.ReadAllText(path);
-    }
-
-    private static void EnsureFile(string path)
-    {
-        string? directory = Path.GetDirectoryName(path);
-
-        if (!string.IsNullOrWhiteSpace(directory))
-        {
-            Directory.CreateDirectory(directory);
-        }
-
-        if (!File.Exists(path))
-        {
-            File.WriteAllText(path, string.Empty);
-        }
-    }
-
-    private static string GetArtifactRulePath(string projectRoot)
-    {
-        return Path.Combine(
-            Path.GetFullPath(projectRoot),
-            LlmIdeLayout.MetadataDirectoryName,
-            LlmIdeLayout.PoliciesDirectoryName,
-            LlmIdeLayout.ArtifactRuleFileName);
+        // Policies are common to all projects: read from the program's /policies folder.
+        string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ArtifactRuleFileName);
+        return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
     }
 }

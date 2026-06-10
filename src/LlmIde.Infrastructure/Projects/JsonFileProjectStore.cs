@@ -51,31 +51,13 @@ public sealed class JsonFileProjectStore : IProjectStore
             WriteProgress(metadataRoot, "project-state", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.CriteriaFileName), Array.Empty<Criterion>());
             WriteProgress(metadataRoot, "criteria", "running", string.Empty);
-            EnsureTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.SystemRuleFileName));
-            EnsureTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.CompressionRuleFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.CompressionRuleFileName));
-            EnsureTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ArtifactRuleFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.ArtifactRuleFileName));
-            EnsureTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ImportanceRuleFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.ImportanceRuleFileName));
-            EnsureJsonTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ContextPolicyFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.ContextPolicyFileName, CreateDefaultContextPolicyJson()));
-            EnsureJsonTextFile(
-                Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.ProviderPolicyFileName),
-                LoadProgramPolicyTemplate(LlmIdeLayout.ProviderPolicyFileName, CreateDefaultProviderPolicyJson()));
+            // Policies and provider settings are common (app-root /policies, /settings); not seeded per project.
             WriteProgress(metadataRoot, "policies", "running", string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.MessagesFileName), string.Empty);
             EnsureTextFile(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.RequestsFileName), string.Empty);
             SqliteConversationLogStore.EnsureDatabase(normalizedRoot);
             new FileRollingContextStore(programRoot).EnsureInitialized(normalizedRoot);
             WriteProgress(metadataRoot, "conversations", "running", string.Empty);
-            EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName), CreateDefaultProviderSettings());
             WriteProgress(metadataRoot, "settings", "running", string.Empty);
             EnsureJsonFile(Path.Combine(metadataRoot, LlmIdeLayout.ArtifactsDirectoryName, LlmIdeLayout.ArtifactsIndexFileName), Array.Empty<object>());
             WriteProgress(metadataRoot, "completed", "completed", string.Empty);
