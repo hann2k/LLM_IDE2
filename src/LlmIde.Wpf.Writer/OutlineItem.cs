@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// Represents one outline (목차) node in the writing workspace tree.

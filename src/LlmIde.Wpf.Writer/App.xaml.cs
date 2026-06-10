@@ -1,4 +1,4 @@
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// Provides the WPF application entry point.

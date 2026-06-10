@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Edits an artifact extracted from a conversation response: title, type (combo box), and content,

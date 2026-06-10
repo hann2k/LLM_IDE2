@@ -2,7 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows.Data;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// Multiplies a width by a fraction (converter parameter, default 0.72) so a chat bubble can cap

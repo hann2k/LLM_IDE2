@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// Serializable outline node (persisted to the project root's outline.json).

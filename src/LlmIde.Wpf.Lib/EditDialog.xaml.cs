@@ -2,7 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Provides a single text editor dialog for project files. Markdown files additionally show a

@@ -2,7 +2,7 @@ using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// Persisted main-window layout (resizable panel sizes).

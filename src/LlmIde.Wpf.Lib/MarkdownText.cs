@@ -1,6 +1,6 @@
 using System.Windows;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Attached property that renders Markdown text into a read-only <see cref="RichTextBox"/>'s document,

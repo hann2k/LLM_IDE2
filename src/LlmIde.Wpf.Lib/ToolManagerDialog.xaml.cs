@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.Windows;
 using LlmIde.Core.Agents;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Provides a read-only view of the tools the LLM can use. Tools are implemented in code, so this

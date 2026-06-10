@@ -5,7 +5,7 @@ using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
 using TextBox = System.Windows.Controls.TextBox;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Writer;
 
 /// <summary>
 /// A minimal single-line text input dialog (prompt + text box + 확인/취소).

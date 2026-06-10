@@ -3,7 +3,7 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Converts a conversation importance weight to the delete button visibility:

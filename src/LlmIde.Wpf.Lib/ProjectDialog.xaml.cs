@@ -1,7 +1,7 @@
 using System.Windows;
 using Forms = System.Windows.Forms;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Identifies the operation a <see cref="ProjectDialog"/> performs.

@@ -1,3 +1,4 @@
+using LlmIde.Wpf.Lib;
 using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.IO;
@@ -22,7 +23,7 @@ using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Chat;
 
 /// <summary>
 /// Provides the first WPF shell for the LLM IDE.

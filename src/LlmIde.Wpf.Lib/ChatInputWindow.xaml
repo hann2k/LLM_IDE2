@@ -1,4 +1,4 @@
-<Window x:Class="LlmIde.Wpf.ChatInputWindow"
+<Window x:Class="LlmIde.Wpf.Lib.ChatInputWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         Title="입력창"

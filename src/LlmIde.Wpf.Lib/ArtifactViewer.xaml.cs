@@ -3,7 +3,7 @@ using System.IO;
 using System.Windows;
 using System.Windows.Input;
 
-namespace LlmIde.Wpf;
+namespace LlmIde.Wpf.Lib;
 
 /// <summary>
 /// Provides a read-only artifact viewer. Code artifacts use a fixed-width code view; other
