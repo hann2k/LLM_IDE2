@@ -373,15 +373,17 @@
                                             PreviewMouseLeftButtonDown="ArtifactCard_PreviewMouseLeftButtonDown"
                                             MouseMove="ArtifactCard_MouseMove">
                                         <StackPanel>
-                                            <Image Source="{Binding ImagePath}"
-                                                   MaxHeight="96"
-                                                   Stretch="Uniform"
-                                                   Margin="0,0,0,6"
-                                                   Visibility="{Binding IsImage, Converter={StaticResource BoolToVis}}" />
+                                            <!-- Title (filename for image artifacts) sits on top so it stays visible even when the thumbnail is large or the row is short. -->
                                             <TextBlock Text="{Binding Title}"
                                                        FontSize="13"
                                                        FontWeight="Bold"
                                                        TextWrapping="Wrap" />
+                                            <Image Source="{Binding ImagePath}"
+                                                   MaxHeight="96"
+                                                   Stretch="Uniform"
+                                                   HorizontalAlignment="Left"
+                                                   Margin="0,6,0,0"
+                                                   Visibility="{Binding IsImage, Converter={StaticResource BoolToVis}}" />
                                             <TextBlock Text="{Binding Type}"
                                                        FontSize="12"
                                                        Foreground="#666666"
