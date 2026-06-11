@@ -22,4 +22,22 @@
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+
+  <!--
+    공통 정책의 단일 원본은 저장소 /policies 다. 빌드 시 프로그램 데이터 루트
+    (%LOCALAPPDATA%\LlmIde2\policies)로 무조건 복사(덮어쓰기)한다. 실행 파일 옆 복사와
+    첫 실행 시드는 폐기 (DEC-083). 실행 프로젝트(CLI/Chat/Writer)만
+    CopyPoliciesToProgramData=true 로 이 타깃을 켠다. Retries 는 병렬 빌드(Chat/Writer 동시)
+    시 같은 대상 파일 쓰기 충돌 대비다.
+  -->
+  <Target Name="CopyPoliciesToProgramDataRoot" AfterTargets="Build" Condition="'$(CopyPoliciesToProgramData)' == 'true'">
+    <ItemGroup>
+      <LlmIdePolicyFiles Include="$(MSBuildThisFileDirectory)policies\**\*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(LlmIdePolicyFiles)"
+          DestinationFolder="$(LOCALAPPDATA)\LlmIde2\policies\%(RecursiveDir)"
+          OverwriteReadOnlyFiles="true"
+          Retries="3"
+          RetryDelayMilliseconds="200" />
+  </Target>
 </Project>

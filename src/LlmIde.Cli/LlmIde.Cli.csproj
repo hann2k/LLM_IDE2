@@ -5,16 +5,14 @@
     <ProjectReference Include="..\LlmIde.Infrastructure\LlmIde.Infrastructure.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <Content Include="..\..\policies\**\*" Link="policies\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <AssemblyName>llmide</AssemblyName>
     <TargetFramework>net10.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <!-- 빌드 시 저장소 /policies 를 데이터 루트(%LOCALAPPDATA%\LlmIde2\policies)로 복사 (DEC-083). -->
+    <CopyPoliciesToProgramData>true</CopyPoliciesToProgramData>
   </PropertyGroup>
 
 </Project>
