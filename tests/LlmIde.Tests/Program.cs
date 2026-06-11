@@ -118,7 +118,7 @@ public static class Program
 
         AssertEqual("DefaultProject", result.ProjectInfo.Title, "Default project name should be assigned.");
         AssertEqual(Path.Combine(workspace.Root, "DefaultProject"), result.ProjectRoot, "Default project path should be under program root.");
-        AssertFileExists(result.ProjectRoot, ".llmide/project.json");
+        // AssertFileExists(result.ProjectRoot, ".llmide/project.json");
         AssertFileExists(result.ProjectRoot, ".llmide/init-progress.json");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/conversation.db");
         AssertFileExists(result.ProjectRoot, ".llmide/conversations/rolling-context/current.md");

@@ -956,7 +956,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         if (e.LeftButton != MouseButtonState.Pressed || outlineDragItem is null || outlineDragItem.IsEditing)
         {
             return;
@@ -985,7 +985,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         bool ok = TryResolveOutlineDrop(e, out OutlineItem dragged, out OutlineItem? target, out _)
             && (target is null || !ReferenceEquals(dragged, target));
         e.Effects = ok ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
@@ -1777,7 +1777,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactArea_DragOver(object sender, System.Windows.DragEventArgs e)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         e.Effects = viewModel.SelectedProject is not null && HasImageFiles(e.Data)
             ? System.Windows.DragDropEffects.Copy
             : System.Windows.DragDropEffects.None;
@@ -1836,7 +1836,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactCard_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed || artifactDragCandidate is null)
         {
             return;
@@ -1861,7 +1861,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void BodyEditor_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         if (e.Data.GetDataPresent(ArtifactDragFormat) && viewModel.IsBodyEditable)
         {
             e.Effects = System.Windows.DragDropEffects.Copy;
