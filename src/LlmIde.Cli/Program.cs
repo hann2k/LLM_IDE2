@@ -30,7 +30,7 @@ public static class Program
     /// <returns>The process exit code.</returns>
     public static int Main(string[] args)
     {
-        string ideProgramRoot = AppContext.BaseDirectory;
+        string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());

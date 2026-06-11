@@ -23,6 +23,8 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-writer.ps1 -Zip
 > 채팅 IDE(Writer 대신 Chat)를 배포하려면 스크립트의 프로젝트 경로를
 > `src/LlmIde.Wpf.Chat/LlmIde.Wpf.Chat.csproj`로 바꿔 동일하게 게시한다.
 
+**비개발자 테스터용 (압축 풀기도 어려운 경우)**: `scripts/install-and-run.bat`을 `LlmIde.Writer.zip`과 **같은 폴더**에 함께 전달한다. 테스터가 bat을 더블클릭하면: ① 실행 폴더에 압축 해제 → ② 데이터 폴더(패키지의 `LlmIde2`)를 `%LOCALAPPDATA%\LlmIde2`로 이동 → ③ 아키텍처 확인(x86/x64/ARM64) → ④ .NET 10 데스크톱 런타임 확인·(winget) 설치 → ⑤ Writer 실행. 프로그램은 데이터를 `%LOCALAPPDATA%\LlmIde2`에서 읽는다. (API 키를 미리 `settings/providers.json`에 박아 두면 키 입력 없이 바로 사용 가능.)
+
 ---
 
 ## B. 테스터용 — 설치와 첫 사용
@@ -54,11 +56,11 @@ powershell -ExecutionPolicy Bypass -File scripts/publish-writer.ps1 -Zip
 
 ## C. 데이터 위치
 
-실행 폴더(프로그램 루트) 기준:
+모든 사용자 데이터는 **`%LOCALAPPDATA%\LlmIde2`** 에 저장된다(앱 실행 파일 위치와 무관 — Program Files 같은 읽기 전용 위치에 설치해도 안전). 정책 파일은 앱에 동봉되어 있고, 첫 실행 시 이 폴더에 없으면 자동으로 시드된다(이후 사용자가 편집 가능).
 
 ```text
-<실행폴더>/
-├─ policies/              공통 정책(배포 포함)
+%LOCALAPPDATA%\LlmIde2\
+├─ policies/                공통 정책(첫 실행 시 시드, 편집 가능)
 ├─ settings/providers.json  공통 LLM 프로바이더 + API 키(로컬 평문)
 ├─ project/projects.json    프로젝트 등록소
 └─ <프로젝트폴더>/           목차(outline.json)·본문(<id>.md)·.llmide(대화/아티팩트 등)
