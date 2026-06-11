@@ -328,7 +328,15 @@ public partial class MainWindow : WorkspaceWindowBase
             return;
         }
 
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        // 잘못된 링크(상대 경로 등)가 앱을 종료시키지 않도록 방어한다 (DEC-087).
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"링크를 열 수 없습니다: {url}\n{ex.Message}", "링크 열기 오류", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>
@@ -1882,7 +1890,8 @@ public partial class MainWindow : WorkspaceWindowBase
     }
 
     /// <summary>
-    /// Inserts a markdown reference (image for image artifacts) at the drop position in the body.
+    /// Inserts the dropped artifact at the drop position in the body: an image reference tag for
+    /// image artifacts, or the artifact's text content itself for text artifacts (DEC-087).
     /// </summary>
     private void BodyEditor_Drop(object sender, System.Windows.DragEventArgs e)
     {
@@ -1900,7 +1909,7 @@ public partial class MainWindow : WorkspaceWindowBase
         try
         {
             Artifact artifact = artifactService.Get(projectRoot, artifactId);
-            string reference = BuildArtifactReference(artifact);
+            string insertion = BuildArtifactInsertion(projectRoot, artifact);
 
             // Insert at the drop position; fall back to the caret when the point maps nowhere.
             int index = editor.GetCharacterIndexFromPoint(e.GetPosition(editor), true);
@@ -1912,8 +1921,8 @@ public partial class MainWindow : WorkspaceWindowBase
 
             string body = viewModel.BodyText ?? string.Empty;
             index = Math.Clamp(index, 0, body.Length);
-            viewModel.BodyText = body.Insert(index, reference);
-            editor.CaretIndex = index + reference.Length;
+            viewModel.BodyText = body.Insert(index, insertion);
+            editor.CaretIndex = index + insertion.Length;
             e.Handled = true;
         }
         catch (Exception ex)
@@ -1923,17 +1932,24 @@ public partial class MainWindow : WorkspaceWindowBase
     }
 
     /// <summary>
-    /// Builds a project-relative markdown reference for an artifact (image syntax for images).
+    /// Builds the body insertion for a dropped artifact: a project-relative markdown image
+    /// reference for images (rendered by the preview, DEC-081), or the artifact's text content
+    /// for text artifacts (DEC-087 — links crashed the preview and were not the writing intent).
     /// </summary>
-    private static string BuildArtifactReference(Artifact artifact)
+    /// <param name="projectRoot">The project root path.</param>
+    /// <param name="artifact">The dropped artifact.</param>
+    /// <returns>The text to insert into the body.</returns>
+    private string BuildArtifactInsertion(string projectRoot, Artifact artifact)
     {
-        // Body files live in the project root; reference the artifact via its project-relative path.
         Log.Ins.Debug("시작");
-        string relative = $"{LlmIdeLayout.MetadataDirectoryName}/{LlmIdeLayout.ArtifactsDirectoryName}/{artifact.ContentPath}";
+        if (ArtifactService.IsImage(artifact))
+        {
+            // Body files live in the project root; reference the image via its project-relative path.
+            string relative = $"{LlmIdeLayout.MetadataDirectoryName}/{LlmIdeLayout.ArtifactsDirectoryName}/{artifact.ContentPath}";
+            return $"![{artifact.Title}]({relative})";
+        }
 
-        return ArtifactService.IsImage(artifact)
-            ? $"![{artifact.Title}]({relative})"
-            : $"[{artifact.Title}]({relative})";
+        return artifactService.ReadContent(projectRoot, artifact);
     }
 
     /// <summary>

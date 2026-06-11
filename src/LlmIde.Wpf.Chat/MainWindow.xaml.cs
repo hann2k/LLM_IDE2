@@ -191,7 +191,15 @@ public partial class MainWindow : WorkspaceWindowBase
             return;
         }
 
-        System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        // 잘못된 링크(상대 경로 등)가 앱을 종료시키지 않도록 방어한다 (DEC-087).
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch (Exception ex)
+        {
+            System.Windows.MessageBox.Show(this, $"링크를 열 수 없습니다: {url}\n{ex.Message}", "링크 열기 오류", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
 
     /// <summary>
