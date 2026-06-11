@@ -1974,7 +1974,15 @@ public partial class MainWindow : WorkspaceWindowBase
             return $"![{artifact.Title}]({relative})";
         }
 
-        return artifactService.ReadContent(projectRoot, artifact);
+        string content = artifactService.ReadContent(projectRoot, artifact);
+
+        // 코드류 아티팩트는 마크다운 코드 펜스로 감싸 줄/들여쓰기와 미리보기 서식을 보존한다.
+        if (ArtifactViewer.IsCodeArtifact(artifact.Type, artifact.TargetPath))
+        {
+            return "```\n" + content.TrimEnd('\r', '\n') + "\n```";
+        }
+
+        return content;
     }
 
     /// <summary>

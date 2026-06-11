@@ -53,12 +53,13 @@ public partial class ArtifactViewer : Window
     }
 
     /// <summary>
-    /// Determines whether an artifact should be shown in the code view rather than Markdown.
+    /// Determines whether an artifact is code-like (shown in the code view rather than Markdown;
+    /// also used by the Writer body drop to wrap insertions in a markdown code fence).
     /// </summary>
     /// <param name="type">The artifact type.</param>
     /// <param name="targetPath">The optional target path.</param>
     /// <returns>True when the artifact is code-like.</returns>
-    private static bool IsCodeArtifact(string type, string targetPath)
+    public static bool IsCodeArtifact(string type, string targetPath)
     {
         Log.Ins.Debug("시작");
         string normalizedType = (type ?? string.Empty).Trim().ToLowerInvariant();
