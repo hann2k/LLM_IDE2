@@ -95,6 +95,9 @@ public static class Program
             ChatServiceRunsToolBatchWithPartialFailure,
             WebSearchParsesResults,
             WebSearchEmptyQueryFails,
+            ClaudeProviderSendMapsSystemAndParsesContent,
+            ClaudeProviderStreamParsesTextDeltas,
+            ClaudeProviderListModelsParsesIds,
             ConversationDeleteRemovesTurnAndMessages,
             ManualConversationIsStoredAsCompletedTurn,
             UpdateAssistantMessageContentReplacesContent,
@@ -326,6 +329,12 @@ public static class Program
         AssertEqual("deepseek", provider.Name, "Provider settings should include DeepSeek.");
         AssertEqual(string.Empty, provider.ApiKey, "API key should be an empty placeholder.");
         AssertEqual("deepseek-chat", provider.Model, "DeepSeek model should be initialized.");
+
+        // Claude entry is seeded alongside DeepSeek (DEC-086).
+        ProviderSettings claude = settings.Providers[1];
+        AssertEqual("claude", claude.Name, "Provider settings should include Claude.");
+        AssertEqual(string.Empty, claude.ApiKey, "Claude API key should be an empty placeholder.");
+        AssertEqual("claude-opus-4-8", claude.Model, "Claude model should be initialized.");
     }
 
     /// <summary>
@@ -1605,6 +1614,88 @@ public static class Program
     }
 
     /// <summary>
+    /// Verifies the Claude provider lifts system messages into the top-level system field,
+    /// sends Anthropic auth headers, and parses text content blocks (DEC-086).
+    /// </summary>
+    private static void ClaudeProviderSendMapsSystemAndParsesContent()
+    {
+        string responseBody = """{"content":[{"type":"text","text":"하이"}],"stop_reason":"end_turn"}""";
+        CapturingHttpMessageHandler handler = new CapturingHttpMessageHandler(responseBody, "application/json", 200);
+        ClaudeChatProvider provider = new ClaudeChatProvider(new HttpClient(handler));
+
+        ChatProviderResponse response = provider.SendAsync(
+            new ChatProviderRequest
+            {
+                Messages =
+                [
+                    new ChatMessage { Role = "system", Content = "follow the rules" },
+                    new ChatMessage { Role = "user", Content = "hello" }
+                ]
+            },
+            new ProviderSettings { Name = "claude", ApiKey = "test-key", Model = "claude-opus-4-8" },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertEqual("하이", response.Content, "Claude text content should be parsed.");
+        AssertEqual("claude-opus-4-8", response.Model, "Settings model should be used when the request has none.");
+        AssertContains(handler.LastHeaders, "x-api-key");
+        AssertContains(handler.LastHeaders, "anthropic-version");
+        AssertContains(handler.LastBody, "\"system\":\"follow the rules\"");
+        AssertContains(handler.LastBody, "\"max_tokens\"");
+        AssertFalse(handler.LastBody.Contains("\"role\":\"system\""), "System role must not appear inside messages.");
+    }
+
+    /// <summary>
+    /// Verifies the Claude provider streams only text_delta chunks from the SSE stream (DEC-086).
+    /// </summary>
+    private static void ClaudeProviderStreamParsesTextDeltas()
+    {
+        string sse =
+            "event: message_start\n" +
+            "data: {\"type\":\"message_start\"}\n" +
+            "\n" +
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"안\"}}\n" +
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"x\"}}\n" +
+            "data: {\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"text_delta\",\"text\":\"녕\"}}\n" +
+            "event: message_stop\n" +
+            "data: {\"type\":\"message_stop\"}\n";
+        ClaudeChatProvider provider = new ClaudeChatProvider(
+            new HttpClient(new FakeHttpMessageHandler(sse, "text/event-stream", 200)));
+        StringBuilder builder = new StringBuilder();
+
+        CollectAsync().GetAwaiter().GetResult();
+
+        async Task CollectAsync()
+        {
+            await foreach (string chunk in provider.StreamAsync(
+                new ChatProviderRequest { Messages = [new ChatMessage { Role = "user", Content = "hi" }] },
+                new ProviderSettings { Name = "claude", ApiKey = "test-key", Model = "claude-opus-4-8" },
+                CancellationToken.None))
+            {
+                builder.Append(chunk);
+            }
+        }
+
+        AssertEqual("안녕", builder.ToString(), "Only text_delta chunks should be streamed.");
+    }
+
+    /// <summary>
+    /// Verifies the Claude provider parses the model list response (DEC-086).
+    /// </summary>
+    private static void ClaudeProviderListModelsParsesIds()
+    {
+        string body = """{"data":[{"id":"claude-opus-4-8"},{"id":"claude-sonnet-4-6"}]}""";
+        ClaudeChatProvider provider = new ClaudeChatProvider(
+            new HttpClient(new FakeHttpMessageHandler(body, "application/json", 200)));
+
+        IReadOnlyList<ProviderModel> models = provider.ListModelsAsync(
+            new ProviderSettings { Name = "claude", ApiKey = "test-key" },
+            CancellationToken.None).GetAwaiter().GetResult();
+
+        AssertEqual(2, models.Count, "Both model entries should be returned.");
+        AssertEqual("claude-opus-4-8", models[0].Id, "Model identifiers should be parsed.");
+    }
+
+    /// <summary>
     /// Verifies deleting a conversation removes its turn, messages, and tool calls but keeps others.
     /// </summary>
     private static void ConversationDeleteRemovesTurnAndMessages()
@@ -2359,6 +2450,72 @@ public sealed class FakeHttpMessageHandler : HttpMessageHandler
             Content = content
         };
         return Task.FromResult(response);
+    }
+}
+
+/// <summary>
+/// A fake HTTP handler that returns a fixed response and captures the outgoing request
+/// (body + headers) so provider tests can assert the wire format without real HTTP calls.
+/// </summary>
+public sealed class CapturingHttpMessageHandler : HttpMessageHandler
+{
+    /// <summary>
+    /// The response body.
+    /// </summary>
+    private readonly string body;
+
+    /// <summary>
+    /// The response content type.
+    /// </summary>
+    private readonly string contentType;
+
+    /// <summary>
+    /// The response status code.
+    /// </summary>
+    private readonly int statusCode;
+
+    /// <summary>
+    /// Gets the last captured request body.
+    /// </summary>
+    public string LastBody { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Gets the last captured request headers (one per line).
+    /// </summary>
+    public string LastHeaders { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="CapturingHttpMessageHandler"/> class.
+    /// </summary>
+    /// <param name="body">The response body.</param>
+    /// <param name="contentType">The response content type.</param>
+    /// <param name="statusCode">The response status code.</param>
+    public CapturingHttpMessageHandler(string body, string contentType, int statusCode)
+    {
+        this.body = body;
+        this.contentType = contentType;
+        this.statusCode = statusCode;
+    }
+
+    /// <summary>
+    /// Captures the request and returns the fixed response.
+    /// </summary>
+    /// <param name="request">The HTTP request.</param>
+    /// <param name="cancellationToken">The cancellation token.</param>
+    /// <returns>The HTTP response.</returns>
+    protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        LastBody = request.Content is null
+            ? string.Empty
+            : await request.Content.ReadAsStringAsync(cancellationToken);
+        LastHeaders = request.Headers.ToString();
+
+        StringContent content = new StringContent(body, Encoding.UTF8);
+        content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue(contentType);
+        return new HttpResponseMessage((HttpStatusCode)statusCode)
+        {
+            Content = content
+        };
     }
 }
 

@@ -72,7 +72,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     }
 
     /// <summary>
-    /// Creates the default provider settings (one DeepSeek entry without a key).
+    /// Creates the default provider settings (DeepSeek + Claude entries without keys, DEC-086).
     /// </summary>
     /// <returns>The default document.</returns>
     private static ProviderSettingsDocument CreateDefault()
@@ -81,7 +81,11 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
         return new ProviderSettingsDocument
         {
             DefaultProvider = "deepseek",
-            Providers = [new ProviderSettings { Name = "deepseek", Model = "deepseek-chat" }]
+            Providers =
+            [
+                new ProviderSettings { Name = "deepseek", Model = "deepseek-chat" },
+                new ProviderSettings { Name = "claude", Model = "claude-opus-4-8" }
+            ]
         };
     }
 }

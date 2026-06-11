@@ -244,7 +244,7 @@ public sealed class ChatService
         Action<string>? onCompressionChunk = null,
         Action<string>? onAgentStep = null)
     {
-        Log.Ins.Debug("시작");
+        Log.Ins.Debug($"-> LLM: {message}");
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         onRequestReady?.Invoke(CreatePreviewResponse(preparedRequest));

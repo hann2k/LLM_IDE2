@@ -27,7 +27,7 @@ public static class ConversationSequence
     /// <returns>True when the identifier is a non-zero numeric sequence.</returns>
     public static bool TryParse(string identifier, out long sequence)
     {
-        Log.Ins.Debug("시작");
+        // Log.Ins.Debug("시작");
         sequence = 0;
 
         if (string.IsNullOrWhiteSpace(identifier))

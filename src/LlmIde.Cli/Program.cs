@@ -54,6 +54,7 @@ public static class Program
             artifactService,
             promptStore);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
+        ClaudeChatProvider claudeProvider = new ClaudeChatProvider(new HttpClient());
         ProjectRegistryService projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
         ProjectInitializer projectInitializer = new ProjectInitializer(projectStore, projectRegistryService, ideProgramRoot);
         HttpClient fetchHttpClient = new HttpClient(new HttpClientHandler
@@ -75,7 +76,8 @@ public static class Program
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
             {
-                ["deepseek"] = deepSeekProvider
+                ["deepseek"] = deepSeekProvider,
+                ["claude"] = claudeProvider
             },
             conversationLogStore,
             contextBuilder,
@@ -90,11 +92,13 @@ public static class Program
             providerSettingsStore,
             new Dictionary<string, IModelProvider>
             {
-                ["deepseek"] = deepSeekProvider
+                ["deepseek"] = deepSeekProvider,
+                ["claude"] = claudeProvider
             });
         Dictionary<string, IChatProvider> chatProviders = new Dictionary<string, IChatProvider>
         {
-            ["deepseek"] = deepSeekProvider
+            ["deepseek"] = deepSeekProvider,
+            ["claude"] = claudeProvider
         };
         CliApplication application = new CliApplication(
             projectStore,

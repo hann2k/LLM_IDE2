@@ -128,6 +128,7 @@ public partial class MainWindow : WorkspaceWindowBase
             artifactService,
             promptStore);
         DeepSeekChatProvider deepSeekProvider = new DeepSeekChatProvider(new HttpClient());
+        ClaudeChatProvider claudeProvider = new ClaudeChatProvider(new HttpClient());
         conversationLogStore = new CompositeConversationLogStore(
         [
             new JsonlConversationLogStore(),
@@ -148,7 +149,8 @@ public partial class MainWindow : WorkspaceWindowBase
             providerSettingsStore,
             new Dictionary<string, IChatProvider>
             {
-                ["deepseek"] = deepSeekProvider
+                ["deepseek"] = deepSeekProvider,
+                ["claude"] = claudeProvider
             },
             conversationLogStore,
             contextBuilder,
