@@ -482,6 +482,7 @@ public partial class MainWindow : WorkspaceWindowBase
         SetBodyPreviewMode(false);
         viewModel.SelectedOutlineItem = null;
         viewModel.BodyText = string.Empty;
+        ResetBodyUndoHistory();
         viewModel.OutlineItems.Clear();
 
         foreach (OutlineItem root in outlineStore.Load(project.Path))
@@ -614,6 +615,9 @@ public partial class MainWindow : WorkspaceWindowBase
         viewModel.BodyText = projectRoot is not null && current is not null
             ? outlineStore.ReadBody(projectRoot, current)
             : string.Empty;
+
+        // 다른 섹션의 텍스트가 Ctrl+Z로 되살아나지 않도록 스택을 비운다 (DEC-088).
+        ResetBodyUndoHistory();
     }
 
     /// <summary>
@@ -921,6 +925,7 @@ public partial class MainWindow : WorkspaceWindowBase
         SetBodyPreviewMode(false);
         viewModel.SelectedOutlineItem = null;
         viewModel.BodyText = string.Empty;
+        ResetBodyUndoHistory();
         RenumberOutline();
         SaveOutline();
     }
@@ -1919,7 +1924,7 @@ public partial class MainWindow : WorkspaceWindowBase
                 index = editor.CaretIndex;
             }
 
-            string body = viewModel.BodyText ?? string.Empty;
+            string body = editor.Text ?? string.Empty;
             index = Math.Clamp(index, 0, body.Length);
 
             // 드롭 지점이 기존 마크다운 이미지/링크 태그 내부면 태그가 쪼개지지 않도록
@@ -1935,7 +1940,10 @@ public partial class MainWindow : WorkspaceWindowBase
                 }
             }
 
-            viewModel.BodyText = body.Insert(index, insertion);
+            // 편집기 경유로 삽입해 실행취소(Ctrl+Z) 단위로 기록한다 (DEC-088).
+            // 양방향 바인딩이 BodyText를 자동 갱신한다.
+            editor.Select(index, 0);
+            editor.SelectedText = insertion;
             editor.CaretIndex = index + insertion.Length;
             e.Handled = true;
         }
@@ -1981,6 +1989,39 @@ public partial class MainWindow : WorkspaceWindowBase
         }
 
         SetBodyPreviewMode(BodyPreviewView.Visibility != Visibility.Visible);
+    }
+
+    /// <summary>
+    /// Undoes the last body editor change ([←] 버튼, Ctrl+Z와 동일, DEC-088).
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void BodyUndo_Click(object sender, RoutedEventArgs e)
+    {
+        Log.Ins.Debug("시작");
+        BodyEditor.Undo();
+    }
+
+    /// <summary>
+    /// Redoes the last undone body editor change ([→] 버튼, Ctrl+Y와 동일, DEC-088).
+    /// </summary>
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void BodyRedo_Click(object sender, RoutedEventArgs e)
+    {
+        Log.Ins.Debug("시작");
+        BodyEditor.Redo();
+    }
+
+    /// <summary>
+    /// Clears the body editor's undo/redo stack. Called on section switch, project change, and
+    /// outline deletion so undo can never resurrect another document's text (DEC-088).
+    /// </summary>
+    private void ResetBodyUndoHistory()
+    {
+        Log.Ins.Debug("시작");
+        BodyEditor.IsUndoEnabled = false;
+        BodyEditor.IsUndoEnabled = true;
     }
 
     /// <summary>

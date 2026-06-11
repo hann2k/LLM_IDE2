@@ -294,11 +294,24 @@
                             BorderThickness="0,0,1,1">
                         <DockPanel>
                             <DockPanel DockPanel.Dock="Top" Margin="8,4">
+                                <!-- 우측 도킹은 선언 순서대로 오른쪽부터 쌓인다: [←] [→] [미리보기/수정] (DEC-088) -->
                                 <Button x:Name="BodyPreviewToggleButton"
                                         DockPanel.Dock="Right"
                                         Content="미리보기"
                                         Padding="12,2"
                                         Click="BodyPreviewToggle_Click" />
+                                <Button DockPanel.Dock="Right"
+                                        Content="→"
+                                        Padding="8,2"
+                                        Margin="0,0,6,0"
+                                        ToolTip="다시 실행 (Ctrl+Y)"
+                                        Click="BodyRedo_Click" />
+                                <Button DockPanel.Dock="Right"
+                                        Content="←"
+                                        Padding="8,2"
+                                        Margin="0,0,4,0"
+                                        ToolTip="실행 취소 (Ctrl+Z)"
+                                        Click="BodyUndo_Click" />
                                 <TextBlock Text="본문"
                                            FontWeight="Bold"
                                            FontSize="13"
