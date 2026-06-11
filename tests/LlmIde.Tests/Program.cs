@@ -16,6 +16,7 @@ using System.Net.Http;
 using System.Runtime.CompilerServices;
 using System.Text;
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Tests;
 
@@ -24,12 +25,18 @@ namespace LlmIde.Tests;
 /// </summary>
 public static class Program
 {
+    // private static string LogRoot = string.Empty;
     /// <summary>
     /// Runs all tests.
     /// </summary>
     /// <returns>The process exit code.</returns>
     public static int Main()
     {
+        // LogRoot = LlmIde.Infrastructure.ProgramDataRoot.GetLogDir();
+
+        Log.Ins.SetLogDir(LlmIde.Infrastructure.ProgramDataRoot.GetLogDir());
+        Log.Ins.Debug("시작");
+
         List<Action> tests =
         [
             DefaultInitCreatesDefaultProjectBelowProgramRoot,

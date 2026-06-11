@@ -21,8 +21,32 @@
 4. 빌드 및 테스트를 수행한다.
 
 ```
+빌드
 dotnet build LlmIde.slnx -c Debug
+
+테스트
 dotnet run --project tests/LlmIde.Tests/LlmIde.Tests.csproj -c Debug
+
+커밋
+git add -A
+git status --short
+git commit -q -F - <<'EOF'
+chore(diag): 디버그 로깅 컨벤션 확정 + 연속 이동 이벤트 로그 제외
+
+- Code_Convention.md: 새 메서드/생성자 첫 줄 Log.Ins.Debug("시작") 고정 규칙
+  추가. 예외 = 테스트 메서드, 연속 마우스 이동 이벤트 핸들러.
+- Writer: 이동/드래그오버 핸들러 5개(OutlineTree_MouseMove, OutlineTree_DragOver,
+  ArtifactArea_DragOver, ArtifactCard_MouseMove, BodyEditor_PreviewDragOver)의
+  시작 로그 주석 처리(이동마다 과도 축적 방지). [사용자 수정]
+- tests: DefaultProject 초기화의 project.json 존재 단언 임시 주석. [사용자 수정]
+
+Co-Authored-By: Claude Opus 4.8 (1M context) <noreply@anthropic.com>
+EOF
+git log --oneline -1
+
+푸시
+git push origin main 2>&1 | tail -5
+
 ```
 
 5. 빌드오류 및 테스트 오류가 발생하면 2단계부터 재실행한다.

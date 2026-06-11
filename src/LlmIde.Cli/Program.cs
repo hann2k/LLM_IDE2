@@ -31,8 +31,12 @@ public static class Program
     /// <returns>The process exit code.</returns>
     public static int Main(string[] args)
     {
-        Log.Ins.Debug("시작");
         string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
+        Log.Ins.SetLogDir(LlmIde.Infrastructure.ProgramDataRoot.GetLogDir());
+        Log.Ins.Debug("시작");
+
+        // Log.Ins.Debug("시작");
+        // string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
         CriteriaService criteriaService = new CriteriaService(new JsonCriteriaStore());

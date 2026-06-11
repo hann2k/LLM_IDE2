@@ -22,7 +22,8 @@ public static class ProgramDataRoot
     /// <returns>The absolute data root path (%LOCALAPPDATA%\LlmIde2).</returns>
     public static string EnsureAndGet()
     {
-        Log.Ins.Debug("시작");
+        // 여기는 예외로 로깅하면 안된다.
+        // Log.Ins.Debug("시작");
         string dataRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             FolderName);
@@ -30,6 +31,16 @@ public static class ProgramDataRoot
         Directory.CreateDirectory(dataRoot);
         SeedPolicies(dataRoot);
         return dataRoot;
+    }
+
+    public static string GetLogDir()
+    {
+        string logRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
+            FolderName, "Log");
+
+        Directory.CreateDirectory(logRoot);
+        return logRoot;
     }
 
     /// <summary>

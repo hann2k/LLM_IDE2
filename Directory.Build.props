@@ -10,10 +10,11 @@
     Framework.Common.Logger.Log 가 전 프로젝트에서 필요해졌다. 기존에는 Infrastructure 만
     참조했으나(파일 로깅), 이제 Core/Cli/Wpf 전 모듈이 직접 호출하므로 공통화한다.
     Newtonsoft.Json 은 Framework.Common.dll(bare DLL) 의 전이 의존성이라 함께 둔다.
+    참조 대상은 외부 라이브러리 빌드 산출물(FrameworkCommon bin/Debug)을 직접 가리킨다.
   -->
   <ItemGroup>
     <Reference Include="Framework.Common">
-      <HintPath>$(MSBuildThisFileDirectory)package\Lib.Net10\Framework.Common.dll</HintPath>
+      <HintPath>C:\Users\user\Project_CS\Lib.Net10\FrameworkCommon\bin\Debug\net10.0\Framework.Common.dll</HintPath>
     </Reference>
   </ItemGroup>
 

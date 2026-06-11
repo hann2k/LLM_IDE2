@@ -96,13 +96,16 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     public MainWindow()
     {
+        string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
+        Log.Ins.SetLogDir(LlmIde.Infrastructure.ProgramDataRoot.GetLogDir());
         Log.Ins.Debug("시작");
+
         InitializeComponent();
 
         // Open Markdown hyperlinks (in rendered conversation responses) in the default browser.
         CommandBindings.Add(new System.Windows.Input.CommandBinding(Markdig.Wpf.Commands.Hyperlink, OpenMarkdownHyperlink));
 
-        string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
+        // string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
         viewModel = new MainWindowViewModel();
         projectStore = new JsonFileProjectStore(ideProgramRoot);
         projectRegistryService = new ProjectRegistryService(new JsonProjectRegistryStore(ideProgramRoot));
