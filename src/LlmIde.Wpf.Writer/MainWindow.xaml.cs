@@ -1921,6 +1921,20 @@ public partial class MainWindow : WorkspaceWindowBase
 
             string body = viewModel.BodyText ?? string.Empty;
             index = Math.Clamp(index, 0, body.Length);
+
+            // 드롭 지점이 기존 마크다운 이미지/링크 태그 내부면 태그가 쪼개지지 않도록
+            // 태그 끝으로 보정하고, 두 태그가 붙지 않게 공백 하나를 사이에 둔다.
+            foreach (System.Text.RegularExpressions.Match match in
+                System.Text.RegularExpressions.Regex.Matches(body, @"!?\[[^\]]*\]\([^)]*\)"))
+            {
+                if (index > match.Index && index < match.Index + match.Length)
+                {
+                    index = match.Index + match.Length;
+                    insertion = " " + insertion;
+                    break;
+                }
+            }
+
             viewModel.BodyText = body.Insert(index, insertion);
             editor.CaretIndex = index + insertion.Length;
             e.Handled = true;
