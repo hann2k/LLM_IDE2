@@ -469,6 +469,7 @@ public partial class MainWindow : WorkspaceWindowBase
         viewModel.Artifacts.Clear();
 
         // Load the document outline (and reset the body editor) for this project.
+        SetBodyPreviewMode(false);
         viewModel.SelectedOutlineItem = null;
         viewModel.BodyText = string.Empty;
         viewModel.OutlineItems.Clear();
@@ -586,6 +587,8 @@ public partial class MainWindow : WorkspaceWindowBase
     private void OutlineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
         Log.Ins.Debug("시작");
+        // The preview is a snapshot; switching sections returns to the editor (DEC-084).
+        SetBodyPreviewMode(false);
         string? projectRoot = viewModel.SelectedProject?.Path;
 
         // Save the previously selected item's body before switching (focus-move save).
@@ -905,6 +908,7 @@ public partial class MainWindow : WorkspaceWindowBase
 
         ObservableCollection<OutlineItem> collection = selected.Parent?.Children ?? viewModel.OutlineItems;
         collection.Remove(selected);
+        SetBodyPreviewMode(false);
         viewModel.SelectedOutlineItem = null;
         viewModel.BodyText = string.Empty;
         RenumberOutline();
@@ -1393,6 +1397,8 @@ public partial class MainWindow : WorkspaceWindowBase
 
         if (BodyDiffDialog.Confirm(viewModel.BodyText, proposed, this))
         {
+            // Return to the editor so the applied revision is immediately visible/editable (DEC-084).
+            SetBodyPreviewMode(false);
             viewModel.BodyText = proposed;
             SaveCurrentBody();
         }
@@ -1927,9 +1933,12 @@ public partial class MainWindow : WorkspaceWindowBase
     }
 
     /// <summary>
-    /// Opens the body preview window (text + images rendered from markdown).
+    /// Toggles the body area between the text editor and the in-place markdown preview
+    /// ([미리보기] ↔ [수정], DEC-084).
     /// </summary>
-    private void BodyPreview_Click(object sender, RoutedEventArgs e)
+    /// <param name="sender">The event sender.</param>
+    /// <param name="e">The event arguments.</param>
+    private void BodyPreviewToggle_Click(object sender, RoutedEventArgs e)
     {
         Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
@@ -1937,7 +1946,27 @@ public partial class MainWindow : WorkspaceWindowBase
             return;
         }
 
-        BodyPreviewWindow.Show(viewModel.BodyText ?? string.Empty, viewModel.SelectedProject.Path, this);
+        SetBodyPreviewMode(BodyPreviewView.Visibility != Visibility.Visible);
+    }
+
+    /// <summary>
+    /// Shows either the rendered markdown preview (true) or the text editor (false) in the body
+    /// area, and flips the toggle button caption to the opposite action. The preview is a snapshot
+    /// of the editor content at switch time (relative image paths resolved against the project root).
+    /// </summary>
+    /// <param name="preview">True to show the rendered preview, false to show the editor.</param>
+    private void SetBodyPreviewMode(bool preview)
+    {
+        Log.Ins.Debug("시작");
+        if (preview)
+        {
+            string projectRoot = viewModel.SelectedProject?.Path ?? string.Empty;
+            MarkdownText.SetText(BodyPreviewView, BodyMarkdownPreview.RewriteImagePaths(viewModel.BodyText ?? string.Empty, projectRoot));
+        }
+
+        BodyPreviewView.Visibility = preview ? Visibility.Visible : Visibility.Collapsed;
+        BodyEditor.Visibility = preview ? Visibility.Collapsed : Visibility.Visible;
+        BodyPreviewToggleButton.Content = preview ? "수정" : "미리보기";
     }
 
     /// <summary>

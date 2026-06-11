@@ -294,10 +294,11 @@
                             BorderThickness="0,0,1,1">
                         <DockPanel>
                             <DockPanel DockPanel.Dock="Top" Margin="8,4">
-                                <Button DockPanel.Dock="Right"
+                                <Button x:Name="BodyPreviewToggleButton"
+                                        DockPanel.Dock="Right"
                                         Content="미리보기"
                                         Padding="12,2"
-                                        Click="BodyPreview_Click" />
+                                        Click="BodyPreviewToggle_Click" />
                                 <TextBlock Text="본문"
                                            FontWeight="Bold"
                                            FontSize="13"
@@ -318,6 +319,15 @@
                                          AllowDrop="True"
                                          PreviewDragOver="BodyEditor_PreviewDragOver"
                                          Drop="BodyEditor_Drop" />
+                                <!-- 본문 자리 마크다운 미리보기 (DEC-084). [미리보기] ↔ [수정] 토글로 편집기와 교대 표시. -->
+                                <RichTextBox x:Name="BodyPreviewView"
+                                             Visibility="Collapsed"
+                                             IsReadOnly="True"
+                                             IsDocumentEnabled="True"
+                                             BorderThickness="0"
+                                             Padding="10"
+                                             Background="White"
+                                             VerticalScrollBarVisibility="Auto" />
                                 <TextBlock Text="목차를 선택하면 본문을 편집할 수 있습니다."
                                            Foreground="#AAAAAA"
                                            FontSize="13"
