@@ -1945,6 +1945,9 @@ public partial class MainWindow : WorkspaceWindowBase
             editor.Select(index, 0);
             editor.SelectedText = insertion;
             editor.CaretIndex = index + insertion.Length;
+
+            // 드롭 직후 바로 Ctrl+Z/Ctrl+Y가 듣도록 포커스를 편집기로 옮긴다.
+            editor.Focus();
             e.Handled = true;
         }
         catch (Exception ex)
