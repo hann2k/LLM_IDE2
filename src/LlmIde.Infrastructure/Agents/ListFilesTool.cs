@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -27,6 +28,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <param name="maxEntriesCap">The hard cap on returned entries.</param>
     public ListFilesTool(int defaultMaxEntries = 1000, int maxEntriesCap = 5000)
     {
+        Log.Ins.Debug("시작");
         this.defaultMaxEntries = defaultMaxEntries;
         this.maxEntriesCap = maxEntriesCap;
     }
@@ -54,6 +56,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         string path = ReadString(request.Arguments, "path");
         bool recursive = ReadBool(request.Arguments, "recursive", false);
         int maxEntries = ReadInt(request.Arguments, "maxEntries", defaultMaxEntries);
@@ -121,6 +124,7 @@ public sealed class ListFilesTool : IAgentTool
         int maxEntries,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         List<ListFilesEntry> entries = [];
         bool truncated = false;
         Queue<string> directories = new Queue<string>();
@@ -184,6 +188,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <returns>The string value, or empty.</returns>
     private static string ReadString(JsonElement arguments, string name)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.String)
@@ -203,6 +208,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <returns>The boolean value.</returns>
     private static bool ReadBool(JsonElement arguments, string name, bool fallback)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value))
         {
@@ -229,6 +235,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <returns>The integer value.</returns>
     private static int ReadInt(JsonElement arguments, string name, int fallback)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.Number
@@ -249,6 +256,7 @@ public sealed class ListFilesTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string path, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         ListFilesResult result = new ListFilesResult
         {
             Ok = false,

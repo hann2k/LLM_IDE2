@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -21,6 +22,7 @@ public sealed class ProjectRegistryService
     /// <param name="projectRegistryStore">The project registry store.</param>
     public ProjectRegistryService(IProjectRegistryStore projectRegistryStore)
     {
+        Log.Ins.Debug("시작");
         this.projectRegistryStore = projectRegistryStore;
     }
 
@@ -30,6 +32,7 @@ public sealed class ProjectRegistryService
     /// <returns>The registered projects.</returns>
     public IReadOnlyList<ProjectRegistryEntry> List()
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         return registry.Projects;
@@ -41,6 +44,7 @@ public sealed class ProjectRegistryService
     /// <returns>The next numeric project identifier.</returns>
     public string NextProjectPId()
     {
+        Log.Ins.Debug("시작");
         long max = 0;
 
         foreach (ProjectRegistryEntry project in List())
@@ -61,6 +65,7 @@ public sealed class ProjectRegistryService
     /// <returns>The project entry.</returns>
     public ProjectRegistryEntry GetRequired(string pId)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryEntry? project = Find(pId);
 
         if (project is null)
@@ -77,6 +82,7 @@ public sealed class ProjectRegistryService
     /// <param name="entry">The project entry.</param>
     public void Add(ProjectRegistryEntry entry)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
 
@@ -99,6 +105,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when a project was removed.</returns>
     public bool Remove(string pId)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         int removedCount = registry.Projects.RemoveAll(project => IsSamePId(project.PId, pId));
@@ -113,6 +120,7 @@ public sealed class ProjectRegistryService
     /// <param name="newName">The new user-visible project name.</param>
     public void Rename(string pId, string newName)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         ProjectRegistryEntry project = GetRequiredFrom(registry, pId);
@@ -127,6 +135,7 @@ public sealed class ProjectRegistryService
     /// <param name="newPId">The new project identifier.</param>
     public void ChangePId(string pId, string newPId)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         ProjectRegistryEntry project = GetRequiredFrom(registry, pId);
@@ -148,6 +157,7 @@ public sealed class ProjectRegistryService
     /// <param name="newPath">The new project root path.</param>
     public void Move(string pId, string newPath)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         ProjectRegistryEntry project = GetRequiredFrom(registry, pId);
@@ -162,6 +172,7 @@ public sealed class ProjectRegistryService
     /// <returns>The normalized project identifier.</returns>
     public static string NormalizeInitializationPId(string pId)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(pId))
         {
             return DefaultProjectId;
@@ -178,6 +189,7 @@ public sealed class ProjectRegistryService
     /// <returns>The normalized display name.</returns>
     public static string NormalizeInitializationDisplayName(string name, string pId)
     {
+        Log.Ins.Debug("시작");
         return NormalizeDisplayName(name, pId);
     }
 
@@ -188,6 +200,7 @@ public sealed class ProjectRegistryService
     /// <returns>The project entry, or null.</returns>
     private ProjectRegistryEntry? Find(string pId)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryDocument registry = projectRegistryStore.Load();
         NormalizeRegistryEntries(registry);
         return registry.Projects.FirstOrDefault(project => IsSamePId(project.PId, pId));
@@ -201,6 +214,7 @@ public sealed class ProjectRegistryService
     /// <returns>The project entry.</returns>
     private static ProjectRegistryEntry GetRequiredFrom(ProjectRegistryDocument registry, string pId)
     {
+        Log.Ins.Debug("시작");
         ProjectRegistryEntry? project = registry.Projects.FirstOrDefault(entry => IsSamePId(entry.PId, pId));
 
         if (project is null)
@@ -219,6 +233,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when the project identifier exists.</returns>
     private static bool ContainsPId(ProjectRegistryDocument registry, string pId)
     {
+        Log.Ins.Debug("시작");
         return registry.Projects.Any(project => IsSamePId(project.PId, pId));
     }
 
@@ -229,6 +244,7 @@ public sealed class ProjectRegistryService
     /// <returns>The normalized project identifier.</returns>
     private static string NormalizeRequiredPId(string pId)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(pId))
         {
             throw new InvalidOperationException("프로젝트 pID는 필수입니다.");
@@ -252,6 +268,7 @@ public sealed class ProjectRegistryService
     /// <returns>The normalized display name.</returns>
     private static string NormalizeDisplayName(string name, string fallbackPId)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(name))
         {
             return fallbackPId.Trim();
@@ -268,6 +285,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when project identifiers are equal.</returns>
     private static bool IsSamePId(string left, string right)
     {
+        Log.Ins.Debug("시작");
         return string.Equals(left, right, StringComparison.OrdinalIgnoreCase);
     }
 
@@ -278,6 +296,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when the project identifier is valid.</returns>
     private static bool IsEnglishPId(string pId)
     {
+        Log.Ins.Debug("시작");
         if (pId.Length == 0 || !(IsAsciiLetter(pId[0]) || IsAsciiDigit(pId[0])))
         {
             return false;
@@ -303,6 +322,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when the character is an ASCII letter.</returns>
     private static bool IsAsciiLetter(char character)
     {
+        Log.Ins.Debug("시작");
         return (character >= 'A' && character <= 'Z') || (character >= 'a' && character <= 'z');
     }
 
@@ -313,6 +333,7 @@ public sealed class ProjectRegistryService
     /// <returns>True when the character is an ASCII digit.</returns>
     private static bool IsAsciiDigit(char character)
     {
+        Log.Ins.Debug("시작");
         return character >= '0' && character <= '9';
     }
 
@@ -322,6 +343,7 @@ public sealed class ProjectRegistryService
     /// <param name="registry">The registry document.</param>
     private static void NormalizeRegistryEntries(ProjectRegistryDocument registry)
     {
+        Log.Ins.Debug("시작");
         foreach (ProjectRegistryEntry project in registry.Projects)
         {
             if (string.IsNullOrWhiteSpace(project.PId))

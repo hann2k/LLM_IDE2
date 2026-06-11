@@ -1,5 +1,6 @@
 using LlmIde.Core.Agents;
 using LlmIde.Core.Providers;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -25,6 +26,7 @@ public sealed class DeepSeekChatModelClient : IChatModelClient
     /// <param name="settings">The provider settings.</param>
     public DeepSeekChatModelClient(IChatProvider chatProvider, ProviderSettings settings)
     {
+        Log.Ins.Debug("시작");
         this.chatProvider = chatProvider;
         this.settings = settings;
     }
@@ -37,6 +39,7 @@ public sealed class DeepSeekChatModelClient : IChatModelClient
     /// <returns>The model response.</returns>
     public async Task<ChatModelResponse> CompleteAsync(ChatModelRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         ChatProviderRequest providerRequest = new ChatProviderRequest
         {
             Model = settings.Model,

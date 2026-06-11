@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -17,6 +18,7 @@ public sealed class ProposeBodyEditTool : IAgentTool
     /// <param name="bridge">The document body bridge.</param>
     public ProposeBodyEditTool(IDocumentBodyBridge bridge)
     {
+        Log.Ins.Debug("시작");
         this.bridge = bridge;
     }
 
@@ -43,6 +45,7 @@ public sealed class ProposeBodyEditTool : IAgentTool
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         string body = ReadString(request.Arguments, "body");
 
         if (body.Length == 0)
@@ -76,6 +79,7 @@ public sealed class ProposeBodyEditTool : IAgentTool
     /// <returns>The string value, or empty.</returns>
     private static string ReadString(JsonElement arguments, string name)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.String)
@@ -94,6 +98,7 @@ public sealed class ProposeBodyEditTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         return new AgentToolResult
         {
             Tool = Name,

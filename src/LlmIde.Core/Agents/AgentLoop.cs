@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LlmIde.Core.Providers;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Agents;
 
@@ -31,6 +32,7 @@ public sealed class AgentLoop : IAgentLoop
     /// <param name="systemInstructions">The agent system instructions (defaults to the built-in instructions).</param>
     public AgentLoop(IChatModelClient modelClient, IAgentToolHost toolHost, string? systemInstructions = null)
     {
+        Log.Ins.Debug("시작");
         this.modelClient = modelClient;
         this.toolHost = toolHost;
         this.systemInstructions = string.IsNullOrWhiteSpace(systemInstructions)
@@ -46,6 +48,7 @@ public sealed class AgentLoop : IAgentLoop
     /// <returns>The agent run result.</returns>
     public async Task<AgentRunResult> RunAsync(AgentRunRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         AgentLoopOptions options = request.Options ?? new AgentLoopOptions();
         List<AgentTurn> turns = [];
         List<AgentToolResult> toolResults = [];
@@ -214,6 +217,7 @@ public sealed class AgentLoop : IAgentLoop
         StopReason stopReason,
         string errorMessage)
     {
+        Log.Ins.Debug("시작");
         return new AgentRunResult
         {
             Turns = turns,

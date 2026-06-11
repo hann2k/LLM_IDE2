@@ -1,4 +1,5 @@
 using System.Text;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Artifacts;
 
@@ -16,6 +17,7 @@ public static class MarkdownSelectionMatcher
     /// <returns>The matching source span, or null when not found.</returns>
     public static (int Start, int Length)? FindSourceSpan(string source, string selection)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(source) || string.IsNullOrWhiteSpace(selection))
         {
             return null;
@@ -51,6 +53,7 @@ public static class MarkdownSelectionMatcher
     /// <returns>The normalized text and the index map.</returns>
     private static (string Normalized, List<int> Map) Normalize(string text)
     {
+        Log.Ins.Debug("시작");
         StringBuilder builder = new StringBuilder();
         List<int> map = [];
         bool lastWasSpace = false;
@@ -116,6 +119,7 @@ public static class MarkdownSelectionMatcher
     /// <returns>The index after the skipped markers.</returns>
     private static int SkipLineStartMarkers(string text, int start)
     {
+        Log.Ins.Debug("시작");
         int i = SkipSpacesAndTabs(text, start);
 
         // Heading: one or more '#' followed by a space.
@@ -180,6 +184,7 @@ public static class MarkdownSelectionMatcher
     /// <returns>The index of the first non-space, non-tab character.</returns>
     private static int SkipSpacesAndTabs(string text, int start)
     {
+        Log.Ins.Debug("시작");
         int i = start;
 
         while (i < text.Length && (text[i] == ' ' || text[i] == '\t'))

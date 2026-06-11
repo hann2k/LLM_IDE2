@@ -2,6 +2,7 @@ using System.Collections.ObjectModel;
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Text.Json.Serialization;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -149,6 +150,7 @@ public sealed class OutlineItem : INotifyPropertyChanged
     /// </summary>
     public void RevertTitleIfEmpty()
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(title))
         {
             Title = titleBackup;
@@ -161,6 +163,7 @@ public sealed class OutlineItem : INotifyPropertyChanged
     /// <param name="propertyName">The changed property name.</param>
     private void OnPropertyChanged([CallerMemberName] string propertyName = "")
     {
+        Log.Ins.Debug("시작");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }

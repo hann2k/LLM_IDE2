@@ -4,6 +4,7 @@ using Button = System.Windows.Controls.Button;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
 using TextBox = System.Windows.Controls.TextBox;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -15,6 +16,7 @@ public sealed class BodyDiffDialog : Window
 {
     private BodyDiffDialog(string original, string revised, Window owner)
     {
+        Log.Ins.Debug("시작");
         Title = "본문 수정 확인";
         Owner = owner;
         Width = 1000;
@@ -65,11 +67,13 @@ public sealed class BodyDiffDialog : Window
     /// <returns>True when the user applied the change.</returns>
     public static bool Confirm(string original, string revised, Window owner)
     {
+        Log.Ins.Debug("시작");
         return new BodyDiffDialog(original, revised, owner).ShowDialog() == true;
     }
 
     private static Border BuildPane(string header, string text, string headerColor, int column)
     {
+        Log.Ins.Debug("시작");
         DockPanel panel = new DockPanel();
 
         panel.Children.Add(new TextBlock

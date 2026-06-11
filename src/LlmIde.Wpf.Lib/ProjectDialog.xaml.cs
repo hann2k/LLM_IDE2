@@ -1,5 +1,6 @@
 using System.Windows;
 using Forms = System.Windows.Forms;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -57,6 +58,7 @@ public partial class ProjectDialog : Window
         string currentName = "",
         bool requiresApiKeyConfirmation = false)
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
         this.mode = mode;
         this.requiresApiKeyConfirmation = requiresApiKeyConfirmation;
@@ -102,6 +104,7 @@ public partial class ProjectDialog : Window
     /// <param name="currentName">The current project display name.</param>
     private void ApplyMode(string currentName)
     {
+        Log.Ins.Debug("시작");
         if (mode == ProjectDialogMode.Create)
         {
             ApplyCreateMode();
@@ -122,6 +125,7 @@ public partial class ProjectDialog : Window
     /// </summary>
     private void ApplyCreateMode()
     {
+        Log.Ins.Debug("시작");
         Title = "프로젝트 생성";
         ConfirmButton.Content = "생성";
 
@@ -143,6 +147,7 @@ public partial class ProjectDialog : Window
     /// <param name="currentName">The current project display name.</param>
     private void ApplyRenameMode(string currentName)
     {
+        Log.Ins.Debug("시작");
         Title = "프로젝트 이름변경";
         ConfirmButton.Content = "수정";
 
@@ -162,6 +167,7 @@ public partial class ProjectDialog : Window
     /// </summary>
     private void ApplyDeleteMode()
     {
+        Log.Ins.Debug("시작");
         Title = "프로젝트 삭제";
         ConfirmButton.Content = "삭제";
 
@@ -187,6 +193,7 @@ public partial class ProjectDialog : Window
     /// <returns>True when API key deletion is confirmed or not required.</returns>
     public bool IsApiKeyDeletionConfirmed()
     {
+        Log.Ins.Debug("시작");
         if (!requiresApiKeyConfirmation)
         {
             return true;
@@ -202,6 +209,7 @@ public partial class ProjectDialog : Window
     /// <param name="e">The event arguments.</param>
     private void BrowsePathButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string selectedPath = ProjectPathTextBox.Text.Trim();
 
         if (string.IsNullOrWhiteSpace(selectedPath))
@@ -231,6 +239,7 @@ public partial class ProjectDialog : Window
     /// <param name="e">The event arguments.</param>
     private void ConfirmButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         DialogResult = true;
     }
 
@@ -241,6 +250,7 @@ public partial class ProjectDialog : Window
     /// <param name="e">The event arguments.</param>
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         DialogResult = false;
     }
 }

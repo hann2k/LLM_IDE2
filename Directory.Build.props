@@ -4,4 +4,20 @@
     <BaseIntermediateOutputPath>$(MSBuildThisFileDirectory)obj/$(MSBuildProjectName)/</BaseIntermediateOutputPath>
     <DefaultItemExcludes>$(DefaultItemExcludes);**/bin/**;**/obj/**</DefaultItemExcludes>
   </PropertyGroup>
+
+  <!--
+    실행 추적용 디버그 로깅(Log.Ins.Debug("시작"))을 모든 메서드에 삽입하면서
+    Framework.Common.Logger.Log 가 전 프로젝트에서 필요해졌다. 기존에는 Infrastructure 만
+    참조했으나(파일 로깅), 이제 Core/Cli/Wpf 전 모듈이 직접 호출하므로 공통화한다.
+    Newtonsoft.Json 은 Framework.Common.dll(bare DLL) 의 전이 의존성이라 함께 둔다.
+  -->
+  <ItemGroup>
+    <Reference Include="Framework.Common">
+      <HintPath>$(MSBuildThisFileDirectory)package\Lib.Net10\Framework.Common.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
 </Project>

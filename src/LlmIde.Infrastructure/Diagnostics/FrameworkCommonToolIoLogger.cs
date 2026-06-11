@@ -28,6 +28,7 @@ public sealed class FrameworkCommonToolIoLogger : IToolIoLogger
     /// <param name="logDirectory">An optional directory to ensure exists (the library still writes to its fixed Log folder).</param>
     public FrameworkCommonToolIoLogger(string? logDirectory = null)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         EnsureInitialized(logDirectory);
     }
 
@@ -37,6 +38,7 @@ public sealed class FrameworkCommonToolIoLogger : IToolIoLogger
     /// <param name="record">The tool I/O record to log.</param>
     public void Log(ToolIoLogRecord record)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         try
         {
             Framework.Common.Logger.Log.Ins.Debug(JsonSerializer.Serialize(record, JsonOptions.Compact));
@@ -53,6 +55,7 @@ public sealed class FrameworkCommonToolIoLogger : IToolIoLogger
     /// <param name="logDirectory">An optional directory to ensure exists.</param>
     private static void EnsureInitialized(string? logDirectory)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         if (initialized)
         {
             return;

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -28,6 +29,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <param name="maxReadChars">The hard cap on characters read from a file.</param>
     public ReadFileTool(int defaultMaxChars = 20000, int maxReadChars = 2_000_000)
     {
+        Log.Ins.Debug("시작");
         this.defaultMaxChars = defaultMaxChars;
         this.maxReadChars = maxReadChars;
     }
@@ -55,6 +57,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <returns>The tool result.</returns>
     public async Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         string path = ReadString(request.Arguments, "path");
         int maxChars = ReadInt(request.Arguments, "maxChars", defaultMaxChars);
 
@@ -112,6 +115,7 @@ public sealed class ReadFileTool : IAgentTool
     private static (string? FullPath, string? Error) ResolveSafePath(string workingDirectory, string path)
     {
         // read_file requires a concrete file path, so the project root itself is not a valid target.
+        Log.Ins.Debug("시작");
         return ProjectPathGuard.Resolve(workingDirectory, path, allowRoot: false);
     }
 
@@ -124,6 +128,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <returns>The text and whether it was truncated.</returns>
     private async Task<(string Text, bool Truncated)> ReadCappedAsync(string fullPath, int maxChars, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         int cap = Math.Min(maxChars, maxReadChars);
         await using FileStream stream = new FileStream(fullPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
         using StreamReader reader = new StreamReader(stream);
@@ -162,6 +167,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <returns>The string value, or empty.</returns>
     private static string ReadString(JsonElement arguments, string name)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.String)
@@ -181,6 +187,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <returns>The integer value.</returns>
     private static int ReadInt(JsonElement arguments, string name, int fallback)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.Number
@@ -201,6 +208,7 @@ public sealed class ReadFileTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string path, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         ReadFileResult result = new ReadFileResult
         {
             Ok = false,

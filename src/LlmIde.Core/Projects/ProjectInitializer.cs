@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -31,6 +32,7 @@ public sealed class ProjectInitializer
         ProjectRegistryService projectRegistryService,
         string ideProgramRoot)
     {
+        Log.Ins.Debug("시작");
         this.projectStore = projectStore;
         this.projectRegistryService = projectRegistryService;
         this.ideProgramRoot = Path.GetFullPath(ideProgramRoot);
@@ -43,6 +45,7 @@ public sealed class ProjectInitializer
     /// <returns>The initialization result.</returns>
     public ProjectInitializationResult Initialize(ProjectInitializationRequest request)
     {
+        Log.Ins.Debug("시작");
         string pId = ProjectRegistryService.NormalizeInitializationPId(request.PId);
         string projectName = ProjectRegistryService.NormalizeInitializationDisplayName(request.Name, pId);
         bool defaultPIdRequested = !request.HasExplicitPId || string.IsNullOrWhiteSpace(request.PId);
@@ -78,6 +81,7 @@ public sealed class ProjectInitializer
     /// <returns>The project root path.</returns>
     private string ResolveProjectRoot(string pId, string requestedPath)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(requestedPath))
         {
             return Path.Combine(ideProgramRoot, pId);
@@ -93,6 +97,7 @@ public sealed class ProjectInitializer
     /// <returns>True when the project exists.</returns>
     private bool ProjectExists(string pId)
     {
+        Log.Ins.Debug("시작");
         return projectRegistryService.List().Any(project =>
             string.Equals(project.PId, pId, StringComparison.OrdinalIgnoreCase));
     }

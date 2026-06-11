@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -16,6 +17,7 @@ public sealed class ProjectStateService
     /// <param name="projectStateStore">The project state store.</param>
     public ProjectStateService(IProjectStateStore projectStateStore)
     {
+        Log.Ins.Debug("시작");
         this.projectStateStore = projectStateStore;
     }
 
@@ -26,6 +28,7 @@ public sealed class ProjectStateService
     /// <returns>The project state.</returns>
     public ProjectState Get(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return projectStateStore.Load(projectRoot);
     }
 
@@ -43,6 +46,7 @@ public sealed class ProjectStateService
         string? currentTask,
         string? lastDecision)
     {
+        Log.Ins.Debug("시작");
         ProjectState state = projectStateStore.Load(projectRoot);
 
         if (stage is not null)
@@ -73,6 +77,7 @@ public sealed class ProjectStateService
     /// <returns>The updated project state.</returns>
     public ProjectState AddItem(string projectRoot, string listName, string item)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(item))
         {
             throw new InvalidOperationException("프로젝트 상태 항목은 필수입니다.");
@@ -99,6 +104,7 @@ public sealed class ProjectStateService
     /// <returns>True when the item was removed.</returns>
     public bool RemoveItem(string projectRoot, string listName, string item)
     {
+        Log.Ins.Debug("시작");
         ProjectState state = projectStateStore.Load(projectRoot);
         List<string> list = GetList(state, listName);
         int removedCount = list.RemoveAll(existingItem =>
@@ -120,6 +126,7 @@ public sealed class ProjectStateService
     /// <returns>The mutable list.</returns>
     private static List<string> GetList(ProjectState state, string listName)
     {
+        Log.Ins.Debug("시작");
         return listName switch
         {
             "completed" => state.CompletedItems,

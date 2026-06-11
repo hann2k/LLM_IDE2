@@ -4,6 +4,7 @@ using Button = System.Windows.Controls.Button;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
 using TextBox = System.Windows.Controls.TextBox;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -23,6 +24,7 @@ public sealed class TextInputDialog : Window
     /// <param name="owner">The owner window.</param>
     public TextInputDialog(string title, string prompt, string initialText, Window owner)
     {
+        Log.Ins.Debug("시작");
         Title = title;
         Owner = owner;
         Width = 400;
@@ -103,6 +105,7 @@ public sealed class TextInputDialog : Window
     /// <returns>The entered text, or null.</returns>
     public static string? Prompt(string title, string prompt, string initialText, Window owner)
     {
+        Log.Ins.Debug("시작");
         TextInputDialog dialog = new TextInputDialog(title, prompt, initialText, owner);
 
         if (dialog.ShowDialog() == true && dialog.ResponseText.Length > 0)

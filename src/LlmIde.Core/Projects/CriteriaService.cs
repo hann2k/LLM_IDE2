@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -16,6 +17,7 @@ public sealed class CriteriaService
     /// <param name="criteriaStore">The criteria store.</param>
     public CriteriaService(ICriteriaStore criteriaStore)
     {
+        Log.Ins.Debug("시작");
         this.criteriaStore = criteriaStore;
     }
 
@@ -29,6 +31,7 @@ public sealed class CriteriaService
     /// <returns>The created criterion.</returns>
     public Criterion Add(string projectRoot, string title, string description, string priority)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(title))
         {
             throw new InvalidOperationException("기준 제목은 필수입니다.");
@@ -55,6 +58,7 @@ public sealed class CriteriaService
     /// <returns>The project criteria.</returns>
     public IReadOnlyList<Criterion> List(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return criteriaStore.Load(projectRoot);
     }
 
@@ -66,6 +70,7 @@ public sealed class CriteriaService
     /// <returns>The rebuilt criteria.</returns>
     public IReadOnlyList<Criterion> ReplaceFromLines(string projectRoot, IEnumerable<string> lines)
     {
+        Log.Ins.Debug("시작");
         List<Criterion> criteria = [];
 
         foreach (string line in lines)
@@ -107,6 +112,7 @@ public sealed class CriteriaService
         string? description,
         string? priority)
     {
+        Log.Ins.Debug("시작");
         List<Criterion> criteria = criteriaStore.Load(projectRoot).ToList();
         Criterion criterion = GetRequired(criteria, criterionId);
 
@@ -136,6 +142,7 @@ public sealed class CriteriaService
     /// <returns>True when the criterion was removed.</returns>
     public bool Remove(string projectRoot, string criterionId)
     {
+        Log.Ins.Debug("시작");
         List<Criterion> criteria = criteriaStore.Load(projectRoot).ToList();
         int removedCount = criteria.RemoveAll(criterion =>
             string.Equals(criterion.CriterionId, criterionId, StringComparison.Ordinal));
@@ -155,6 +162,7 @@ public sealed class CriteriaService
     /// <param name="criterionId">The criterion identifier.</param>
     public void Activate(string projectRoot, string criterionId)
     {
+        Log.Ins.Debug("시작");
         SetStatus(projectRoot, criterionId, "active");
     }
 
@@ -165,6 +173,7 @@ public sealed class CriteriaService
     /// <param name="criterionId">The criterion identifier.</param>
     public void Deactivate(string projectRoot, string criterionId)
     {
+        Log.Ins.Debug("시작");
         SetStatus(projectRoot, criterionId, "inactive");
     }
 
@@ -175,6 +184,7 @@ public sealed class CriteriaService
     /// <returns>The active criteria.</returns>
     public IReadOnlyList<Criterion> ListActive(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return criteriaStore.Load(projectRoot)
             .Where(criterion => string.Equals(criterion.Status, "active", StringComparison.OrdinalIgnoreCase))
             .ToList();
@@ -188,6 +198,7 @@ public sealed class CriteriaService
     /// <param name="status">The status.</param>
     private void SetStatus(string projectRoot, string criterionId, string status)
     {
+        Log.Ins.Debug("시작");
         List<Criterion> criteria = criteriaStore.Load(projectRoot).ToList();
         Criterion criterion = GetRequired(criteria, criterionId);
         criterion.Status = status;
@@ -202,6 +213,7 @@ public sealed class CriteriaService
     /// <returns>The criterion.</returns>
     private static Criterion GetRequired(List<Criterion> criteria, string criterionId)
     {
+        Log.Ins.Debug("시작");
         Criterion? criterion = criteria.FirstOrDefault(candidate =>
             string.Equals(candidate.CriterionId, criterionId, StringComparison.Ordinal));
 

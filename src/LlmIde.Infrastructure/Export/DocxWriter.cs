@@ -1,6 +1,7 @@
 using DocumentFormat.OpenXml;
 using DocumentFormat.OpenXml.Packaging;
 using DocumentFormat.OpenXml.Wordprocessing;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Export;
 
@@ -27,6 +28,7 @@ public static class DocxWriter
     /// <param name="blocks">The ordered heading/body blocks.</param>
     public static void Write(string outputPath, IEnumerable<DocxBlock> blocks)
     {
+        Log.Ins.Debug("시작");
         using WordprocessingDocument doc = WordprocessingDocument.Create(outputPath, WordprocessingDocumentType.Document);
         MainDocumentPart main = doc.AddMainDocumentPart();
         main.Document = new Document();
@@ -52,6 +54,7 @@ public static class DocxWriter
 
     private static Paragraph Heading(string text, int level)
     {
+        Log.Ins.Debug("시작");
         Paragraph paragraph = new Paragraph();
         paragraph.AppendChild(new ParagraphProperties(new ParagraphStyleId { Val = "Heading" + level }));
         Run run = paragraph.AppendChild(new Run());
@@ -61,6 +64,7 @@ public static class DocxWriter
 
     private static Paragraph NormalParagraph(string text)
     {
+        Log.Ins.Debug("시작");
         Paragraph paragraph = new Paragraph();
         Run run = paragraph.AppendChild(new Run());
         run.AppendChild(new Text(text) { Space = SpaceProcessingModeValues.Preserve });
@@ -69,6 +73,7 @@ public static class DocxWriter
 
     private static void AddStyles(MainDocumentPart main)
     {
+        Log.Ins.Debug("시작");
         StyleDefinitionsPart stylesPart = main.AddNewPart<StyleDefinitionsPart>();
         Styles styles = new Styles();
 

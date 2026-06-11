@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Agents;
 
@@ -97,6 +98,7 @@ public static class AgentMessageParser
     /// <returns>The parsed message.</returns>
     public static ParsedModelMessage Parse(string content)
     {
+        Log.Ins.Debug("시작");
         string? json = ExtractJson(content);
 
         if (json is null)
@@ -158,6 +160,7 @@ public static class AgentMessageParser
     /// <returns>The parsed tool requests.</returns>
     private static List<ParsedToolRequest> ParseToolRequests(JsonElement root)
     {
+        Log.Ins.Debug("시작");
         List<ParsedToolRequest> requests = [];
 
         if (root.TryGetProperty("requests", out JsonElement requestsElement)
@@ -185,6 +188,7 @@ public static class AgentMessageParser
     /// <returns>The parsed tool request.</returns>
     private static ParsedToolRequest ReadToolRequest(JsonElement element)
     {
+        Log.Ins.Debug("시작");
         string tool = element.ValueKind == JsonValueKind.Object && element.TryGetProperty("tool", out JsonElement toolElement)
             ? toolElement.GetString() ?? string.Empty
             : string.Empty;
@@ -203,6 +207,7 @@ public static class AgentMessageParser
     /// <returns>The JSON substring, or null when no balanced object is found.</returns>
     private static string? ExtractJson(string content)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(content))
         {
             return null;

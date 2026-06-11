@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Windows;
 using System.Windows.Input;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -18,6 +19,7 @@ public partial class EditDialog : Window
     /// <param name="markdownPreview">Whether to show a live Markdown preview next to the editor.</param>
     public EditDialog(string title, string content, bool markdownPreview = false)
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
         Title = title;
         ContentTextBox.Text = content;
@@ -51,6 +53,7 @@ public partial class EditDialog : Window
     private void EnableMarkdownPreview()
     {
         // Open Markdown hyperlinks in the default browser instead of throwing on click.
+        Log.Ins.Debug("시작");
         CommandBindings.Add(new CommandBinding(Markdig.Wpf.Commands.Hyperlink, OpenHyperlink));
         ContentTextBox.TextChanged += OnContentTextChanged;
         UpdatePreview();
@@ -61,6 +64,7 @@ public partial class EditDialog : Window
     /// </summary>
     private void DisableMarkdownPreview()
     {
+        Log.Ins.Debug("시작");
         SplitterColumn.Width = new GridLength(0);
         PreviewColumn.Width = new GridLength(0);
         PreviewSplitter.Visibility = Visibility.Collapsed;
@@ -72,6 +76,7 @@ public partial class EditDialog : Window
     /// </summary>
     private void UpdatePreview()
     {
+        Log.Ins.Debug("시작");
         PreviewContent.Markdown = ContentTextBox.Text;
     }
 
@@ -82,6 +87,7 @@ public partial class EditDialog : Window
     /// <param name="e">The event arguments.</param>
     private void OnContentTextChanged(object sender, System.Windows.Controls.TextChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         UpdatePreview();
     }
 
@@ -92,6 +98,7 @@ public partial class EditDialog : Window
     /// <param name="e">The command event arguments carrying the link target.</param>
     private void OpenHyperlink(object sender, ExecutedRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string? url = e.Parameter as string;
 
         if (string.IsNullOrWhiteSpace(url))
@@ -109,6 +116,7 @@ public partial class EditDialog : Window
     /// <param name="e">The event arguments.</param>
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         DialogResult = true;
     }
 
@@ -119,6 +127,7 @@ public partial class EditDialog : Window
     /// <param name="e">The event arguments.</param>
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         DialogResult = false;
     }
 }

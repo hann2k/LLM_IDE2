@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LlmIde.Core.Projects;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -19,6 +20,7 @@ public sealed class FileImportanceRuleStore : IImportanceRuleStore
     /// <param name="programRoot">The IDE program root.</param>
     public FileImportanceRuleStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -30,6 +32,7 @@ public sealed class FileImportanceRuleStore : IImportanceRuleStore
     public string Load(string projectRoot)
     {
         // The importance rule now lives in the common prompts.json under the "importance_rule" key.
+        Log.Ins.Debug("시작");
         string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.PromptsFileName);
 
         if (!File.Exists(path))

@@ -15,6 +15,7 @@ using Microsoft.Data.Sqlite;
 using System.IO;
 using System.Net.Http;
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Cli;
 
@@ -30,6 +31,7 @@ public static class Program
     /// <returns>The process exit code.</returns>
     public static int Main(string[] args)
     {
+        Log.Ins.Debug("시작");
         string ideProgramRoot = LlmIde.Infrastructure.ProgramDataRoot.EnsureAndGet();
         IProjectStore projectStore = new JsonFileProjectStore(ideProgramRoot);
         IProviderSettingsStore providerSettingsStore = new JsonProviderSettingsStore(ideProgramRoot);
@@ -202,6 +204,7 @@ public sealed class CliApplication
         IAgentToolHost agentToolHost,
         IConversationLogStore conversationLogStore)
     {
+        Log.Ins.Debug("시작");
         this.projectStore = projectStore;
         this.projectInitializer = projectInitializer;
         this.projectRegistryService = projectRegistryService;
@@ -223,6 +226,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     public int Run(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length == 0)
         {
             PrintUsage();
@@ -247,6 +251,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCore(string[] args)
     {
+        Log.Ins.Debug("시작");
         string command = args[0].Trim().ToLowerInvariant();
 
         if (command == "init")
@@ -300,6 +305,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunAgent(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintAgentUsage();
@@ -346,6 +352,7 @@ public sealed class CliApplication
     /// <param name="result">The agent run result.</param>
     private void LogAgentToolCalls(string projectRoot, ProviderSettings settings, AgentRunResult result)
     {
+        Log.Ins.Debug("시작");
         if (result.ToolCalls.Count == 0)
         {
             return;
@@ -384,6 +391,7 @@ public sealed class CliApplication
     /// <param name="result">The agent run result.</param>
     private static void PrintAgentResult(AgentRunResult result)
     {
+        Log.Ins.Debug("시작");
         foreach (AgentToolResult toolResult in result.ToolResults)
         {
             string info = string.Empty;
@@ -420,6 +428,7 @@ public sealed class CliApplication
     /// <returns>The default provider settings.</returns>
     private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument settingsDocument)
     {
+        Log.Ins.Debug("시작");
         ProviderSettings? settings = settingsDocument.Providers.FirstOrDefault(provider =>
             string.Equals(provider.Name, settingsDocument.DefaultProvider, StringComparison.OrdinalIgnoreCase));
 
@@ -436,6 +445,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintAgentUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide agent-run <project-id> <message>");
     }
@@ -447,6 +457,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunInit(string[] args)
     {
+        Log.Ins.Debug("시작");
         ProjectInitializationRequest request = ParseInitRequest(args);
         ProjectInitializationResult result = projectInitializer.Initialize(request);
         string action = result.Created ? "초기화됨" : "열림";
@@ -463,6 +474,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunChat(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintChatUsage();
@@ -539,6 +551,7 @@ public sealed class CliApplication
     /// <returns>True when the argument is part of the user message.</returns>
     private static ParsedChatArguments ParseChatArguments(string[] args)
     {
+        Log.Ins.Debug("시작");
         List<string> messageParts = [];
         List<string> artifactIds = [];
 
@@ -575,6 +588,7 @@ public sealed class CliApplication
     /// <param name="response">The chat response.</param>
     private static void PrintChatDebug(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         ChatDebugView debugView = new ChatDebugView
         {
             RequestId = response.RequestId,
@@ -593,6 +607,7 @@ public sealed class CliApplication
     /// <param name="response">The chat response.</param>
     private static void PrintChatDebugWithResponse(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         PrintChatDebug(response);
         Console.WriteLine(response.Content);
     }
@@ -603,6 +618,7 @@ public sealed class CliApplication
     /// <param name="response">The chat response.</param>
     private static void PrintCompressionDebug(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (response.CompressionRequest is null)
         {
             return;
@@ -628,6 +644,7 @@ public sealed class CliApplication
     /// <param name="response">The compression preview response.</param>
     private static void PrintCompressionDebugStart(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (response.CompressionRequest is null)
         {
             return;
@@ -655,6 +672,7 @@ public sealed class CliApplication
     /// <param name="response">The completed chat response.</param>
     private static void PrintCompressionDebugEnd(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (response.CompressionRequest is null)
         {
             Console.WriteLine();
@@ -676,6 +694,7 @@ public sealed class CliApplication
     /// <param name="response">The completed chat response.</param>
     private static void PrintArtifactCandidates(ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (response.ArtifactCandidates.Count == 0)
         {
             return;
@@ -692,6 +711,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunModels(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintModelsUsage();
@@ -721,6 +741,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunModelsList(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintModelsUsage();
@@ -747,6 +768,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunModelsSet(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintModelsUsage();
@@ -766,6 +788,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteria(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintCriteriaUsage();
@@ -815,6 +838,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaList(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintCriteriaUsage();
@@ -844,6 +868,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaAdd(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintCriteriaUsage();
@@ -868,6 +893,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaUpdate(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintCriteriaUsage();
@@ -889,6 +915,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaRemove(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintCriteriaUsage();
@@ -908,6 +935,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaActivate(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintCriteriaUsage();
@@ -927,6 +955,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunCriteriaDeactivate(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintCriteriaUsage();
@@ -946,6 +975,7 @@ public sealed class CliApplication
     /// <returns>The parsed options.</returns>
     private static CriteriaOptions ParseCriteriaOptions(string[] args)
     {
+        Log.Ins.Debug("시작");
         CriteriaOptions options = new CriteriaOptions();
         int index = 0;
 
@@ -987,6 +1017,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunState(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintStateUsage();
@@ -1026,6 +1057,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunArtifacts(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 3)
         {
             PrintArtifactsUsage();
@@ -1070,6 +1102,7 @@ public sealed class CliApplication
 
     private int RunArtifactsList(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintArtifactsUsage();
@@ -1095,6 +1128,7 @@ public sealed class CliApplication
 
     private int RunArtifactsShow(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintArtifactsUsage();
@@ -1111,6 +1145,7 @@ public sealed class CliApplication
 
     private int RunArtifactsAdd(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintArtifactsUsage();
@@ -1126,6 +1161,7 @@ public sealed class CliApplication
 
     private int RunArtifactsUpdate(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintArtifactsUsage();
@@ -1143,6 +1179,7 @@ public sealed class CliApplication
 
     private int RunArtifactsRemove(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintArtifactsUsage();
@@ -1157,6 +1194,7 @@ public sealed class CliApplication
 
     private int RunArtifactsExtract(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintArtifactsUsage();
@@ -1177,6 +1215,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunStateShow(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintStateUsage();
@@ -1196,6 +1235,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunStateSet(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintStateUsage();
@@ -1220,6 +1260,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunStateAdd(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintStateUsage();
@@ -1241,6 +1282,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunStateRemove(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintStateUsage();
@@ -1262,6 +1304,7 @@ public sealed class CliApplication
     /// <returns>The parsed options.</returns>
     private static ProjectStateSetOptions ParseProjectStateSetOptions(string[] args)
     {
+        Log.Ins.Debug("시작");
         ProjectStateSetOptions options = new ProjectStateSetOptions();
         int index = 0;
 
@@ -1307,11 +1350,13 @@ public sealed class CliApplication
     /// <param name="state">The project state.</param>
     private static void PrintProjectState(ProjectState state)
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine(JsonSerializer.Serialize(state, JsonOptions.Default));
     }
 
     private static ArtifactOptions ParseArtifactOptions(string[] args, bool requireContent)
     {
+        Log.Ins.Debug("시작");
         ArtifactOptions options = new ArtifactOptions();
         int index = 0;
 
@@ -1375,6 +1420,7 @@ public sealed class CliApplication
 
     private static ArtifactCandidate CreateArtifactCandidate(ArtifactOptions options)
     {
+        Log.Ins.Debug("시작");
         return CreateArtifactCandidate(options, null, string.Empty);
     }
 
@@ -1383,6 +1429,7 @@ public sealed class CliApplication
         Artifact? existing,
         string existingContent)
     {
+        Log.Ins.Debug("시작");
         return new ArtifactCandidate
         {
             Title = options.Title ?? existing?.Title ?? string.Empty,
@@ -1399,6 +1446,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjects(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 2)
         {
             PrintProjectsUsage();
@@ -1452,6 +1500,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsList()
     {
+        Log.Ins.Debug("시작");
         IReadOnlyList<ProjectRegistryEntry> projects = projectRegistryService.List();
 
         if (projects.Count == 0)
@@ -1476,6 +1525,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsOpen(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintProjectsUsage();
@@ -1493,6 +1543,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int OpenProjectPath(string path)
     {
+        Log.Ins.Debug("시작");
         string normalizedPath = Path.GetFullPath(path);
 
         if (!projectStore.IsInitialized(normalizedPath))
@@ -1513,6 +1564,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsRemove(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 3)
         {
             PrintProjectsUsage();
@@ -1531,6 +1583,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsDelete(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length < 5)
         {
             PrintProjectsUsage();
@@ -1558,6 +1611,7 @@ public sealed class CliApplication
     /// <param name="project">The project to delete.</param>
     private void ValidateDeleteConfirmation(string[] args, ProjectRegistryEntry project)
     {
+        Log.Ins.Debug("시작");
         if (args[3] != "--confirm")
         {
             throw new InvalidOperationException("삭제하려면 --confirm <project-id> 확인 인자가 필요합니다.");
@@ -1581,6 +1635,7 @@ public sealed class CliApplication
     /// <returns>True when at least one API key exists.</returns>
     private bool HasApiKey(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         ProviderSettingsDocument settings = providerSettingsStore.Load(projectRoot);
         return settings.Providers.Any(provider => !string.IsNullOrWhiteSpace(provider.ApiKey));
     }
@@ -1592,6 +1647,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsRename(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintProjectsUsage();
@@ -1610,6 +1666,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsRePId(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintProjectsUsage();
@@ -1628,6 +1685,7 @@ public sealed class CliApplication
     /// <returns>The process exit code.</returns>
     private int RunProjectsMove(string[] args)
     {
+        Log.Ins.Debug("시작");
         if (args.Length != 4)
         {
             PrintProjectsUsage();
@@ -1646,6 +1704,7 @@ public sealed class CliApplication
     /// <returns>The parsed request.</returns>
     private static ProjectInitializationRequest ParseInitRequest(string[] args)
     {
+        Log.Ins.Debug("시작");
         ProjectInitializationRequest request = new ProjectInitializationRequest();
         int index = 1;
 
@@ -1691,6 +1750,7 @@ public sealed class CliApplication
     /// <returns>The option value.</returns>
     private static string ReadOptionValue(string[] args, int optionIndex, string option)
     {
+        Log.Ins.Debug("시작");
         int valueIndex = optionIndex + 1;
 
         if (valueIndex >= args.Length)
@@ -1706,6 +1766,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide init");
         Console.WriteLine("  llmide init --pid <project-id>");
@@ -1772,6 +1833,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintProjectsUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide projects list");
         Console.WriteLine("  llmide projects open <project-id>");
@@ -1788,6 +1850,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintModelsUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide models list <project-id>");
         Console.WriteLine("  llmide models set <project-id> <model>");
@@ -1798,6 +1861,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintCriteriaUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide criteria list <project-id>");
         Console.WriteLine("  llmide criteria add <project-id> --title <title> --description <description>");
@@ -1815,6 +1879,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintStateUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide state show <project-id>");
         Console.WriteLine("  llmide state set <project-id> --stage <stage>");
@@ -1839,6 +1904,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintChatUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide chat <project-id> <message>");
         Console.WriteLine("  llmide chat <project-id> <message> --artifact <artifact-id>");
@@ -1852,6 +1918,7 @@ public sealed class CliApplication
     /// </summary>
     private static void PrintArtifactsUsage()
     {
+        Log.Ins.Debug("시작");
         Console.WriteLine("사용법:");
         Console.WriteLine("  llmide artifacts list <project-id>");
         Console.WriteLine("  llmide artifacts show <project-id> <artifact-id>");

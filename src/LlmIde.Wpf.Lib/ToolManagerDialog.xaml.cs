@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Windows;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -16,6 +17,7 @@ public partial class ToolManagerDialog : Window
     /// <param name="tools">The available tool descriptors to display.</param>
     public ToolManagerDialog(IReadOnlyList<AgentToolDescriptor> tools)
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
         ToolList.ItemsSource = tools;
     }
@@ -27,6 +29,7 @@ public partial class ToolManagerDialog : Window
     /// <param name="e">The event arguments.</param>
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         Close();
     }
 }

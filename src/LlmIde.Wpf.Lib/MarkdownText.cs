@@ -1,4 +1,5 @@
 using System.Windows;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -24,6 +25,7 @@ public static class MarkdownText
     /// <returns>The Markdown text.</returns>
     public static string GetText(DependencyObject element)
     {
+        Log.Ins.Debug("시작");
         return (string)element.GetValue(TextProperty);
     }
 
@@ -34,6 +36,7 @@ public static class MarkdownText
     /// <param name="value">The Markdown text.</param>
     public static void SetText(DependencyObject element, string value)
     {
+        Log.Ins.Debug("시작");
         element.SetValue(TextProperty, value);
     }
 
@@ -44,6 +47,7 @@ public static class MarkdownText
     /// <param name="e">The change arguments.</param>
     private static void OnTextChanged(DependencyObject element, DependencyPropertyChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (element is not System.Windows.Controls.RichTextBox richTextBox)
         {
             return;

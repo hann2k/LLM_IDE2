@@ -2,6 +2,7 @@ using System.Text.Json;
 using LlmIde.Core.Providers;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Providers;
 
@@ -21,6 +22,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <param name="programRoot">The IDE program root.</param>
     public JsonProviderSettingsStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -31,6 +33,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <returns>The provider settings document.</returns>
     public ProviderSettingsDocument Load(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string settingsPath = GetSettingsPath();
 
         if (!File.Exists(settingsPath))
@@ -52,6 +55,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <param name="settings">The provider settings document.</param>
     public void Save(string projectRoot, ProviderSettingsDocument settings)
     {
+        Log.Ins.Debug("시작");
         string settingsPath = GetSettingsPath();
         Directory.CreateDirectory(Path.GetDirectoryName(settingsPath) ?? programRoot);
         File.WriteAllText(settingsPath, JsonSerializer.Serialize(settings, JsonOptions.Default));
@@ -63,6 +67,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <returns>The provider settings path.</returns>
     private string GetSettingsPath()
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(programRoot, LlmIdeLayout.SettingsDirectoryName, LlmIdeLayout.ProvidersFileName);
     }
 
@@ -72,6 +77,7 @@ public sealed class JsonProviderSettingsStore : IProviderSettingsStore
     /// <returns>The default document.</returns>
     private static ProviderSettingsDocument CreateDefault()
     {
+        Log.Ins.Debug("시작");
         return new ProviderSettingsDocument
         {
             DefaultProvider = "deepseek",

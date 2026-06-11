@@ -22,6 +22,7 @@ using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -120,6 +121,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     public MainWindow()
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
 
         // Open Markdown hyperlinks (in rendered conversation responses) in the default browser.
@@ -205,6 +207,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         ApplyLayout();
         LoadProjects();
         WarnIfNoApiKey();
@@ -216,6 +219,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void WarnIfNoApiKey()
     {
+        Log.Ins.Debug("시작");
         try
         {
             // Providers are common (program root); the project argument is ignored by the store.
@@ -244,6 +248,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ApplyLayout()
     {
+        Log.Ins.Debug("시작");
         WindowLayout? layout = layoutStore.Load();
 
         if (layout is null)
@@ -282,6 +287,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void SaveLayout()
     {
+        Log.Ins.Debug("시작");
         layoutStore.Save(new WindowLayout
         {
             ProjectWidth = ProjectColumn.ActualWidth,
@@ -299,6 +305,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void LayoutSplitter_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         SaveLayout();
     }
 
@@ -309,6 +316,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The command event arguments carrying the link target.</param>
     private void OpenMarkdownHyperlink(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string? url = e.Parameter as string;
 
         if (string.IsNullOrWhiteSpace(url))
@@ -327,6 +335,7 @@ public partial class MainWindow : WorkspaceWindowBase
     private void ProjectList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         // Save the in-progress body to the previously selected project before switching.
+        Log.Ins.Debug("시작");
         if (e.RemovedItems.Count > 0
             && e.RemovedItems[0] is ProjectListItem previousProject
             && viewModel.SelectedOutlineItem is OutlineItem previousItem)
@@ -370,16 +379,25 @@ public partial class MainWindow : WorkspaceWindowBase
             : null;
 
     /// <inheritdoc />
-    protected override void ReleaseProjectFileLocks() => SqliteConnection.ClearAllPools();
+    protected override void ReleaseProjectFileLocks() 
+    {
+        Log.Ins.Debug("시작");
+        SqliteConnection.ClearAllPools();
+    }
 
     /// <inheritdoc />
-    protected override void OnProvidersChanged() => PopulateComposerProviders();
+    protected override void OnProvidersChanged() 
+    {
+        Log.Ins.Debug("시작");
+        PopulateComposerProviders();
+    }
 
     /// <summary>
     /// Loads registered projects into the project list.
     /// </summary>
     protected override void LoadProjects()
     {
+        Log.Ins.Debug("시작");
         viewModel.Projects.Clear();
         IReadOnlyList<ProjectRegistryEntry> projects = projectRegistryService.List();
 
@@ -404,6 +422,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="projectRoot">The project root path.</param>
     protected override void SelectProjectByRoot(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string normalizedProjectRoot = System.IO.Path.GetFullPath(projectRoot);
 
         foreach (ProjectListItem project in viewModel.Projects)
@@ -424,6 +443,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="pId">The project identifier.</param>
     protected override void SelectProjectByPId(string pId)
     {
+        Log.Ins.Debug("시작");
         foreach (ProjectListItem project in viewModel.Projects)
         {
             if (!string.Equals(project.PId, pId, StringComparison.OrdinalIgnoreCase))
@@ -442,6 +462,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="project">The selected project.</param>
     private void LoadProjectDetails(ProjectListItem project)
     {
+        Log.Ins.Debug("시작");
         viewModel.Conversations.Clear();
         viewModel.Artifacts.Clear();
 
@@ -488,6 +509,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ScrollConversationsToEnd()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.Conversations.Count == 0)
         {
             return;
@@ -511,6 +533,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ComposerSend_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         SubmitComposer();
     }
 
@@ -521,6 +544,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ComposerInput_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.Key != Key.Enter || (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift)
         {
             return;
@@ -535,6 +559,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void SubmitComposer()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -558,6 +583,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
+        Log.Ins.Debug("시작");
         string? projectRoot = viewModel.SelectedProject?.Path;
 
         // Save the previously selected item's body before switching (focus-move save).
@@ -581,6 +607,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="item">The outline item.</param>
     private void PrepareBodyFile(OutlineItem item)
     {
+        Log.Ins.Debug("시작");
         item.BodyFile = item.Id + ".md";
 
         if (viewModel.SelectedProject is not null)
@@ -594,6 +621,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void SaveOutline()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is not null)
         {
             outlineStore.Save(viewModel.SelectedProject.Path, viewModel.OutlineItems);
@@ -605,6 +633,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void SaveCurrentBody()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is not null && viewModel.SelectedOutlineItem is not null)
         {
             outlineStore.WriteBody(viewModel.SelectedProject.Path, viewModel.SelectedOutlineItem, viewModel.BodyText);
@@ -616,6 +645,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void SaveAll()
     {
+        Log.Ins.Debug("시작");
         SaveCurrentBody();
         SaveOutline();
     }
@@ -627,6 +657,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ExportDocxMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -673,6 +704,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void SaveCommand_CanExecute(object sender, System.Windows.Input.CanExecuteRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         e.CanExecute = viewModel.SelectedProject is not null;
     }
 
@@ -683,6 +715,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void SaveCommand_Executed(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         SaveAll();
     }
 
@@ -693,6 +726,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineAdd_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string? title = TextInputDialog.Prompt("목차 추가", "새 목차 제목:", "새 항목", this);
 
         if (title is null)
@@ -719,6 +753,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineAddChild_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         OutlineItem? selected = viewModel.SelectedOutlineItem;
 
         if (selected is null)
@@ -751,6 +786,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineItem_MouseDoubleClick(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is FrameworkElement element && element.DataContext is OutlineItem item)
         {
             item.IsEditing = true;
@@ -765,6 +801,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineEditBox_IsVisibleChanged(object sender, DependencyPropertyChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is System.Windows.Controls.TextBox box && box.IsVisible)
         {
             box.Focus();
@@ -779,6 +816,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineEditBox_KeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is System.Windows.Controls.TextBox box
             && (e.Key == System.Windows.Input.Key.Enter || e.Key == System.Windows.Input.Key.Escape)
             && box.DataContext is OutlineItem item)
@@ -797,6 +835,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineEditBox_LostFocus(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is System.Windows.Controls.TextBox box && box.DataContext is OutlineItem item)
         {
             item.RevertTitleIfEmpty();
@@ -812,6 +851,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineRename_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         OutlineItem? selected = viewModel.SelectedOutlineItem;
 
         if (selected is null)
@@ -838,6 +878,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineDelete_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         OutlineItem? selected = viewModel.SelectedOutlineItem;
 
         if (selected is null)
@@ -875,6 +916,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_PreviewMouseRightButtonDown(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.OriginalSource is DependencyObject source
             && FindAncestor<System.Windows.Controls.TreeViewItem>(source) is System.Windows.Controls.TreeViewItem item)
         {
@@ -899,6 +941,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         outlineDragStart = e.GetPosition(null);
         outlineDragItem = e.OriginalSource is DependencyObject source
             && FindAncestor<System.Windows.Controls.TreeViewItem>(source) is System.Windows.Controls.TreeViewItem item
@@ -913,6 +956,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.LeftButton != MouseButtonState.Pressed || outlineDragItem is null || outlineDragItem.IsEditing)
         {
             return;
@@ -941,6 +985,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_DragOver(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         bool ok = TryResolveOutlineDrop(e, out OutlineItem dragged, out OutlineItem? target, out _)
             && (target is null || !ReferenceEquals(dragged, target));
         e.Effects = ok ? System.Windows.DragDropEffects.Move : System.Windows.DragDropEffects.None;
@@ -954,6 +999,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void OutlineTree_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (!TryResolveOutlineDrop(e, out OutlineItem dragged, out OutlineItem? target, out OutlineDrop pos))
         {
             return;
@@ -981,6 +1027,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>True when the drop is allowed.</returns>
     private bool TryResolveOutlineDrop(System.Windows.DragEventArgs e, out OutlineItem dragged, out OutlineItem? target, out OutlineDrop pos)
     {
+        Log.Ins.Debug("시작");
         dragged = null!;
         target = null;
         pos = OutlineDrop.After;
@@ -1019,6 +1066,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="pos">The drop relationship.</param>
     private void MoveOutlineItem(OutlineItem dragged, OutlineItem target, OutlineDrop pos)
     {
+        Log.Ins.Debug("시작");
         ObservableCollection<OutlineItem> source = dragged.Parent?.Children ?? viewModel.OutlineItems;
         source.Remove(dragged);
 
@@ -1053,6 +1101,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="dragged">The dragged item.</param>
     private void MoveOutlineToRootEnd(OutlineItem dragged)
     {
+        Log.Ins.Debug("시작");
         ObservableCollection<OutlineItem> source = dragged.Parent?.Children ?? viewModel.OutlineItems;
 
         if (ReferenceEquals(source, viewModel.OutlineItems)
@@ -1078,6 +1127,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>True when node is ancestor or within its subtree.</returns>
     private static bool IsSelfOrDescendant(OutlineItem ancestor, OutlineItem node)
     {
+        Log.Ins.Debug("시작");
         if (ReferenceEquals(ancestor, node))
         {
             return true;
@@ -1100,6 +1150,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>The new id.</returns>
     private static string NewOutlineId()
     {
+        Log.Ins.Debug("시작");
         return "sec_" + Guid.NewGuid().ToString("N")[..8];
     }
 
@@ -1108,6 +1159,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void RenumberOutline()
     {
+        Log.Ins.Debug("시작");
         RenumberOutline(viewModel.OutlineItems, string.Empty);
     }
 
@@ -1118,6 +1170,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="prefix">The parent number prefix.</param>
     private static void RenumberOutline(IEnumerable<OutlineItem> items, string prefix)
     {
+        Log.Ins.Debug("시작");
         int index = 1;
 
         foreach (OutlineItem item in items)
@@ -1137,6 +1190,7 @@ public partial class MainWindow : WorkspaceWindowBase
     private static T? FindAncestor<T>(DependencyObject node)
         where T : DependencyObject
     {
+        Log.Ins.Debug("시작");
         DependencyObject? current = node;
 
         while (current is not null)
@@ -1157,6 +1211,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void PopulateComposerProviders()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             ProviderSelector.ItemsSource = null;
@@ -1178,6 +1233,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ProviderSelector_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (suppressProviderChange || ProviderSelector.SelectedItem is not string providerName)
         {
             return;
@@ -1192,6 +1248,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="providerName">The provider name.</param>
     private void ChangeDefaultProvider(string providerName)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -1217,6 +1274,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>A task that completes when the chat finishes.</returns>
     private async Task SendMessageAsync(string text)
     {
+        Log.Ins.Debug("시작");
         if (isSending || viewModel.SelectedProject is null)
         {
             return;
@@ -1262,6 +1320,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>The added conversation row.</returns>
     private ConversationListItem AddConversationRow(string requestId, string userText, DateTimeOffset sentAt)
     {
+        Log.Ins.Debug("시작");
         ConversationListItem row = new ConversationListItem
         {
             RequestId = requestId,
@@ -1283,6 +1342,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="chunk">The streamed chunk.</param>
     private void AppendAssistantChunk(ConversationListItem? row, string chunk)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -1299,6 +1359,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="label">The step label.</param>
     private void OnChatAgentStep(ConversationListItem? row, string label)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -1320,6 +1381,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ShowBodyProposalIfAny()
     {
+        Log.Ins.Debug("시작");
         string? proposed = bodyBridge.TakePendingProposal();
 
         if (proposed is null || viewModel.SelectedOutlineItem is null)
@@ -1342,6 +1404,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void DebugBodyDiffMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string before = string.IsNullOrEmpty(viewModel.BodyText)
             ? "이전 본문 샘플입니다.\n첫 번째 문단.\n두 번째 문단."
             : viewModel.BodyText;
@@ -1351,6 +1414,7 @@ public partial class MainWindow : WorkspaceWindowBase
 
     private void FinalizeConversationRow(ConversationListItem? row, ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -1372,6 +1436,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="response">The completed chat response.</param>
     private void SaveResponseArtifacts(string projectRoot, ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         foreach (ArtifactCandidate candidate in response.ArtifactCandidates)
         {
             artifactService.Save(projectRoot, candidate, response.RequestId);
@@ -1384,6 +1449,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="projectRoot">The project root path.</param>
     private void ReloadArtifacts(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         viewModel.Artifacts.Clear();
 
         foreach (Artifact artifact in artifactService.List(projectRoot))
@@ -1400,6 +1466,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>The artifact list item.</returns>
     private ArtifactListItem ToArtifactListItem(string projectRoot, Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         string? imagePath = ArtifactService.IsImage(artifact)
             ? artifactService.GetContentFullPath(projectRoot, artifact)
             : null;
@@ -1415,6 +1482,7 @@ public partial class MainWindow : WorkspaceWindowBase
     private void HandleSendFailure(ConversationListItem? row, string text, Exception ex)
     {
         // When no row was added the request was never stored, so restore the input for retry.
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             ComposerInput.Text = text;
@@ -1434,6 +1502,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ImportanceSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not Slider slider || slider.DataContext is not ConversationListItem row)
         {
             return;
@@ -1456,6 +1525,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ImportanceSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not Slider slider || slider.DataContext is not ConversationListItem row)
         {
             return;
@@ -1472,6 +1542,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="weight">The importance weight.</param>
     private void PersistImportanceWeight(ConversationListItem row, int weight)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null || string.IsNullOrWhiteSpace(row.RequestId))
         {
             return;
@@ -1494,6 +1565,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void DeleteConversationButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not FrameworkElement element || element.DataContext is not ConversationListItem row)
         {
             return;
@@ -1534,6 +1606,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ExtractArtifactMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not System.Windows.Controls.MenuItem menuItem
             || menuItem.Parent is not System.Windows.Controls.ContextMenu contextMenu
             || contextMenu.PlacementTarget is not System.Windows.Controls.RichTextBox richTextBox
@@ -1626,6 +1699,7 @@ public partial class MainWindow : WorkspaceWindowBase
         int length,
         string artifactTitle)
     {
+        Log.Ins.Debug("시작");
         string content = row.AssistantContent;
 
         if (start < 0 || length <= 0 || start + length > content.Length)
@@ -1647,6 +1721,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ArtifactItem_Click(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not FrameworkElement element || element.DataContext is not ArtifactListItem item)
         {
             return;
@@ -1702,6 +1777,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactArea_DragOver(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         e.Effects = viewModel.SelectedProject is not null && HasImageFiles(e.Data)
             ? System.Windows.DragDropEffects.Copy
             : System.Windows.DragDropEffects.None;
@@ -1713,6 +1789,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactArea_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null || !e.Data.GetDataPresent(System.Windows.DataFormats.FileDrop))
         {
             return;
@@ -1749,6 +1826,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactCard_PreviewMouseLeftButtonDown(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         artifactDragStartPoint = e.GetPosition(null);
         artifactDragCandidate = (sender as FrameworkElement)?.DataContext as ArtifactListItem;
     }
@@ -1758,6 +1836,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ArtifactCard_MouseMove(object sender, System.Windows.Input.MouseEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.LeftButton != System.Windows.Input.MouseButtonState.Pressed || artifactDragCandidate is null)
         {
             return;
@@ -1782,6 +1861,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void BodyEditor_PreviewDragOver(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.Data.GetDataPresent(ArtifactDragFormat) && viewModel.IsBodyEditable)
         {
             e.Effects = System.Windows.DragDropEffects.Copy;
@@ -1794,6 +1874,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void BodyEditor_Drop(object sender, System.Windows.DragEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (!e.Data.GetDataPresent(ArtifactDragFormat)
             || viewModel.SelectedProject is null
             || sender is not System.Windows.Controls.TextBox editor)
@@ -1835,6 +1916,7 @@ public partial class MainWindow : WorkspaceWindowBase
     private static string BuildArtifactReference(Artifact artifact)
     {
         // Body files live in the project root; reference the artifact via its project-relative path.
+        Log.Ins.Debug("시작");
         string relative = $"{LlmIdeLayout.MetadataDirectoryName}/{LlmIdeLayout.ArtifactsDirectoryName}/{artifact.ContentPath}";
 
         return ArtifactService.IsImage(artifact)
@@ -1847,6 +1929,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void BodyPreview_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -1860,6 +1943,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private static bool HasImageFiles(System.Windows.IDataObject data)
     {
+        Log.Ins.Debug("시작");
         return data.GetDataPresent(System.Windows.DataFormats.FileDrop)
             && ((string[])data.GetData(System.Windows.DataFormats.FileDrop)).Any(IsImageFile);
     }
@@ -1869,6 +1953,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private static bool IsImageFile(string path)
     {
+        Log.Ins.Debug("시작");
         return ImageExtensions.Contains(System.IO.Path.GetExtension(path).ToLowerInvariant());
     }
 
@@ -1878,6 +1963,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="action">The action to run.</param>
     private void RunOnUi(Action action)
     {
+        Log.Ins.Debug("시작");
         if (Dispatcher.CheckAccess())
         {
             action();
@@ -2050,6 +2136,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <param name="propertyName">The changed property name.</param>
     private void OnPropertyChanged([CallerMemberName] string propertyName = "")
     {
+        Log.Ins.Debug("시작");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
@@ -2065,6 +2152,7 @@ public sealed class ProjectListItem
     /// <param name="entry">The project registry entry.</param>
     public ProjectListItem(ProjectRegistryEntry entry)
     {
+        Log.Ins.Debug("시작");
         PId = entry.PId;
         DisplayName = entry.Name;
         Path = entry.Path;
@@ -2198,6 +2286,7 @@ public sealed class ConversationListItem : INotifyPropertyChanged
     /// <param name="propertyName">The changed property name.</param>
     private void OnPropertyChanged([CallerMemberName] string propertyName = "")
     {
+        Log.Ins.Debug("시작");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
@@ -2214,6 +2303,7 @@ public sealed class ArtifactListItem
     /// <param name="imagePath">The absolute image path for image artifacts; null for text artifacts.</param>
     public ArtifactListItem(Artifact artifact, string? imagePath = null)
     {
+        Log.Ins.Debug("시작");
         ArtifactId = artifact.ArtifactId;
         Title = artifact.Title;
         Type = artifact.Type;
@@ -2269,6 +2359,7 @@ public static class ConversationLogReader
     /// <returns>The conversation rows.</returns>
     public static IReadOnlyList<ConversationListItem> Read(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string conversationDirectory = Path.Combine(
             System.IO.Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -2303,6 +2394,7 @@ public static class ConversationLogReader
     /// <returns>The parsed records.</returns>
     private static List<TValue> ReadJsonLines<TValue>(string path)
     {
+        Log.Ins.Debug("시작");
         List<TValue> values = [];
 
         if (!File.Exists(path))
@@ -2337,6 +2429,7 @@ public static class ConversationLogReader
     /// <returns>The request lookup.</returns>
     private static Dictionary<string, ConversationRequestRecord> BuildRequestLookup(IReadOnlyList<ConversationRequestRecord> requests)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, ConversationRequestRecord> requestsById = new Dictionary<string, ConversationRequestRecord>(StringComparer.Ordinal);
 
         foreach (ConversationRequestRecord request in requests)
@@ -2362,6 +2455,7 @@ public static class ConversationLogReader
         IReadOnlyList<ConversationMessageRecord> messages,
         string requestId)
     {
+        Log.Ins.Debug("시작");
         foreach (ConversationMessageRecord message in messages)
         {
             if (!string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
@@ -2388,6 +2482,7 @@ public static class ConversationLogReader
         Dictionary<string, ConversationRequestRecord> requestsById,
         string requestId)
     {
+        Log.Ins.Debug("시작");
         if (requestsById.TryGetValue(requestId, out ConversationRequestRecord? request))
         {
             return request;
@@ -2408,6 +2503,7 @@ public static class ConversationLogReader
         ConversationMessageRecord? assistantMessage,
         ConversationRequestRecord? request)
     {
+        Log.Ins.Debug("시작");
         DateTimeOffset createdAt = userMessage.CreatedAt;
 
         if (request is not null && request.CreatedAt != default)
@@ -2432,6 +2528,7 @@ public static class ConversationLogReader
     /// <returns>The formatted timestamp text.</returns>
     public static string FormatTimestamp(DateTimeOffset value)
     {
+        Log.Ins.Debug("시작");
         return value.ToLocalTime().ToString("[yyyy-MM-dd HH:mm:ss.fff]");
     }
 }

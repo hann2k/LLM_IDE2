@@ -3,6 +3,7 @@ using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
 using Microsoft.Data.Sqlite;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Conversations;
 
@@ -19,6 +20,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The database file path.</returns>
     public string SaveContextPackage(string projectRoot, ContextPackage contextPackage)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -50,6 +52,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The next request sequence number.</returns>
     public long GetNextRequestSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         return GetNextSequence(connection, "select request_id from conversation_turns;");
@@ -62,6 +65,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The next message sequence number.</returns>
     public long GetNextMessageSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         return GetNextSequence(connection, "select message_id from conversation_messages;");
@@ -74,6 +78,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="request">The request record.</param>
     public void AppendRequest(string projectRoot, ConversationRequestRecord request)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -147,6 +152,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
     public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -167,6 +173,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="message">The message record.</param>
     public void AppendMessage(string projectRoot, ConversationMessageRecord message)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -212,6 +219,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="toolCall">The tool call record.</param>
     public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -257,6 +265,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="requestId">The chat request identifier.</param>
     public void DeleteConversation(string projectRoot, string requestId)
     {
+        Log.Ins.Debug("시작");
         string compressionRequestId = requestId + "c";
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
@@ -280,6 +289,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="content">The new assistant message content.</param>
     public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -301,6 +311,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The recent messages in chronological order.</returns>
     public IReadOnlyList<ConversationMessageRecord> GetRecentMessages(string projectRoot, int maxMessages)
     {
+        Log.Ins.Debug("시작");
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -347,6 +358,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The database file path.</returns>
     public static string EnsureDatabase(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = GetDatabasePath(projectRoot);
         Directory.CreateDirectory(Path.GetDirectoryName(databasePath) ?? string.Empty);
 
@@ -418,6 +430,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <param name="connection">The SQLite connection.</param>
     private static void EnsureConversationTurnColumns(SqliteConnection connection)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, string> columns = new Dictionary<string, string>
         {
             ["request_type"] = "text not null default 'chat'",
@@ -455,6 +468,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The column names.</returns>
     private static HashSet<string> GetColumns(SqliteConnection connection, string tableName)
     {
+        Log.Ins.Debug("시작");
         HashSet<string> columns = new HashSet<string>(StringComparer.Ordinal);
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = $"pragma table_info({tableName});";
@@ -476,6 +490,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The next sequence number.</returns>
     private static long GetNextSequence(SqliteConnection connection, string selectIdentifiersSql)
     {
+        Log.Ins.Debug("시작");
         long maxSequence = 0;
         using SqliteCommand command = connection.CreateCommand();
         command.CommandText = selectIdentifiersSql;
@@ -504,6 +519,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The conversation database path.</returns>
     private static string GetDatabasePath(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(
             Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -518,6 +534,7 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     /// <returns>The open SQLite connection.</returns>
     private static SqliteConnection OpenConnection(string databasePath)
     {
+        Log.Ins.Debug("시작");
         SqliteConnection connection = new SqliteConnection($"Data Source={databasePath}");
         connection.Open();
         return connection;

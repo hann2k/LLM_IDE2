@@ -1,4 +1,5 @@
 using LlmIde.Core.Conversations;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Conversations;
 
@@ -18,6 +19,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="stores">The stores to write to.</param>
     public CompositeConversationLogStore(IReadOnlyList<IConversationLogStore> stores)
     {
+        Log.Ins.Debug("시작");
         this.stores = stores;
     }
 
@@ -29,6 +31,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <returns>The first stored context package path.</returns>
     public string SaveContextPackage(string projectRoot, ContextPackage contextPackage)
     {
+        Log.Ins.Debug("시작");
         string firstPath = string.Empty;
 
         foreach (IConversationLogStore store in stores)
@@ -51,6 +54,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <returns>The next request sequence number.</returns>
     public long GetNextRequestSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         long nextSequence = 1;
 
         foreach (IConversationLogStore store in stores)
@@ -73,6 +77,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <returns>The next message sequence number.</returns>
     public long GetNextMessageSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         long nextSequence = 1;
 
         foreach (IConversationLogStore store in stores)
@@ -95,6 +100,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="request">The request record.</param>
     public void AppendRequest(string projectRoot, ConversationRequestRecord request)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.AppendRequest(projectRoot, request);
@@ -109,6 +115,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
     public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.UpdateRequestImportanceWeight(projectRoot, requestId, importanceWeight);
@@ -122,6 +129,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="message">The message record.</param>
     public void AppendMessage(string projectRoot, ConversationMessageRecord message)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.AppendMessage(projectRoot, message);
@@ -135,6 +143,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="toolCall">The tool call record.</param>
     public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.AppendToolCall(projectRoot, toolCall);
@@ -148,6 +157,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="requestId">The chat request identifier.</param>
     public void DeleteConversation(string projectRoot, string requestId)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.DeleteConversation(projectRoot, requestId);
@@ -162,6 +172,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <param name="content">The new assistant message content.</param>
     public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores)
         {
             store.UpdateAssistantMessageContent(projectRoot, requestId, content);
@@ -176,6 +187,7 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     /// <returns>The recent messages.</returns>
     public IReadOnlyList<ConversationMessageRecord> GetRecentMessages(string projectRoot, int maxMessages)
     {
+        Log.Ins.Debug("시작");
         foreach (IConversationLogStore store in stores.Reverse())
         {
             IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(projectRoot, maxMessages);

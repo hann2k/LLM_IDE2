@@ -1,6 +1,7 @@
 using System.Net.Http;
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -20,6 +21,7 @@ public static class AgentToolHostFactory
     public static IAgentToolHost Create(string ideProgramRoot, HttpClient httpClient, ArtifactService artifactService, IDocumentBodyBridge? bodyBridge = null)
     {
         // All implemented tools are registered here; add new tools to this list.
+        Log.Ins.Debug("시작");
         List<IAgentTool> allTools =
         [
             new FetchUrlTool(httpClient),

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -45,6 +46,7 @@ public sealed class WindowLayoutStore
     /// <param name="ideProgramRoot">The IDE program root directory.</param>
     public WindowLayoutStore(string ideProgramRoot)
     {
+        Log.Ins.Debug("시작");
         filePath = Path.Combine(ideProgramRoot, "config", "window-layout.json");
     }
 
@@ -54,6 +56,7 @@ public sealed class WindowLayoutStore
     /// <returns>The saved layout, or null.</returns>
     public WindowLayout? Load()
     {
+        Log.Ins.Debug("시작");
         try
         {
             if (!File.Exists(filePath))
@@ -75,6 +78,7 @@ public sealed class WindowLayoutStore
     /// <param name="layout">The layout to save.</param>
     public void Save(WindowLayout layout)
     {
+        Log.Ins.Debug("시작");
         try
         {
             string? directory = Path.GetDirectoryName(filePath);

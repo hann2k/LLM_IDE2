@@ -1,6 +1,7 @@
 using System;
 using System.Windows.Threading;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -22,6 +23,7 @@ public sealed class WriterDocumentBodyBridge : IDocumentBodyBridge
     /// <param name="readCurrentBody">Reads the current section snapshot (invoked on the UI thread).</param>
     public WriterDocumentBodyBridge(Dispatcher dispatcher, Func<DocumentBodySnapshot?> readCurrentBody)
     {
+        Log.Ins.Debug("시작");
         this.dispatcher = dispatcher;
         this.readCurrentBody = readCurrentBody;
     }
@@ -32,6 +34,7 @@ public sealed class WriterDocumentBodyBridge : IDocumentBodyBridge
     /// <returns>The body snapshot, or null when no section is selected.</returns>
     public DocumentBodySnapshot? GetCurrentBody()
     {
+        Log.Ins.Debug("시작");
         return dispatcher.Invoke(readCurrentBody);
     }
 
@@ -41,6 +44,7 @@ public sealed class WriterDocumentBodyBridge : IDocumentBodyBridge
     /// <param name="revisedBody">The proposed full body.</param>
     public void ProposeBodyRevision(string revisedBody)
     {
+        Log.Ins.Debug("시작");
         lock (gate)
         {
             pendingProposal = revisedBody;
@@ -53,6 +57,7 @@ public sealed class WriterDocumentBodyBridge : IDocumentBodyBridge
     /// <returns>The pending proposal, or null when there is none.</returns>
     public string? TakePendingProposal()
     {
+        Log.Ins.Debug("시작");
         lock (gate)
         {
             string? proposal = pendingProposal;

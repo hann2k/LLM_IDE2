@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Conversations;
 
@@ -14,6 +15,7 @@ public static partial class ConversationImportanceParser
     /// <returns>The parsing result.</returns>
     public static ConversationImportanceParseResult Parse(string content)
     {
+        Log.Ins.Debug("시작");
         Match xmlMatch = ImportanceXmlRegex().Match(content);
 
         if (xmlMatch.Success)
@@ -44,6 +46,7 @@ public static partial class ConversationImportanceParser
     /// <returns>The parsing result.</returns>
     private static ConversationImportanceParseResult CreateResult(string content, Match match, string weightText)
     {
+        Log.Ins.Debug("시작");
         int weight = 0;
 
         if (int.TryParse(weightText, out int parsedWeight))

@@ -2,6 +2,7 @@ using System;
 using System.Windows;
 using System.Windows.Media.Imaging;
 using Image = System.Windows.Controls.Image;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -12,6 +13,7 @@ public sealed class ImageViewerWindow : Window
 {
     private ImageViewerWindow(string title, string imagePath, Window owner)
     {
+        Log.Ins.Debug("시작");
         Title = string.IsNullOrWhiteSpace(title) ? "이미지" : title;
         Owner = owner;
         Width = 820;
@@ -42,6 +44,7 @@ public sealed class ImageViewerWindow : Window
     /// <param name="owner">The owner window.</param>
     public static void Show(string title, string imagePath, Window owner)
     {
+        Log.Ins.Debug("시작");
         new ImageViewerWindow(title, imagePath, owner).ShowDialog();
     }
 }

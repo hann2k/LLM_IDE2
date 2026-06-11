@@ -26,3 +26,6 @@ backup/
 # OS files
 .DS_Store
 Thumbs.db
+
+# Framework.Common 런타임 로그 출력(계측 Log.Ins.Debug)
+/Log/

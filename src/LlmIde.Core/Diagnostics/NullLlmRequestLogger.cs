@@ -16,5 +16,6 @@ public sealed class NullLlmRequestLogger : ILlmRequestLogger
     /// <param name="record">The call record (ignored).</param>
     public void Log(LlmRequestLogRecord record)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
     }
 }

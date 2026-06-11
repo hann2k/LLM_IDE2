@@ -3,6 +3,7 @@ using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
 using Microsoft.Data.Sqlite;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Conversations;
 
@@ -22,6 +23,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <param name="programRoot">The IDE program root.</param>
     public FileRollingContextStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -31,6 +33,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <param name="projectRoot">The project root path.</param>
     public void EnsureInitialized(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string rollingContextDirectory = GetRollingContextDirectory(projectRoot);
         Directory.CreateDirectory(rollingContextDirectory);
         Directory.CreateDirectory(GetHistoryDirectory(projectRoot));
@@ -46,6 +49,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <returns>The current summary, or null when none exists.</returns>
     public RollingContextSummary? LoadCurrent(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         EnsureInitialized(projectRoot);
         string content = File.ReadAllText(GetCurrentPath(projectRoot));
 
@@ -78,6 +82,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <returns>The compression rule.</returns>
     public string LoadCompressionRule(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         EnsureInitialized(projectRoot);
 
         // The compression rule is a common policy: read from the program's /policies folder.
@@ -102,6 +107,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
         string provider,
         string model)
     {
+        Log.Ins.Debug("시작");
         EnsureInitialized(projectRoot);
         RollingContextSummary? supersededSummary = LoadCurrentFromDatabase(projectRoot);
         MarkCurrentSummariesSuperseded(projectRoot);
@@ -149,6 +155,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
         string model,
         string error)
     {
+        Log.Ins.Debug("시작");
         EnsureInitialized(projectRoot);
         RollingContextSummary summary = CreateSummary(
             sourceRequestId,
@@ -177,6 +184,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
         string? error,
         bool isCurrent)
     {
+        Log.Ins.Debug("시작");
         string rollingContextId = $"rctx_{Guid.NewGuid():N}";
 
         return new RollingContextSummary
@@ -202,6 +210,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <returns>The policy template content.</returns>
     private string LoadProgramPolicyTemplate(string fileName)
     {
+        Log.Ins.Debug("시작");
         return LoadProgramPolicyTemplate(fileName, string.Empty);
     }
 
@@ -213,6 +222,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// <returns>The policy template content.</returns>
     private string LoadProgramPolicyTemplate(string fileName, string fallback)
     {
+        Log.Ins.Debug("시작");
         string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, fileName);
         return File.Exists(path) ? File.ReadAllText(path) : fallback;
     }
@@ -222,6 +232,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static void EnsureTextFile(string path, string content)
     {
+        Log.Ins.Debug("시작");
         if (File.Exists(path))
         {
             return;
@@ -236,6 +247,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static void AppendIndex(string projectRoot, RollingContextSummary summary)
     {
+        Log.Ins.Debug("시작");
         string json = JsonSerializer.Serialize(summary, JsonOptions.Compact);
         File.AppendAllText(GetIndexPath(projectRoot), json + Environment.NewLine);
     }
@@ -245,6 +257,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static void EnsureRollingContextTable(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = SqliteConversationLogStore.EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -272,6 +285,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static void MarkCurrentSummariesSuperseded(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = SqliteConversationLogStore.EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -289,6 +303,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static void InsertSummary(string projectRoot, RollingContextSummary summary)
     {
+        Log.Ins.Debug("시작");
         string databasePath = SqliteConversationLogStore.EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -341,6 +356,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static RollingContextSummary? LoadCurrentFromDatabase(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string databasePath = SqliteConversationLogStore.EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
         using SqliteCommand command = connection.CreateCommand();
@@ -391,6 +407,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static SqliteConnection OpenConnection(string databasePath)
     {
+        Log.Ins.Debug("시작");
         SqliteConnection connection = new SqliteConnection($"Data Source={databasePath}");
         connection.Open();
         return connection;
@@ -401,6 +418,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetMetadataDirectory(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(Path.GetFullPath(projectRoot), LlmIdeLayout.MetadataDirectoryName);
     }
 
@@ -409,6 +427,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetRollingContextDirectory(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(
             GetMetadataDirectory(projectRoot),
             LlmIdeLayout.ConversationsDirectoryName,
@@ -420,6 +439,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetHistoryDirectory(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(GetRollingContextDirectory(projectRoot), LlmIdeLayout.RollingContextHistoryDirectoryName);
     }
 
@@ -428,6 +448,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetCurrentPath(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(GetRollingContextDirectory(projectRoot), LlmIdeLayout.CurrentRollingContextFileName);
     }
 
@@ -436,6 +457,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetIndexPath(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(GetRollingContextDirectory(projectRoot), LlmIdeLayout.RollingContextIndexFileName);
     }
 
@@ -444,6 +466,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetCurrentRelativePath()
     {
+        Log.Ins.Debug("시작");
         return string.Join(
             '/',
             LlmIdeLayout.ConversationsDirectoryName,
@@ -456,6 +479,7 @@ public sealed class FileRollingContextStore : IRollingContextStore
     /// </summary>
     private static string GetHistoryRelativePath(string rollingContextId)
     {
+        Log.Ins.Debug("시작");
         return string.Join(
             '/',
             LlmIdeLayout.ConversationsDirectoryName,

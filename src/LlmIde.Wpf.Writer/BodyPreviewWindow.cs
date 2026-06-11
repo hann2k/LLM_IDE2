@@ -4,6 +4,7 @@ using System.Windows;
 using System.Windows.Controls;
 using LlmIde.Wpf.Lib;
 using RichTextBox = System.Windows.Controls.RichTextBox;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -15,6 +16,7 @@ public sealed class BodyPreviewWindow : Window
 {
     private BodyPreviewWindow(string bodyMarkdown, string projectRoot, Window owner)
     {
+        Log.Ins.Debug("시작");
         Title = "본문 미리보기";
         Owner = owner;
         Width = 860;
@@ -44,6 +46,7 @@ public sealed class BodyPreviewWindow : Window
     /// <param name="owner">The owner window.</param>
     public static void Show(string bodyMarkdown, string projectRoot, Window owner)
     {
+        Log.Ins.Debug("시작");
         new BodyPreviewWindow(bodyMarkdown, projectRoot, owner).ShowDialog();
     }
 
@@ -56,6 +59,7 @@ public sealed class BodyPreviewWindow : Window
     /// <returns>The markdown with absolute image URIs.</returns>
     private static string RewriteImagePaths(string markdown, string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Regex.Replace(
             markdown,
             @"(!\[[^\]]*\]\()([^)\s]+)(\))",

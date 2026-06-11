@@ -34,6 +34,7 @@ public sealed class FrameworkCommonLlmRequestLogger : ILlmRequestLogger
     /// <param name="logDirectory">An optional directory to ensure exists (the library still writes to its fixed Log folder).</param>
     public FrameworkCommonLlmRequestLogger(string? logDirectory = null)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         EnsureInitialized(logDirectory);
     }
 
@@ -43,6 +44,7 @@ public sealed class FrameworkCommonLlmRequestLogger : ILlmRequestLogger
     /// <param name="record">The call record to log.</param>
     public void Log(LlmRequestLogRecord record)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         try
         {
             string json = JsonSerializer.Serialize(record, JsonOptions.Compact);
@@ -68,6 +70,7 @@ public sealed class FrameworkCommonLlmRequestLogger : ILlmRequestLogger
     /// <param name="logDirectory">An optional directory to ensure exists.</param>
     private static void EnsureInitialized(string? logDirectory)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
         if (initialized)
         {
             return;

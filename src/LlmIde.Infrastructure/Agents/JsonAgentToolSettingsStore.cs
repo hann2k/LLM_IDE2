@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmIde.Core.Agents;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -26,6 +27,7 @@ public sealed class JsonAgentToolSettingsStore
     /// <returns>The agent tool settings.</returns>
     public AgentToolSettings Load(string ideProgramRoot)
     {
+        Log.Ins.Debug("시작");
         string path = Path.Combine(Path.GetFullPath(ideProgramRoot), SettingsDirectoryName, FileName);
 
         if (!File.Exists(path))

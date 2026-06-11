@@ -1,6 +1,7 @@
 using System.Linq;
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -21,6 +22,7 @@ public sealed class ArtifactsListTool : IAgentTool
     /// <param name="artifactService">The artifact service.</param>
     public ArtifactsListTool(ArtifactService artifactService)
     {
+        Log.Ins.Debug("시작");
         this.artifactService = artifactService;
     }
 
@@ -47,6 +49,7 @@ public sealed class ArtifactsListTool : IAgentTool
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(request.WorkingDirectory))
         {
             return Task.FromResult(Failure(request, "작업 폴더가 설정되지 않았습니다."));
@@ -94,6 +97,7 @@ public sealed class ArtifactsListTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         return new AgentToolResult
         {
             Tool = Name,

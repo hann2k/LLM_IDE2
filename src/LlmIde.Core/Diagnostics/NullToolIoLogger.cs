@@ -16,5 +16,6 @@ public sealed class NullToolIoLogger : IToolIoLogger
     /// <param name="record">The tool I/O record (ignored).</param>
     public void Log(ToolIoLogRecord record)
     {
+        Framework.Common.Logger.Log.Ins.Debug("시작");
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using LlmIde.Infrastructure.Export;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -19,6 +20,7 @@ public static class DocxExporter
     /// <param name="readBody">Reads an item's body text.</param>
     public static void Export(string outputPath, IEnumerable<OutlineItem> roots, Func<OutlineItem, string> readBody)
     {
+        Log.Ins.Debug("시작");
         List<DocxBlock> blocks = new List<DocxBlock>();
 
         foreach (OutlineItem root in roots)
@@ -31,6 +33,7 @@ public static class DocxExporter
 
     private static void Flatten(OutlineItem item, int level, Func<OutlineItem, string> readBody, List<DocxBlock> blocks)
     {
+        Log.Ins.Debug("시작");
         string heading = string.IsNullOrWhiteSpace(item.Number)
             ? item.Title
             : $"{item.Number} {item.Title}";

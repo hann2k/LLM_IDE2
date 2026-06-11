@@ -3,6 +3,7 @@ using LlmIde.Core.Providers;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Conversations;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -22,6 +23,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="programRoot">The IDE program root.</param>
     public JsonFileProjectStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -33,6 +35,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The initialization result.</returns>
     public ProjectInitializationResult Initialize(string projectRoot, string projectName)
     {
+        Log.Ins.Debug("시작");
         string normalizedRoot = Path.GetFullPath(projectRoot);
         Directory.CreateDirectory(normalizedRoot);
 
@@ -78,6 +81,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>True when the path contains project metadata.</returns>
     public bool IsInitialized(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string metadataRoot = Path.Combine(Path.GetFullPath(projectRoot), LlmIdeLayout.MetadataDirectoryName);
         string projectFile = Path.Combine(metadataRoot, LlmIdeLayout.ProjectFileName);
         return File.Exists(projectFile);
@@ -90,6 +94,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The project information.</returns>
     public ProjectInfo ReadProjectInfo(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string projectFile = Path.Combine(Path.GetFullPath(projectRoot), LlmIdeLayout.MetadataDirectoryName, LlmIdeLayout.ProjectFileName);
         string json = File.ReadAllText(projectFile);
         ProjectInfo? projectInfo = JsonSerializer.Deserialize<ProjectInfo>(json, JsonOptions.Default);
@@ -109,6 +114,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="projectInfo">The project information.</param>
     public void SaveProjectInfo(string projectRoot, ProjectInfo projectInfo)
     {
+        Log.Ins.Debug("시작");
         string projectFile = Path.Combine(
             Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -122,6 +128,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="metadataRoot">The metadata root path.</param>
     private static void CreateDirectories(string metadataRoot)
     {
+        Log.Ins.Debug("시작");
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.PoliciesDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName));
         Directory.CreateDirectory(Path.Combine(metadataRoot, LlmIdeLayout.ConversationsDirectoryName, LlmIdeLayout.ContextPackagesDirectoryName));
@@ -142,6 +149,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The project information.</returns>
     private static ProjectInfo EnsureProjectInfo(string projectRoot, string metadataRoot, string projectName)
     {
+        Log.Ins.Debug("시작");
         string projectFile = Path.Combine(metadataRoot, LlmIdeLayout.ProjectFileName);
 
         if (File.Exists(projectFile))
@@ -175,6 +183,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The default project state.</returns>
     private static ProjectState CreateDefaultProjectState()
     {
+        Log.Ins.Debug("시작");
         return new ProjectState();
     }
 
@@ -184,6 +193,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The default provider settings.</returns>
     private static ProviderSettingsDocument CreateDefaultProviderSettings()
     {
+        Log.Ins.Debug("시작");
         return new ProviderSettingsDocument
         {
             DefaultProvider = "deepseek",
@@ -206,6 +216,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The default context policy JSON.</returns>
     private static string CreateDefaultContextPolicyJson()
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, object> policy = new Dictionary<string, object>
         {
             ["context_management_strategy"] = "summary_plus_window",
@@ -235,6 +246,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The default provider policy JSON.</returns>
     private static string CreateDefaultProviderPolicyJson()
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, object> policy = new Dictionary<string, object>
         {
             ["default_provider"] = "deepseek",
@@ -254,6 +266,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="value">The value to write when the file is missing.</param>
     private static void EnsureJsonFile<TValue>(string path, TValue value)
     {
+        Log.Ins.Debug("시작");
         if (File.Exists(path))
         {
             return;
@@ -269,6 +282,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="content">The content to write when the file is missing.</param>
     private static void EnsureTextFile(string path, string content)
     {
+        Log.Ins.Debug("시작");
         if (File.Exists(path))
         {
             return;
@@ -284,6 +298,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="content">The JSON text to write when the file is missing.</param>
     private static void EnsureJsonTextFile(string path, string content)
     {
+        Log.Ins.Debug("시작");
         if (File.Exists(path))
         {
             return;
@@ -299,6 +314,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The policy template content.</returns>
     private string LoadProgramPolicyTemplate(string fileName)
     {
+        Log.Ins.Debug("시작");
         return LoadProgramPolicyTemplate(fileName, string.Empty);
     }
 
@@ -310,6 +326,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <returns>The policy template content.</returns>
     private string LoadProgramPolicyTemplate(string fileName, string fallback)
     {
+        Log.Ins.Debug("시작");
         string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, fileName);
         return File.Exists(path) ? File.ReadAllText(path) : fallback;
     }
@@ -321,6 +338,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="value">The value to serialize.</param>
     private static void WriteJson<TValue>(string path, TValue value)
     {
+        Log.Ins.Debug("시작");
         string json = JsonSerializer.Serialize(value, JsonOptions.Default);
         File.WriteAllText(path, json);
     }
@@ -334,6 +352,7 @@ public sealed class JsonFileProjectStore : IProjectStore
     /// <param name="errorMessage">The error message.</param>
     private static void WriteProgress(string metadataRoot, string step, string status, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         ProjectInitProgress progress = new ProjectInitProgress
         {
             Step = step,

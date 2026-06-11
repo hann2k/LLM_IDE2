@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Artifacts;
 
 /// <summary>
@@ -13,6 +14,7 @@ public sealed class ArtifactService
     /// <param name="artifactStore">The artifact store.</param>
     public ArtifactService(IArtifactStore artifactStore)
     {
+        Log.Ins.Debug("시작");
         this.artifactStore = artifactStore;
     }
 
@@ -23,6 +25,7 @@ public sealed class ArtifactService
     /// <returns>The artifact candidates.</returns>
     public IReadOnlyList<ArtifactCandidate> ExtractCandidates(string text)
     {
+        Log.Ins.Debug("시작");
         return ArtifactTagParser.Extract(text);
     }
 
@@ -33,6 +36,7 @@ public sealed class ArtifactService
     /// <returns>The stored artifacts.</returns>
     public IReadOnlyList<Artifact> List(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return artifactStore.List(projectRoot);
     }
 
@@ -44,6 +48,7 @@ public sealed class ArtifactService
     /// <returns>The stored artifact.</returns>
     public Artifact Get(string projectRoot, string artifactId)
     {
+        Log.Ins.Debug("시작");
         return artifactStore.Get(projectRoot, artifactId);
     }
 
@@ -55,6 +60,7 @@ public sealed class ArtifactService
     /// <returns>The artifact content.</returns>
     public string ReadContent(string projectRoot, Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         return artifactStore.ReadContent(projectRoot, artifact);
     }
 
@@ -67,6 +73,7 @@ public sealed class ArtifactService
     /// <returns>The stored artifact.</returns>
     public Artifact Save(string projectRoot, ArtifactCandidate candidate, string sourceRequestId)
     {
+        Log.Ins.Debug("시작");
         Validate(candidate);
         return artifactStore.Save(projectRoot, candidate, sourceRequestId);
     }
@@ -80,6 +87,7 @@ public sealed class ArtifactService
     /// <returns>The updated artifact.</returns>
     public Artifact Update(string projectRoot, string artifactId, ArtifactCandidate candidate)
     {
+        Log.Ins.Debug("시작");
         Validate(candidate);
         return artifactStore.Update(projectRoot, artifactId, candidate);
     }
@@ -91,6 +99,7 @@ public sealed class ArtifactService
     /// <param name="artifactId">The artifact identifier.</param>
     public void Remove(string projectRoot, string artifactId)
     {
+        Log.Ins.Debug("시작");
         artifactStore.Remove(projectRoot, artifactId);
     }
 
@@ -103,6 +112,7 @@ public sealed class ArtifactService
     /// <returns>The stored image artifact.</returns>
     public Artifact SaveImage(string projectRoot, string title, string sourceImagePath)
     {
+        Log.Ins.Debug("시작");
         return artifactStore.SaveImage(projectRoot, title, sourceImagePath);
     }
 
@@ -114,6 +124,7 @@ public sealed class ArtifactService
     /// <returns>The absolute content file path.</returns>
     public string GetContentFullPath(string projectRoot, Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         return artifactStore.GetContentFullPath(projectRoot, artifact);
     }
 
@@ -124,11 +135,13 @@ public sealed class ArtifactService
     /// <returns>True when the artifact type is "image".</returns>
     public static bool IsImage(Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         return string.Equals(artifact.Type, "image", StringComparison.OrdinalIgnoreCase);
     }
 
     private static void Validate(ArtifactCandidate candidate)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(candidate.Title))
         {
             throw new InvalidOperationException("산출물 제목은 필수입니다.");

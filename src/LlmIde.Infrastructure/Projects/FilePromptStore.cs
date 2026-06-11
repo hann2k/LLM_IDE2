@@ -1,5 +1,6 @@
 using System.Text.Json;
 using LlmIde.Core.Projects;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -20,6 +21,7 @@ public sealed class FilePromptStore : IPromptStore
     /// <param name="programRoot">The IDE program root.</param>
     public FilePromptStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -31,6 +33,7 @@ public sealed class FilePromptStore : IPromptStore
     public IReadOnlyDictionary<string, string> Load(string projectRoot)
     {
         // Policies are common to all projects: read from the program's /policies folder.
+        Log.Ins.Debug("시작");
         string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.PromptsFileName);
 
         if (!File.Exists(path))

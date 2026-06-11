@@ -4,6 +4,7 @@ using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using LlmIde.Core.Providers;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Providers;
 
@@ -28,6 +29,7 @@ public sealed class DeepSeekChatProvider : IChatProvider, IModelProvider
     /// <param name="httpClient">The HTTP client.</param>
     public DeepSeekChatProvider(HttpClient httpClient)
     {
+        Log.Ins.Debug("시작");
         this.httpClient = httpClient;
     }
 
@@ -43,6 +45,7 @@ public sealed class DeepSeekChatProvider : IChatProvider, IModelProvider
         ProviderSettings settings,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
         {
             throw new InvalidOperationException("DeepSeek API key is empty. Set api_key in .llmide/settings/providers.json.");
@@ -99,6 +102,7 @@ public sealed class DeepSeekChatProvider : IChatProvider, IModelProvider
         ProviderSettings settings,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
         {
             throw new InvalidOperationException("DeepSeek API key is empty. Set api_key in .llmide/settings/providers.json.");
@@ -180,6 +184,7 @@ public sealed class DeepSeekChatProvider : IChatProvider, IModelProvider
         ProviderSettings settings,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(settings.ApiKey))
         {
             throw new InvalidOperationException("DeepSeek API key is empty. Set api_key in .llmide/settings/providers.json.");

@@ -2,6 +2,7 @@ using System;
 using System.Globalization;
 using System.Windows;
 using System.Windows.Data;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -27,6 +28,7 @@ public sealed class ImportanceToDeleteVisibilityConverter : IValueConverter
     /// <returns>Hidden (slot reserved) when importance is 5 or higher; otherwise Visible.</returns>
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
+        Log.Ins.Debug("시작");
         int importance = value is int weight ? weight : 0;
         return importance >= HideThreshold ? Visibility.Hidden : Visibility.Visible;
     }
@@ -41,6 +43,7 @@ public sealed class ImportanceToDeleteVisibilityConverter : IValueConverter
     /// <returns>Never returns.</returns>
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
+        Log.Ins.Debug("시작");
         throw new NotSupportedException();
     }
 }

@@ -22,6 +22,7 @@ using LlmIde.Infrastructure.Json;
 using LlmIde.Infrastructure.Projects;
 using LlmIde.Infrastructure.Providers;
 using Microsoft.Data.Sqlite;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Chat;
 
@@ -95,6 +96,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     public MainWindow()
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
 
         // Open Markdown hyperlinks (in rendered conversation responses) in the default browser.
@@ -165,6 +167,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void Window_Loaded(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         LoadProjects();
     }
 
@@ -175,6 +178,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The command event arguments carrying the link target.</param>
     private void OpenMarkdownHyperlink(object sender, System.Windows.Input.ExecutedRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string? url = e.Parameter as string;
 
         if (string.IsNullOrWhiteSpace(url))
@@ -192,6 +196,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ProjectList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             viewModel.Conversations.Clear();
@@ -209,6 +214,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="projectRoot">The project root path.</param>
     private void ReloadConversations(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         viewModel.Conversations.Clear();
 
         foreach (ConversationListItem conversation in ConversationLogReader.Read(projectRoot))
@@ -245,13 +251,18 @@ public partial class MainWindow : WorkspaceWindowBase
             : null;
 
     /// <inheritdoc />
-    protected override void ReleaseProjectFileLocks() => SqliteConnection.ClearAllPools();
+    protected override void ReleaseProjectFileLocks() 
+    {
+        Log.Ins.Debug("시작");
+        SqliteConnection.ClearAllPools();
+    }
 
     /// <summary>
     /// Loads registered projects into the project list.
     /// </summary>
     protected override void LoadProjects()
     {
+        Log.Ins.Debug("시작");
         viewModel.Projects.Clear();
         IReadOnlyList<ProjectRegistryEntry> projects = projectRegistryService.List();
 
@@ -276,6 +287,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="projectRoot">The project root path.</param>
     protected override void SelectProjectByRoot(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string normalizedProjectRoot = System.IO.Path.GetFullPath(projectRoot);
 
         foreach (ProjectListItem project in viewModel.Projects)
@@ -296,6 +308,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="pId">The project identifier.</param>
     protected override void SelectProjectByPId(string pId)
     {
+        Log.Ins.Debug("시작");
         foreach (ProjectListItem project in viewModel.Projects)
         {
             if (!string.Equals(project.PId, pId, StringComparison.OrdinalIgnoreCase))
@@ -314,6 +327,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="project">The selected project.</param>
     private void LoadProjectDetails(ProjectListItem project)
     {
+        Log.Ins.Debug("시작");
         viewModel.Conversations.Clear();
         viewModel.Artifacts.Clear();
 
@@ -346,6 +360,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void ScrollConversationsToEnd()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.Conversations.Count == 0)
         {
             return;
@@ -364,6 +379,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.Key != Key.Enter)
         {
             return;
@@ -383,6 +399,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void OpenChatInput()
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -400,6 +417,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void EnsureChatInputWindow()
     {
+        Log.Ins.Debug("시작");
         if (chatInputWindow is not null)
         {
             return;
@@ -420,6 +438,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// </summary>
     private void PopulateChatInputProviders()
     {
+        Log.Ins.Debug("시작");
         if (chatInputWindow is null || viewModel.SelectedProject is null)
         {
             return;
@@ -437,6 +456,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="providerName">The provider name.</param>
     private void ChangeDefaultProvider(string providerName)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return;
@@ -463,6 +483,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>True when registration succeeded.</returns>
     private bool TryRegisterManualConversation(string userText, string assistantText)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null)
         {
             return false;
@@ -489,6 +510,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>A task that completes when the chat finishes.</returns>
     private async Task SendMessageAsync(string text)
     {
+        Log.Ins.Debug("시작");
         if (isSending || viewModel.SelectedProject is null)
         {
             return;
@@ -533,6 +555,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <returns>The added conversation row.</returns>
     private ConversationListItem AddConversationRow(string requestId, string userText, DateTimeOffset sentAt)
     {
+        Log.Ins.Debug("시작");
         ConversationListItem row = new ConversationListItem
         {
             RequestId = requestId,
@@ -554,6 +577,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="chunk">The streamed chunk.</param>
     private void AppendAssistantChunk(ConversationListItem? row, string chunk)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -570,6 +594,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="label">The step label.</param>
     private void OnChatAgentStep(ConversationListItem? row, string label)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -587,6 +612,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="response">The completed chat response.</param>
     private void FinalizeConversationRow(ConversationListItem? row, ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             return;
@@ -608,6 +634,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="response">The completed chat response.</param>
     private void SaveResponseArtifacts(string projectRoot, ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         foreach (ArtifactCandidate candidate in response.ArtifactCandidates)
         {
             artifactService.Save(projectRoot, candidate, response.RequestId);
@@ -620,6 +647,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="projectRoot">The project root path.</param>
     private void ReloadArtifacts(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         viewModel.Artifacts.Clear();
 
         foreach (Artifact artifact in artifactService.List(projectRoot))
@@ -637,6 +665,7 @@ public partial class MainWindow : WorkspaceWindowBase
     private void HandleSendFailure(ConversationListItem? row, string text, Exception ex)
     {
         // When no row was added the request was never stored, so restore the input for retry.
+        Log.Ins.Debug("시작");
         if (row is null)
         {
             EnsureChatInputWindow();
@@ -657,6 +686,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ImportanceSlider_ValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not Slider slider || slider.DataContext is not ConversationListItem row)
         {
             return;
@@ -679,6 +709,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ImportanceSlider_DragCompleted(object sender, System.Windows.Controls.Primitives.DragCompletedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not Slider slider || slider.DataContext is not ConversationListItem row)
         {
             return;
@@ -695,6 +726,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="weight">The importance weight.</param>
     private void PersistImportanceWeight(ConversationListItem row, int weight)
     {
+        Log.Ins.Debug("시작");
         if (viewModel.SelectedProject is null || string.IsNullOrWhiteSpace(row.RequestId))
         {
             return;
@@ -717,6 +749,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void DeleteConversationButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not FrameworkElement element || element.DataContext is not ConversationListItem row)
         {
             return;
@@ -757,6 +790,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ExtractArtifactMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not System.Windows.Controls.MenuItem menuItem
             || menuItem.Parent is not System.Windows.Controls.ContextMenu contextMenu
             || contextMenu.PlacementTarget is not System.Windows.Controls.RichTextBox richTextBox
@@ -849,6 +883,7 @@ public partial class MainWindow : WorkspaceWindowBase
         int length,
         string artifactTitle)
     {
+        Log.Ins.Debug("시작");
         string content = row.AssistantContent;
 
         if (start < 0 || length <= 0 || start + length > content.Length)
@@ -870,6 +905,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="e">The event arguments.</param>
     private void ArtifactItem_Click(object sender, MouseButtonEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (sender is not FrameworkElement element || element.DataContext is not ArtifactListItem item)
         {
             return;
@@ -909,6 +945,7 @@ public partial class MainWindow : WorkspaceWindowBase
     /// <param name="action">The action to run.</param>
     private void RunOnUi(Action action)
     {
+        Log.Ins.Debug("시작");
         if (Dispatcher.CheckAccess())
         {
             action();
@@ -1016,6 +1053,7 @@ public sealed class MainWindowViewModel : INotifyPropertyChanged
     /// <param name="propertyName">The changed property name.</param>
     private void OnPropertyChanged([CallerMemberName] string propertyName = "")
     {
+        Log.Ins.Debug("시작");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
@@ -1031,6 +1069,7 @@ public sealed class ProjectListItem
     /// <param name="entry">The project registry entry.</param>
     public ProjectListItem(ProjectRegistryEntry entry)
     {
+        Log.Ins.Debug("시작");
         PId = entry.PId;
         DisplayName = entry.Name;
         Path = entry.Path;
@@ -1164,6 +1203,7 @@ public sealed class ConversationListItem : INotifyPropertyChanged
     /// <param name="propertyName">The changed property name.</param>
     private void OnPropertyChanged([CallerMemberName] string propertyName = "")
     {
+        Log.Ins.Debug("시작");
         PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(propertyName));
     }
 }
@@ -1179,6 +1219,7 @@ public sealed class ArtifactListItem
     /// <param name="artifact">The stored artifact.</param>
     public ArtifactListItem(Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         ArtifactId = artifact.ArtifactId;
         Title = artifact.Title;
         Type = artifact.Type;
@@ -1218,6 +1259,7 @@ public static class ConversationLogReader
     /// <returns>The conversation rows.</returns>
     public static IReadOnlyList<ConversationListItem> Read(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string conversationDirectory = Path.Combine(
             System.IO.Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -1252,6 +1294,7 @@ public static class ConversationLogReader
     /// <returns>The parsed records.</returns>
     private static List<TValue> ReadJsonLines<TValue>(string path)
     {
+        Log.Ins.Debug("시작");
         List<TValue> values = [];
 
         if (!File.Exists(path))
@@ -1286,6 +1329,7 @@ public static class ConversationLogReader
     /// <returns>The request lookup.</returns>
     private static Dictionary<string, ConversationRequestRecord> BuildRequestLookup(IReadOnlyList<ConversationRequestRecord> requests)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, ConversationRequestRecord> requestsById = new Dictionary<string, ConversationRequestRecord>(StringComparer.Ordinal);
 
         foreach (ConversationRequestRecord request in requests)
@@ -1311,6 +1355,7 @@ public static class ConversationLogReader
         IReadOnlyList<ConversationMessageRecord> messages,
         string requestId)
     {
+        Log.Ins.Debug("시작");
         foreach (ConversationMessageRecord message in messages)
         {
             if (!string.Equals(message.RequestId, requestId, StringComparison.Ordinal))
@@ -1337,6 +1382,7 @@ public static class ConversationLogReader
         Dictionary<string, ConversationRequestRecord> requestsById,
         string requestId)
     {
+        Log.Ins.Debug("시작");
         if (requestsById.TryGetValue(requestId, out ConversationRequestRecord? request))
         {
             return request;
@@ -1357,6 +1403,7 @@ public static class ConversationLogReader
         ConversationMessageRecord? assistantMessage,
         ConversationRequestRecord? request)
     {
+        Log.Ins.Debug("시작");
         DateTimeOffset createdAt = userMessage.CreatedAt;
 
         if (request is not null && request.CreatedAt != default)
@@ -1381,6 +1428,7 @@ public static class ConversationLogReader
     /// <returns>The formatted timestamp text.</returns>
     public static string FormatTimestamp(DateTimeOffset value)
     {
+        Log.Ins.Debug("시작");
         return value.ToLocalTime().ToString("[yyyy-MM-dd HH:mm:ss.fff]");
     }
 }

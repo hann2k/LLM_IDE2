@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -16,6 +17,7 @@ public sealed class JsonCriteriaStore : ICriteriaStore
     /// <returns>The project criteria.</returns>
     public IReadOnlyList<Criterion> Load(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string path = GetCriteriaPath(projectRoot);
 
         if (!File.Exists(path))
@@ -35,6 +37,7 @@ public sealed class JsonCriteriaStore : ICriteriaStore
     /// <param name="criteria">The project criteria.</param>
     public void Save(string projectRoot, IReadOnlyList<Criterion> criteria)
     {
+        Log.Ins.Debug("시작");
         string path = GetCriteriaPath(projectRoot);
         string json = JsonSerializer.Serialize(criteria, JsonOptions.Default);
         File.WriteAllText(path, json);
@@ -47,6 +50,7 @@ public sealed class JsonCriteriaStore : ICriteriaStore
     /// <returns>The criteria file path.</returns>
     private static string GetCriteriaPath(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(
             Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,

@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Agents;
 
 /// <summary>
@@ -16,6 +17,7 @@ public sealed class AgentToolHost : IAgentToolHost
     /// <param name="tools">The tools to register.</param>
     public AgentToolHost(IEnumerable<IAgentTool> tools)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, IAgentTool> map = new Dictionary<string, IAgentTool>(StringComparer.Ordinal);
 
         foreach (IAgentTool tool in tools)
@@ -37,6 +39,7 @@ public sealed class AgentToolHost : IAgentToolHost
     /// <returns>The available tool descriptors.</returns>
     public IReadOnlyList<AgentToolDescriptor> ListTools()
     {
+        Log.Ins.Debug("시작");
         List<AgentToolDescriptor> descriptors = [];
 
         foreach (IAgentTool tool in tools.Values)
@@ -59,6 +62,7 @@ public sealed class AgentToolHost : IAgentToolHost
     /// <returns>True when the tool is registered.</returns>
     public bool HasTool(string toolName)
     {
+        Log.Ins.Debug("시작");
         return !string.IsNullOrWhiteSpace(toolName) && tools.ContainsKey(toolName);
     }
 
@@ -70,6 +74,7 @@ public sealed class AgentToolHost : IAgentToolHost
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (!tools.TryGetValue(request.Tool, out IAgentTool? tool))
         {
             throw new InvalidOperationException($"Unknown tool: {request.Tool}");

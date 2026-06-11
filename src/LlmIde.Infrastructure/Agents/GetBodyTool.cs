@@ -1,4 +1,5 @@
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -16,6 +17,7 @@ public sealed class GetBodyTool : IAgentTool
     /// <param name="bridge">The document body bridge.</param>
     public GetBodyTool(IDocumentBodyBridge bridge)
     {
+        Log.Ins.Debug("시작");
         this.bridge = bridge;
     }
 
@@ -42,6 +44,7 @@ public sealed class GetBodyTool : IAgentTool
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         try
         {
             DocumentBodySnapshot? snapshot = bridge.GetCurrentBody();

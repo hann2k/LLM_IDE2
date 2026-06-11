@@ -5,6 +5,7 @@ using LlmIde.Core.Diagnostics;
 using LlmIde.Core.Projects;
 using System.Text;
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Providers;
 
@@ -150,6 +151,7 @@ public sealed class ChatService
         IPromptStore? promptStore = null,
         IToolIoLogger? toolIoLogger = null)
     {
+        Log.Ins.Debug("시작");
         this.providerSettingsStore = providerSettingsStore;
         this.providers = providers;
         this.conversationLogStore = conversationLogStore;
@@ -187,6 +189,7 @@ public sealed class ChatService
         Action<ChatProviderResponse>? onCompressionRequestReady = null,
         Action<string>? onCompressionChunk = null)
     {
+        Log.Ins.Debug("시작");
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         List<AgentToolResult> toolResults = [];
@@ -241,6 +244,7 @@ public sealed class ChatService
         Action<string>? onCompressionChunk = null,
         Action<string>? onAgentStep = null)
     {
+        Log.Ins.Debug("시작");
         PreparedChatRequest preparedRequest = PrepareRequest(projectRoot, message, artifactIds ?? []);
         StoreRequestStart(projectRoot, preparedRequest, message);
         onRequestReady?.Invoke(CreatePreviewResponse(preparedRequest));
@@ -296,6 +300,7 @@ public sealed class ChatService
     /// <returns>The new conversation request identifier.</returns>
     public string AddManualConversation(string projectRoot, string userText, string assistantText)
     {
+        Log.Ins.Debug("시작");
         string requestId = ConversationSequence.ToId(conversationLogStore.GetNextRequestSequence(projectRoot));
         DateTimeOffset createdAt = DateTimeOffset.UtcNow;
 
@@ -339,6 +344,7 @@ public sealed class ChatService
     /// <returns>The wrapped text.</returns>
     private static string WrapImported(string text)
     {
+        Log.Ins.Debug("시작");
         return "<imported>\n" + text + "\n</imported>";
     }
 
@@ -356,6 +362,7 @@ public sealed class ChatService
         List<AgentToolResult> toolResults,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         ChatProviderResponse response = new ChatProviderResponse();
         int[] step = [0];
 
@@ -408,6 +415,7 @@ public sealed class ChatService
         Action<string>? onAgentStep,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         int[] step = [0];
 
         for (int turn = 0; turn <= MaxToolTurns; turn++)
@@ -467,6 +475,7 @@ public sealed class ChatService
         int[] step,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         if (!ToolsEnabled)
         {
             return (false, null);
@@ -538,6 +547,7 @@ public sealed class ChatService
         string toolRequestId,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         DateTimeOffset startedAt = DateTimeOffset.UtcNow;
         AgentToolResult toolResult;
 
@@ -603,6 +613,7 @@ public sealed class ChatService
     /// <param name="toolResult">The tool result.</param>
     private void LogToolCall(string projectRoot, string requestId, int sequence, AgentToolResult toolResult)
     {
+        Log.Ins.Debug("시작");
         conversationLogStore.AppendToolCall(
             projectRoot,
             ConversationToolCallRecord.Create(requestId, sequence, toolResult, DateTimeOffset.UtcNow));
@@ -631,6 +642,7 @@ public sealed class ChatService
         DateTimeOffset startedAt,
         string? error)
     {
+        Log.Ins.Debug("시작");
         string safeResponse = response ?? string.Empty;
         llmRequestLogger.Log(new LlmRequestLogRecord
         {
@@ -657,6 +669,7 @@ public sealed class ChatService
     /// <returns>The message snapshot.</returns>
     private static IReadOnlyList<LlmRequestLogMessage> SnapshotMessages(IReadOnlyList<ChatMessage> messages)
     {
+        Log.Ins.Debug("시작");
         List<LlmRequestLogMessage> snapshot = new List<LlmRequestLogMessage>(messages.Count);
 
         foreach (ChatMessage message in messages)
@@ -678,6 +691,7 @@ public sealed class ChatService
     /// <returns>The batch label.</returns>
     private static string DescribeBatch(IReadOnlyList<AgentToolResult> results)
     {
+        Log.Ins.Debug("시작");
         if (results.Count == 1)
         {
             return DescribeStep(results[0]);
@@ -693,6 +707,7 @@ public sealed class ChatService
     /// <returns>The step label.</returns>
     private static string DescribeStep(AgentToolResult toolResult)
     {
+        Log.Ins.Debug("시작");
         if (toolResult.Result is FetchUrlResult fetchResult
             && Uri.TryCreate(fetchResult.Url, UriKind.Absolute, out Uri? uri))
         {
@@ -734,6 +749,7 @@ public sealed class ChatService
         string message,
         IReadOnlyList<string> artifactIds)
     {
+        Log.Ins.Debug("시작");
         ProviderSettingsDocument settingsDocument = providerSettingsStore.Load(projectRoot);
         ProviderSettings settings = GetDefaultProviderSettings(settingsDocument);
 
@@ -797,6 +813,7 @@ public sealed class ChatService
     /// <returns>The tool instruction text to inject.</returns>
     private string ResolveToolInstruction(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
             ?? new Dictionary<string, string>(StringComparer.Ordinal);
         string instruction = ResolvePrompt(prompts, PromptKeys.ChatToolInstruction, DefaultChatToolInstruction);
@@ -823,6 +840,7 @@ public sealed class ChatService
     /// <returns>The current-time system message content.</returns>
     private static string BuildCurrentTimeMessage()
     {
+        Log.Ins.Debug("시작");
         DateTimeOffset now = DateTimeOffset.Now;
         return "현재 시각: " + now.ToString("yyyy-MM-dd HH:mm:ss zzz") + " (참고용)";
     }
@@ -835,6 +853,7 @@ public sealed class ChatService
     /// <returns>The recent turn messages in chronological order.</returns>
     private IReadOnlyList<ConversationMessageRecord> GetRecentUserTurns(string projectRoot, int turnCount)
     {
+        Log.Ins.Debug("시작");
         IReadOnlyList<ConversationMessageRecord> allMessages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
 
         // Walk from newest to oldest and collect the request ids of the last user turns.
@@ -872,6 +891,7 @@ public sealed class ChatService
     /// <param name="message">The user message.</param>
     private void StoreRequestStart(string projectRoot, PreparedChatRequest preparedRequest, string message)
     {
+        Log.Ins.Debug("시작");
         DateTimeOffset createdAt = DateTimeOffset.UtcNow;
         string contextPackagePath = conversationLogStore.SaveContextPackage(projectRoot, preparedRequest.ContextPackage);
 
@@ -921,6 +941,7 @@ public sealed class ChatService
         Action<ChatProviderResponse>? onCompressionRequestReady,
         Action<string>? onCompressionChunk)
     {
+        Log.Ins.Debug("시작");
         string previousRollingContextId = preparedRequest.ContextPackage.UsedRollingContextId;
         string compressionRule = rollingContextStore.LoadCompressionRule(projectRoot);
         IReadOnlyDictionary<string, string> prompts = promptStore?.Load(projectRoot)
@@ -1071,6 +1092,7 @@ public sealed class ChatService
         CancellationToken cancellationToken,
         Action<string>? onCompressionChunk)
     {
+        Log.Ins.Debug("시작");
         if (onCompressionChunk is null)
         {
             ChatProviderResponse compressionResponse = await preparedRequest.Provider.SendAsync(
@@ -1101,6 +1123,7 @@ public sealed class ChatService
     /// <param name="compressionResult">The compression result.</param>
     private static void ApplyCompressionResult(ChatProviderResponse response, CompressionResult compressionResult)
     {
+        Log.Ins.Debug("시작");
         response.CompressionRequestId = compressionResult.RequestId;
         response.CompressionRequest = compressionResult.Request;
         response.CompressionContent = compressionResult.Content;
@@ -1119,6 +1142,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest,
         ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         ConversationImportanceParseResult importanceResult = ConversationImportanceParser.Parse(response.Content);
         response.Content = importanceResult.Content;
 
@@ -1146,6 +1170,7 @@ public sealed class ChatService
         string assistantMessage,
         IReadOnlyDictionary<string, string> prompts)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(preparedRequest.ContextPackage.RollingContextSummary))
         {
             return BuildBootstrapCompressionPrompt(projectRoot, prompts);
@@ -1166,6 +1191,7 @@ public sealed class ChatService
     /// <returns>The resolved prompt text.</returns>
     private static string ResolvePrompt(IReadOnlyDictionary<string, string> prompts, string key, string fallback)
     {
+        Log.Ins.Debug("시작");
         return prompts.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value) ? value : fallback;
     }
 
@@ -1177,6 +1203,7 @@ public sealed class ChatService
     /// <returns>The bootstrap compression prompt.</returns>
     private string BuildBootstrapCompressionPrompt(string projectRoot, IReadOnlyDictionary<string, string> prompts)
     {
+        Log.Ins.Debug("시작");
         IReadOnlyList<ConversationMessageRecord> messages = conversationLogStore.GetRecentMessages(projectRoot, int.MaxValue);
         StringBuilder logBuilder = new StringBuilder();
 
@@ -1210,6 +1237,7 @@ public sealed class ChatService
         string previousSummary,
         IReadOnlyList<string> activeCriteria)
     {
+        Log.Ins.Debug("시작");
         return new ContextPackage
         {
             RequestId = requestId,
@@ -1233,6 +1261,7 @@ public sealed class ChatService
     /// <returns>The active criteria system message.</returns>
     private static string BuildActiveCriteriaMessage(IReadOnlyList<string> activeCriteria, string intro)
     {
+        Log.Ins.Debug("시작");
         if (activeCriteria.Count == 0)
         {
             return string.Empty;
@@ -1261,6 +1290,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest,
         ChatProviderResponse response)
     {
+        Log.Ins.Debug("시작");
         conversationLogStore.AppendMessage(projectRoot, new ConversationMessageRecord
         {
             MessageId = ConversationSequence.ToId(conversationLogStore.GetNextMessageSequence(projectRoot)),
@@ -1280,6 +1310,7 @@ public sealed class ChatService
     /// <returns>The preview response.</returns>
     private static ChatProviderResponse CreatePreviewResponse(PreparedChatRequest preparedRequest)
     {
+        Log.Ins.Debug("시작");
         return new ChatProviderResponse
         {
             Provider = preparedRequest.Settings.Name,
@@ -1299,6 +1330,7 @@ public sealed class ChatService
         PreparedChatRequest preparedRequest,
         ChatProviderRequest compressionRequest)
     {
+        Log.Ins.Debug("시작");
         return new ChatProviderResponse
         {
             Provider = preparedRequest.Settings.Name,
@@ -1316,6 +1348,7 @@ public sealed class ChatService
     /// <returns>The default provider settings.</returns>
     private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument settingsDocument)
     {
+        Log.Ins.Debug("시작");
         ProviderSettings? settings = settingsDocument.Providers.FirstOrDefault(provider =>
             string.Equals(provider.Name, settingsDocument.DefaultProvider, StringComparison.OrdinalIgnoreCase));
 

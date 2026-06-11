@@ -1,5 +1,6 @@
 using System.Linq;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Conversations;
 
@@ -22,6 +23,7 @@ public sealed class ConversationToolCallRecord
         AgentToolResult toolResult,
         DateTimeOffset createdAt)
     {
+        Log.Ins.Debug("시작");
         string target = string.Empty;
         string summary = string.Empty;
 

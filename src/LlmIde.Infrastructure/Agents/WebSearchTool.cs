@@ -4,6 +4,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using LlmIde.Core.Agents;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -64,6 +65,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <param name="maxResponseChars">The maximum characters read from a search response.</param>
     public WebSearchTool(HttpClient httpClient, int defaultMaxResults = 5, int maxResponseChars = 2_000_000)
     {
+        Log.Ins.Debug("시작");
         this.httpClient = httpClient;
         this.defaultMaxResults = defaultMaxResults;
         this.maxResponseChars = maxResponseChars;
@@ -92,6 +94,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The tool result.</returns>
     public async Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         string query = ReadString(request.Arguments, "query");
         int maxResults = ReadInt(request.Arguments, "maxResults", defaultMaxResults);
 
@@ -162,6 +165,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The parsed results.</returns>
     private static List<WebSearchItem> ParseResults(string html, int maxResults)
     {
+        Log.Ins.Debug("시작");
         List<WebSearchItem> items = [];
         MatchCollection anchors = ResultAnchorRegex.Matches(html);
         MatchCollection snippets = SnippetRegex.Matches(html);
@@ -196,6 +200,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The resolved URL.</returns>
     private static string ResolveHref(string href)
     {
+        Log.Ins.Debug("시작");
         string decodedHref = WebUtility.HtmlDecode(href);
         Match uddg = UddgRegex.Match(decodedHref);
 
@@ -219,6 +224,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The cleaned text.</returns>
     private static string CleanText(string value)
     {
+        Log.Ins.Debug("시작");
         string withoutTags = TagRegex.Replace(value, string.Empty);
         return WebUtility.HtmlDecode(withoutTags).Trim();
     }
@@ -231,6 +237,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The capped body.</returns>
     private async Task<string> ReadCappedBodyAsync(HttpResponseMessage response, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         await using Stream stream = await response.Content.ReadAsStreamAsync(cancellationToken);
         using StreamReader reader = new StreamReader(stream);
         StringBuilder builder = new StringBuilder();
@@ -264,6 +271,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The string value, or empty.</returns>
     private static string ReadString(JsonElement arguments, string name)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.String)
@@ -283,6 +291,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The integer value.</returns>
     private static int ReadInt(JsonElement arguments, string name, int fallback)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.Number
@@ -303,6 +312,7 @@ public sealed class WebSearchTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string query, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         WebSearchResult result = new WebSearchResult
         {
             Ok = false,

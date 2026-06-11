@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmIde.Core.Agents;
 using LlmIde.Core.Artifacts;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -20,6 +21,7 @@ public sealed class ReadArtifactTool : IAgentTool
     /// <param name="artifactService">The artifact service.</param>
     public ReadArtifactTool(ArtifactService artifactService)
     {
+        Log.Ins.Debug("시작");
         this.artifactService = artifactService;
     }
 
@@ -46,6 +48,7 @@ public sealed class ReadArtifactTool : IAgentTool
     /// <returns>The tool result.</returns>
     public Task<AgentToolResult> ExecuteAsync(AgentToolRequest request, CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         string artifactId = ReadString(request.Arguments, "artifact_id");
 
         if (string.IsNullOrWhiteSpace(request.WorkingDirectory))
@@ -101,6 +104,7 @@ public sealed class ReadArtifactTool : IAgentTool
     /// <returns>The string value, or empty.</returns>
     private static string ReadString(JsonElement arguments, string name)
     {
+        Log.Ins.Debug("시작");
         if (arguments.ValueKind == JsonValueKind.Object
             && arguments.TryGetProperty(name, out JsonElement value)
             && value.ValueKind == JsonValueKind.String)
@@ -120,6 +124,7 @@ public sealed class ReadArtifactTool : IAgentTool
     /// <returns>The failed tool result.</returns>
     private AgentToolResult Failure(AgentToolRequest request, string artifactId, string errorMessage)
     {
+        Log.Ins.Debug("시작");
         return new AgentToolResult
         {
             Tool = Name,

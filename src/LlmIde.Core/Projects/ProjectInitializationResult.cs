@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Projects;
 
 /// <summary>
@@ -13,6 +14,7 @@ public sealed class ProjectInitializationResult
     /// <param name="created">Whether a new metadata folder was created.</param>
     public ProjectInitializationResult(string projectRoot, ProjectInfo projectInfo, bool created)
     {
+        Log.Ins.Debug("시작");
         ProjectRoot = projectRoot;
         ProjectInfo = projectInfo;
         Created = created;

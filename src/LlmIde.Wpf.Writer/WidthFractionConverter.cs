@@ -1,6 +1,7 @@
 using System;
 using System.Globalization;
 using System.Windows.Data;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -23,6 +24,7 @@ public sealed class WidthFractionConverter : IValueConverter
     /// <returns>The fractional width, or positive infinity when the width is not yet known.</returns>
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture)
     {
+        Log.Ins.Debug("시작");
         if (value is not double width || width <= 0 || double.IsInfinity(width))
         {
             return double.PositiveInfinity;
@@ -50,6 +52,7 @@ public sealed class WidthFractionConverter : IValueConverter
     /// <returns>Never returns.</returns>
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
     {
+        Log.Ins.Debug("시작");
         throw new NotSupportedException();
     }
 }

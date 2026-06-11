@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Input;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -30,6 +31,7 @@ public partial class ArtifactViewer : Window
     /// <param name="targetPath">The optional target path; its extension helps detect code.</param>
     public ArtifactViewer(string title, string content, string type, string targetPath)
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
         Title = string.IsNullOrWhiteSpace(title) ? "아티팩트 뷰어" : title;
         this.content = content;
@@ -58,6 +60,7 @@ public partial class ArtifactViewer : Window
     /// <returns>True when the artifact is code-like.</returns>
     private static bool IsCodeArtifact(string type, string targetPath)
     {
+        Log.Ins.Debug("시작");
         string normalizedType = (type ?? string.Empty).Trim().ToLowerInvariant();
 
         if (normalizedType is "code" or "json" or "patch" or "command" or "config" or "log")
@@ -85,6 +88,7 @@ public partial class ArtifactViewer : Window
     /// <param name="e">The event arguments.</param>
     private void CopyButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         System.Windows.Clipboard.SetText(content);
     }
 
@@ -95,6 +99,7 @@ public partial class ArtifactViewer : Window
     /// <param name="e">The event arguments.</param>
     private void DeleteButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         MessageBoxResult result = System.Windows.MessageBox.Show(
             this,
             "이 아티팩트를 삭제하시겠습니까? 파일도 함께 삭제됩니다.",
@@ -118,6 +123,7 @@ public partial class ArtifactViewer : Window
     /// <param name="e">The event arguments.</param>
     private void CloseButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         Close();
     }
 
@@ -128,6 +134,7 @@ public partial class ArtifactViewer : Window
     /// <param name="e">The command event arguments carrying the link target.</param>
     private void OpenHyperlink(object sender, ExecutedRoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         string? url = e.Parameter as string;
 
         if (string.IsNullOrWhiteSpace(url))

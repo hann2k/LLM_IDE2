@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Providers;
 
 /// <summary>
@@ -24,6 +25,7 @@ public sealed class ProviderSettingsService
         IProviderSettingsStore providerSettingsStore,
         IReadOnlyDictionary<string, IModelProvider> modelProviders)
     {
+        Log.Ins.Debug("시작");
         this.providerSettingsStore = providerSettingsStore;
         this.modelProviders = modelProviders;
     }
@@ -38,6 +40,7 @@ public sealed class ProviderSettingsService
         string projectRoot,
         CancellationToken cancellationToken)
     {
+        Log.Ins.Debug("시작");
         ProviderSettingsDocument settingsDocument = providerSettingsStore.Load(projectRoot);
         ProviderSettings settings = GetDefaultProviderSettings(settingsDocument);
 
@@ -56,6 +59,7 @@ public sealed class ProviderSettingsService
     /// <param name="model">The model identifier.</param>
     public void SetDefaultModel(string projectRoot, string model)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(model))
         {
             throw new InvalidOperationException("모델은 필수입니다.");
@@ -74,6 +78,7 @@ public sealed class ProviderSettingsService
     /// <returns>The default provider settings.</returns>
     private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument settingsDocument)
     {
+        Log.Ins.Debug("시작");
         ProviderSettings? settings = settingsDocument.Providers.FirstOrDefault(provider =>
             string.Equals(provider.Name, settingsDocument.DefaultProvider, StringComparison.OrdinalIgnoreCase));
 

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -20,6 +21,7 @@ public sealed class JsonProjectRegistryStore : IProjectRegistryStore
     /// <param name="ideProgramRoot">The IDE program root path.</param>
     public JsonProjectRegistryStore(string ideProgramRoot)
     {
+        Log.Ins.Debug("시작");
         registryPath = Path.Combine(Path.GetFullPath(ideProgramRoot), "project", "projects.json");
     }
 
@@ -29,6 +31,7 @@ public sealed class JsonProjectRegistryStore : IProjectRegistryStore
     /// <returns>The project registry document.</returns>
     public ProjectRegistryDocument Load()
     {
+        Log.Ins.Debug("시작");
         if (!File.Exists(registryPath))
         {
             return new ProjectRegistryDocument();
@@ -45,6 +48,7 @@ public sealed class JsonProjectRegistryStore : IProjectRegistryStore
     /// <param name="registry">The registry to save.</param>
     public void Save(ProjectRegistryDocument registry)
     {
+        Log.Ins.Debug("시작");
         string? directory = Path.GetDirectoryName(registryPath);
 
         if (directory is not null)

@@ -9,6 +9,7 @@ using DataGrid = System.Windows.Controls.DataGrid;
 using ComboBox = System.Windows.Controls.ComboBox;
 using HorizontalAlignment = System.Windows.HorizontalAlignment;
 using Orientation = System.Windows.Controls.Orientation;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -25,6 +26,7 @@ public sealed class ProviderManagerDialog : Window
 
     private ProviderManagerDialog(IProviderSettingsStore store, Window owner)
     {
+        Log.Ins.Debug("시작");
         this.store = store;
         ProviderSettingsDocument document = store.Load(string.Empty);
         providers = new ObservableCollection<ProviderSettings>(document.Providers);
@@ -95,12 +97,14 @@ public sealed class ProviderManagerDialog : Window
     /// <param name="owner">The owner window.</param>
     public static void Show(IProviderSettingsStore store, Window owner)
     {
+        Log.Ins.Debug("시작");
         new ProviderManagerDialog(store, owner).ShowDialog();
     }
 
     private void Persist()
     {
         // Commit any in-progress grid edit before saving.
+        Log.Ins.Debug("시작");
         grid.CommitEdit(DataGridEditingUnit.Row, true);
 
         List<ProviderSettings> valid = providers

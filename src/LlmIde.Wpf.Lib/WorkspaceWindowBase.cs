@@ -4,6 +4,7 @@ using System.Windows;
 using LlmIde.Core.Agents;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -65,6 +66,7 @@ public abstract class WorkspaceWindowBase : Window
     /// </summary>
     protected virtual void ReleaseProjectFileLocks()
     {
+        Log.Ins.Debug("시작");
     }
 
     /// <summary>
@@ -73,6 +75,7 @@ public abstract class WorkspaceWindowBase : Window
     /// </summary>
     protected virtual void OnProvidersChanged()
     {
+        Log.Ins.Debug("시작");
     }
 
     /// <summary>
@@ -82,6 +85,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void CreateProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         ProjectDialog dialog = new ProjectDialog(ProjectDialogMode.Create)
         {
             Owner = this
@@ -135,6 +139,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void CloneProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (CurrentProject is not { } source)
         {
             return;
@@ -174,6 +179,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="destinationDirectory">The destination directory.</param>
     private static void CopyDirectory(string sourceDirectory, string destinationDirectory)
     {
+        Log.Ins.Debug("시작");
         Directory.CreateDirectory(destinationDirectory);
 
         foreach (string filePath in Directory.GetFiles(sourceDirectory))
@@ -196,6 +202,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void RenameProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (CurrentProject is not { } selectedProject)
         {
             return;
@@ -233,6 +240,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void DeleteProjectMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (CurrentProject is not { } selectedProject)
         {
             return;
@@ -271,6 +279,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="project">The project to delete.</param>
     private void DeleteProject(WorkspaceProject project)
     {
+        Log.Ins.Debug("시작");
         string projectRoot = System.IO.Path.GetFullPath(project.Path);
 
         if (Directory.Exists(projectRoot))
@@ -290,6 +299,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <returns>True when at least one API key exists.</returns>
     private bool HasApiKey(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         ProviderSettingsDocument settings = ProviderSettingsStore.Load(projectRoot);
         return settings.Providers.Any(provider => !string.IsNullOrWhiteSpace(provider.ApiKey));
     }
@@ -301,6 +311,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void LlmMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         ProviderManagerDialog.Show(ProviderSettingsStore, this);
         OnProvidersChanged();
     }
@@ -312,6 +323,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void ToolManagerMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         ToolManagerDialog dialog = new ToolManagerDialog(AgentToolHost.ListTools())
         {
             Owner = this
@@ -326,6 +338,7 @@ public abstract class WorkspaceWindowBase : Window
     /// <param name="e">The event arguments.</param>
     protected void CriteriaMenuItem_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (CurrentProject is not { } project)
         {
             return;

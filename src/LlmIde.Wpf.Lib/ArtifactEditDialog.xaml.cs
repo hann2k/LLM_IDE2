@@ -1,4 +1,5 @@
 using System.Windows;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -23,6 +24,7 @@ public partial class ArtifactEditDialog : Window
     /// <param name="content">The initial artifact content (the dragged selection).</param>
     public ArtifactEditDialog(string sourceRequestId, string content)
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
 
         TypeComboBox.ItemsSource = ArtifactTypes;
@@ -72,6 +74,7 @@ public partial class ArtifactEditDialog : Window
     /// <param name="e">The event arguments.</param>
     private void SaveButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(TitleTextBox.Text))
         {
             System.Windows.MessageBox.Show(this, "제목을 입력하세요.", "아티팩트 추출", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -100,6 +103,7 @@ public partial class ArtifactEditDialog : Window
     /// <param name="e">The event arguments.</param>
     private void CancelButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         DialogResult = false;
     }
 }

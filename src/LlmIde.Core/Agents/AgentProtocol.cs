@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Agents;
 
@@ -14,6 +15,7 @@ public static class AgentProtocol
     /// <returns>The tool_list JSON.</returns>
     public static string ToolList(IReadOnlyList<AgentToolDescriptor> tools)
     {
+        Log.Ins.Debug("시작");
         var envelope = new
         {
             type = "tool_list",
@@ -29,6 +31,7 @@ public static class AgentProtocol
     /// <returns>The tool_result JSON.</returns>
     public static string ToolResult(AgentToolResult toolResult)
     {
+        Log.Ins.Debug("시작");
         object payload = toolResult.Result ?? new { ok = toolResult.Ok, errorMessage = toolResult.ErrorMessage };
         var envelope = new
         {
@@ -48,6 +51,7 @@ public static class AgentProtocol
     /// <returns>The tool_result JSON with a results array.</returns>
     public static string ToolResults(IReadOnlyList<AgentToolResult> toolResults)
     {
+        Log.Ins.Debug("시작");
         var results = toolResults.Select(toolResult => new
         {
             tool = toolResult.Tool,

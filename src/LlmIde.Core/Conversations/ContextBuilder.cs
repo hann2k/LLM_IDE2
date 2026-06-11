@@ -2,6 +2,7 @@ using LlmIde.Core.Artifacts;
 using LlmIde.Core.Projects;
 using LlmIde.Core.Providers;
 using System.Text;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Conversations;
 
@@ -91,6 +92,7 @@ public sealed class ContextBuilder
         ArtifactService artifactService,
         IPromptStore? promptStore = null)
     {
+        Log.Ins.Debug("시작");
         this.criteriaService = criteriaService;
         this.projectStateService = projectStateService;
         this.rollingContextStore = rollingContextStore;
@@ -119,6 +121,7 @@ public sealed class ContextBuilder
         bool includeHistory = true,
         IReadOnlyList<ConversationMessageRecord>? recentMessages = null)
     {
+        Log.Ins.Debug("시작");
         rollingContextStore.EnsureInitialized(projectRoot);
 
         string systemRule = systemRuleStore.Load(projectRoot);
@@ -167,6 +170,7 @@ public sealed class ContextBuilder
     /// <returns>The resolved prompt text.</returns>
     private static string Resolve(IReadOnlyDictionary<string, string> prompts, string key, string fallback)
     {
+        Log.Ins.Debug("시작");
         return prompts.TryGetValue(key, out string? value) && !string.IsNullOrWhiteSpace(value) ? value : fallback;
     }
 
@@ -182,6 +186,7 @@ public sealed class ContextBuilder
         IReadOnlyList<ConversationMessageRecord> recentMessages,
         IReadOnlyDictionary<string, string> prompts)
     {
+        Log.Ins.Debug("시작");
         List<ChatMessage> messages = [];
         AppendSystemMessage(messages, contextPackage.SystemRule);
         AppendSystemMessage(messages, BuildCriteriaMessage(contextPackage.ActiveCriteria, Resolve(prompts, PromptKeys.ContextCriteriaIntro, DefaultCriteriaIntro)));
@@ -218,6 +223,7 @@ public sealed class ContextBuilder
     /// <returns>The attached artifacts system message.</returns>
     private static string BuildAttachedArtifactsMessage(IReadOnlyList<string> attachedArtifacts, string intro)
     {
+        Log.Ins.Debug("시작");
         if (attachedArtifacts.Count == 0)
         {
             return string.Empty;
@@ -242,6 +248,7 @@ public sealed class ContextBuilder
     /// <param name="content">The message content.</param>
     private static void AppendSystemMessage(List<ChatMessage> messages, string content)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(content))
         {
             return;
@@ -262,6 +269,7 @@ public sealed class ContextBuilder
     /// <returns>The system message content.</returns>
     private static string BuildCriteriaMessage(IReadOnlyList<string> activeCriteria, string intro)
     {
+        Log.Ins.Debug("시작");
         if (activeCriteria.Count == 0)
         {
             return string.Empty;
@@ -287,6 +295,7 @@ public sealed class ContextBuilder
     /// <returns>The system message content.</returns>
     private static string BuildProjectStateMessage(ProjectState projectState, string intro)
     {
+        Log.Ins.Debug("시작");
         StringBuilder builder = new StringBuilder();
         builder.AppendLine(intro);
         AppendStateValue(builder, "단계", projectState.Stage);
@@ -307,6 +316,7 @@ public sealed class ContextBuilder
     /// <returns>The system message content.</returns>
     private static string BuildRollingContextMessage(string rollingContextSummary, string intro)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(rollingContextSummary))
         {
             return string.Empty;
@@ -326,6 +336,7 @@ public sealed class ContextBuilder
     /// <param name="value">The state value.</param>
     private static void AppendStateValue(StringBuilder builder, string label, string value)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(value))
         {
             return;
@@ -345,6 +356,7 @@ public sealed class ContextBuilder
     /// <param name="items">The state items.</param>
     private static void AppendStateList(StringBuilder builder, string label, IReadOnlyList<string> items)
     {
+        Log.Ins.Debug("시작");
         if (items.Count == 0)
         {
             return;
@@ -382,6 +394,7 @@ public sealed class ContextBuilder
         IReadOnlyList<string> attachedArtifacts,
         IReadOnlyList<ConversationMessageRecord> recentMessages)
     {
+        Log.Ins.Debug("시작");
         return new ContextPackage
         {
             RequestId = requestId,
@@ -406,6 +419,7 @@ public sealed class ContextBuilder
 
     private IReadOnlyList<string> LoadAttachedArtifacts(string projectRoot, IReadOnlyList<string> artifactIds)
     {
+        Log.Ins.Debug("시작");
         if (artifactIds.Count == 0)
         {
             return [];
@@ -442,6 +456,7 @@ public sealed class ContextBuilder
     /// <returns>The formatted criterion.</returns>
     private static string FormatCriterion(Criterion criterion)
     {
+        Log.Ins.Debug("시작");
         StringBuilder builder = new StringBuilder();
         builder.Append(criterion.Title);
 

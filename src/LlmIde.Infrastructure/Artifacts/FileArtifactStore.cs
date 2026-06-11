@@ -2,6 +2,7 @@ using System.Text.Json;
 using LlmIde.Core.Artifacts;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Artifacts;
 
@@ -13,6 +14,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public IReadOnlyList<Artifact> List(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return LoadIndex(projectRoot)
             .OrderBy(artifact => artifact.CreatedAt)
             .ToList();
@@ -21,6 +23,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public Artifact Get(string projectRoot, string artifactId)
     {
+        Log.Ins.Debug("시작");
         return LoadIndex(projectRoot).FirstOrDefault(artifact =>
             string.Equals(artifact.ArtifactId, artifactId, StringComparison.Ordinal))
             ?? throw new InvalidOperationException($"산출물을 찾을 수 없습니다: {artifactId}");
@@ -29,6 +32,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public string ReadContent(string projectRoot, Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         string path = GetArtifactContentPath(projectRoot, artifact.ContentPath);
         return File.ReadAllText(path);
     }
@@ -36,6 +40,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public Artifact Save(string projectRoot, ArtifactCandidate candidate, string sourceRequestId)
     {
+        Log.Ins.Debug("시작");
         List<Artifact> artifacts = LoadIndex(projectRoot);
         DateTimeOffset now = DateTimeOffset.UtcNow;
         string artifactId = $"art_{Guid.NewGuid():N}";
@@ -61,6 +66,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public Artifact Update(string projectRoot, string artifactId, ArtifactCandidate candidate)
     {
+        Log.Ins.Debug("시작");
         List<Artifact> artifacts = LoadIndex(projectRoot);
         int index = artifacts.FindIndex(artifact =>
             string.Equals(artifact.ArtifactId, artifactId, StringComparison.Ordinal));
@@ -93,6 +99,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public void Remove(string projectRoot, string artifactId)
     {
+        Log.Ins.Debug("시작");
         List<Artifact> artifacts = LoadIndex(projectRoot);
         Artifact artifact = artifacts.FirstOrDefault(item =>
             string.Equals(item.ArtifactId, artifactId, StringComparison.Ordinal))
@@ -106,6 +113,7 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public Artifact SaveImage(string projectRoot, string title, string sourceImagePath)
     {
+        Log.Ins.Debug("시작");
         if (!File.Exists(sourceImagePath))
         {
             throw new InvalidOperationException($"이미지 파일을 찾을 수 없습니다: {sourceImagePath}");
@@ -146,11 +154,13 @@ public sealed class FileArtifactStore : IArtifactStore
     /// <inheritdoc />
     public string GetContentFullPath(string projectRoot, Artifact artifact)
     {
+        Log.Ins.Debug("시작");
         return GetArtifactContentPath(projectRoot, artifact.ContentPath);
     }
 
     private static List<Artifact> LoadIndex(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         EnsureArtifactsDirectory(projectRoot);
         string path = GetIndexPath(projectRoot);
 
@@ -166,6 +176,7 @@ public sealed class FileArtifactStore : IArtifactStore
 
     private static void SaveIndex(string projectRoot, List<Artifact> artifacts)
     {
+        Log.Ins.Debug("시작");
         EnsureArtifactsDirectory(projectRoot);
         string json = JsonSerializer.Serialize(artifacts, JsonOptions.Default);
         File.WriteAllText(GetIndexPath(projectRoot), json);
@@ -173,12 +184,14 @@ public sealed class FileArtifactStore : IArtifactStore
 
     private static void WriteContent(string projectRoot, string contentPath, string content)
     {
+        Log.Ins.Debug("시작");
         EnsureArtifactsDirectory(projectRoot);
         File.WriteAllText(GetArtifactContentPath(projectRoot, contentPath), content);
     }
 
     private static void DeleteContentIfExists(string projectRoot, string contentPath)
     {
+        Log.Ins.Debug("시작");
         string path = GetArtifactContentPath(projectRoot, contentPath);
 
         if (File.Exists(path))
@@ -189,16 +202,19 @@ public sealed class FileArtifactStore : IArtifactStore
 
     private static void EnsureArtifactsDirectory(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         Directory.CreateDirectory(GetArtifactsRoot(projectRoot));
     }
 
     private static string GetIndexPath(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(GetArtifactsRoot(projectRoot), LlmIdeLayout.ArtifactsIndexFileName);
     }
 
     private static string GetArtifactsRoot(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         return Path.Combine(
             Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -207,12 +223,14 @@ public sealed class FileArtifactStore : IArtifactStore
 
     private static string GetArtifactContentPath(string projectRoot, string contentPath)
     {
+        Log.Ins.Debug("시작");
         string fileName = Path.GetFileName(contentPath);
         return Path.Combine(GetArtifactsRoot(projectRoot), fileName);
     }
 
     private static string GetExtension(string type)
     {
+        Log.Ins.Debug("시작");
         return type.Trim().ToLowerInvariant() switch
         {
             "csharp" => ".cs",

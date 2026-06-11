@@ -1,4 +1,5 @@
 using LlmIde.Core.Projects;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Projects;
 
@@ -18,6 +19,7 @@ public sealed class FileSystemRuleStore : ISystemRuleStore
     /// <param name="programRoot">The IDE program root.</param>
     public FileSystemRuleStore(string? programRoot = null)
     {
+        Log.Ins.Debug("시작");
         this.programRoot = Path.GetFullPath(programRoot ?? AppContext.BaseDirectory);
     }
 
@@ -29,6 +31,7 @@ public sealed class FileSystemRuleStore : ISystemRuleStore
     public string Load(string projectRoot)
     {
         // Policies are common to all projects: read from the program's /policies folder.
+        Log.Ins.Debug("시작");
         string path = Path.Combine(programRoot, LlmIdeLayout.PoliciesDirectoryName, LlmIdeLayout.SystemRuleFileName);
         return File.Exists(path) ? File.ReadAllText(path) : string.Empty;
     }

@@ -1,4 +1,5 @@
 using LlmIde.Core.Projects;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure;
 
@@ -21,6 +22,7 @@ public static class ProgramDataRoot
     /// <returns>The absolute data root path (%LOCALAPPDATA%\LlmIde2).</returns>
     public static string EnsureAndGet()
     {
+        Log.Ins.Debug("시작");
         string dataRoot = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             FolderName);
@@ -37,6 +39,7 @@ public static class ProgramDataRoot
     /// <param name="dataRoot">The data root path.</param>
     private static void SeedPolicies(string dataRoot)
     {
+        Log.Ins.Debug("시작");
         string sourcePolicies = Path.Combine(AppContext.BaseDirectory, LlmIdeLayout.PoliciesDirectoryName);
 
         if (!Directory.Exists(sourcePolicies))

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Encodings.Web;
 using System.Text.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Writer;
 
@@ -42,6 +43,7 @@ public sealed class OutlineStore
     /// <returns>The root outline items.</returns>
     public IReadOnlyList<OutlineItem> Load(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string path = Path.Combine(projectRoot, OutlineFileName);
 
         if (!File.Exists(path))
@@ -67,6 +69,7 @@ public sealed class OutlineStore
     /// <param name="roots">The root outline items.</param>
     public void Save(string projectRoot, IEnumerable<OutlineItem> roots)
     {
+        Log.Ins.Debug("시작");
         try
         {
             List<OutlineNode> nodes = roots.Select(ToNode).ToList();
@@ -85,6 +88,7 @@ public sealed class OutlineStore
     /// <param name="item">The outline item.</param>
     public void EnsureBodyFile(string projectRoot, OutlineItem item)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(item.BodyFile))
         {
             item.BodyFile = item.Id + ".md";
@@ -113,6 +117,7 @@ public sealed class OutlineStore
     /// <returns>The body text.</returns>
     public string ReadBody(string projectRoot, OutlineItem item)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(item.BodyFile))
         {
             return string.Empty;
@@ -137,6 +142,7 @@ public sealed class OutlineStore
     /// <param name="text">The body text.</param>
     public void WriteBody(string projectRoot, OutlineItem item, string text)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(item.BodyFile))
         {
             item.BodyFile = item.Id + ".md";
@@ -159,6 +165,7 @@ public sealed class OutlineStore
     /// <param name="item">The outline item.</param>
     public void DeleteBodyFiles(string projectRoot, OutlineItem item)
     {
+        Log.Ins.Debug("시작");
         try
         {
             if (!string.IsNullOrEmpty(item.BodyFile))
@@ -184,6 +191,7 @@ public sealed class OutlineStore
 
     private static OutlineNode ToNode(OutlineItem item)
     {
+        Log.Ins.Debug("시작");
         return new OutlineNode
         {
             Id = item.Id,
@@ -195,6 +203,7 @@ public sealed class OutlineStore
 
     private static OutlineItem ToItem(OutlineNode node, OutlineItem? parent)
     {
+        Log.Ins.Debug("시작");
         OutlineItem item = new OutlineItem
         {
             Id = node.Id,

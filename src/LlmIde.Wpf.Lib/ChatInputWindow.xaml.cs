@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Windows;
 using System.Windows.Input;
+using Framework.Common.Logger;
 
 namespace LlmIde.Wpf.Lib;
 
@@ -21,6 +22,7 @@ public partial class ChatInputWindow : Window
     /// </summary>
     public ChatInputWindow()
     {
+        Log.Ins.Debug("시작");
         InitializeComponent();
     }
 
@@ -51,6 +53,7 @@ public partial class ChatInputWindow : Window
     /// <param name="selectedProvider">The currently selected provider.</param>
     public void SetProviders(IReadOnlyList<string> providerNames, string selectedProvider)
     {
+        Log.Ins.Debug("시작");
         suppressProviderChange = true;
         ProviderComboBox.ItemsSource = providerNames;
         ProviderComboBox.SelectedItem = selectedProvider;
@@ -62,6 +65,7 @@ public partial class ChatInputWindow : Window
     /// </summary>
     public void FocusInput()
     {
+        Log.Ins.Debug("시작");
         UserInput.Focus();
         UserInput.CaretIndex = UserInput.Text.Length;
     }
@@ -72,6 +76,7 @@ public partial class ChatInputWindow : Window
     /// <param name="text">The message text to restore.</param>
     public void RestoreForRetry(string text)
     {
+        Log.Ins.Debug("시작");
         UserInput.Text = text;
         Show();
         Activate();
@@ -85,6 +90,7 @@ public partial class ChatInputWindow : Window
     /// <param name="e">The event arguments.</param>
     private void Window_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (e.Key == Key.Escape)
         {
             e.Handled = true;
@@ -99,6 +105,7 @@ public partial class ChatInputWindow : Window
     /// <param name="e">The event arguments.</param>
     private void UserInput_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (IsManualMode)
         {
             return;
@@ -116,6 +123,7 @@ public partial class ChatInputWindow : Window
     /// </summary>
     private void Send()
     {
+        Log.Ins.Debug("시작");
         string text = UserInput.Text;
 
         if (string.IsNullOrWhiteSpace(text))
@@ -138,6 +146,7 @@ public partial class ChatInputWindow : Window
     /// <param name="e">The event arguments.</param>
     private void ManualModeCheckBox_Changed(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         bool manual = IsManualMode;
         AssistantInputArea.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
         RegisterButton.Visibility = manual ? Visibility.Visible : Visibility.Collapsed;
@@ -157,6 +166,7 @@ public partial class ChatInputWindow : Window
     /// <param name="e">The event arguments.</param>
     private void RegisterButton_Click(object sender, RoutedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(UserInput.Text) || string.IsNullOrWhiteSpace(AssistantInput.Text))
         {
             System.Windows.MessageBox.Show(this, "user와 assistant 내용을 모두 입력하세요.", "수동대화 추가", MessageBoxButton.OK, MessageBoxImage.Warning);
@@ -180,6 +190,7 @@ public partial class ChatInputWindow : Window
     /// <param name="e">The event arguments.</param>
     private void ProviderComboBox_SelectionChanged(object sender, System.Windows.Controls.SelectionChangedEventArgs e)
     {
+        Log.Ins.Debug("시작");
         if (suppressProviderChange)
         {
             return;

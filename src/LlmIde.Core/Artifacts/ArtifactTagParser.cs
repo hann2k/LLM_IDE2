@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Framework.Common.Logger;
 
 namespace LlmIde.Core.Artifacts;
 
@@ -22,6 +23,7 @@ public static class ArtifactTagParser
     /// <returns>The extracted artifact candidates.</returns>
     public static IReadOnlyList<ArtifactCandidate> Extract(string text)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(text))
         {
             return [];
@@ -58,6 +60,7 @@ public static class ArtifactTagParser
     /// <returns>The text without artifact blocks.</returns>
     public static string RemoveArtifacts(string text)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(text))
         {
             return string.Empty;
@@ -73,6 +76,7 @@ public static class ArtifactTagParser
     /// <returns>The text with artifact blocks replaced by their titles.</returns>
     public static string ReplaceArtifactsWithTitles(string text)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrEmpty(text))
         {
             return string.Empty;
@@ -88,6 +92,7 @@ public static class ArtifactTagParser
     /// <returns>The artifact title marker.</returns>
     private static string ReplaceWithTitle(Match match)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, string> attributes = ParseAttributes(match.Groups["attributes"].Value);
         string title = GetAttribute(attributes, "title", "제목 없는 산출물");
         return $"[아티팩트: {title}]";
@@ -95,6 +100,7 @@ public static class ArtifactTagParser
 
     private static Dictionary<string, string> ParseAttributes(string attributes)
     {
+        Log.Ins.Debug("시작");
         Dictionary<string, string> result = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (Match match in AttributeRegex.Matches(attributes))
@@ -110,6 +116,7 @@ public static class ArtifactTagParser
         string name,
         string fallback)
     {
+        Log.Ins.Debug("시작");
         return attributes.TryGetValue(name, out string? value) && !string.IsNullOrWhiteSpace(value)
             ? value.Trim()
             : fallback;

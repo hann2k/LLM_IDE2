@@ -1,3 +1,4 @@
+using Framework.Common.Logger;
 namespace LlmIde.Core.Conversations;
 
 /// <summary>
@@ -12,6 +13,7 @@ public static class ConversationSequence
     /// <returns>The stored identifier value.</returns>
     public static string ToId(long sequence)
     {
+        Log.Ins.Debug("시작");
         return sequence.ToString(System.Globalization.CultureInfo.InvariantCulture);
     }
 
@@ -23,6 +25,7 @@ public static class ConversationSequence
     /// <returns>True when the identifier is a positive numeric sequence.</returns>
     public static bool TryParse(string identifier, out long sequence)
     {
+        Log.Ins.Debug("시작");
         sequence = 0;
 
         if (string.IsNullOrWhiteSpace(identifier))

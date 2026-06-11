@@ -1,4 +1,5 @@
 using LlmIde.Core.Projects;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Agents;
 
@@ -18,6 +19,7 @@ internal static class ProjectPathGuard
     /// <returns>The resolved full path, or an error message when blocked.</returns>
     public static (string? FullPath, string? Error) Resolve(string workingDirectory, string path, bool allowRoot)
     {
+        Log.Ins.Debug("시작");
         if (string.IsNullOrWhiteSpace(workingDirectory))
         {
             return (null, "작업 폴더가 설정되지 않았습니다.");
@@ -82,6 +84,7 @@ internal static class ProjectPathGuard
     /// <returns>True when the path is inside .llmide.</returns>
     public static bool IsMetadata(string root, string fullPath)
     {
+        Log.Ins.Debug("시작");
         string metadataRoot = Path.Combine(root, LlmIdeLayout.MetadataDirectoryName);
         string metadataWithSeparator = metadataRoot + Path.DirectorySeparatorChar;
         return fullPath.Equals(metadataRoot, StringComparison.OrdinalIgnoreCase)

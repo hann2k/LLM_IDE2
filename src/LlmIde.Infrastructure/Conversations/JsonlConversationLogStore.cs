@@ -2,6 +2,7 @@ using System.Text.Json;
 using LlmIde.Core.Conversations;
 using LlmIde.Core.Projects;
 using LlmIde.Infrastructure.Json;
+using Framework.Common.Logger;
 
 namespace LlmIde.Infrastructure.Conversations;
 
@@ -18,6 +19,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The stored context package path.</returns>
     public string SaveContextPackage(string projectRoot, ContextPackage contextPackage)
     {
+        Log.Ins.Debug("시작");
         string packageDirectory = Path.Combine(
             GetConversationsDirectory(projectRoot),
             LlmIdeLayout.ContextPackagesDirectoryName);
@@ -36,6 +38,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The next request sequence number.</returns>
     public long GetNextRequestSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
         long maxSequence = 0;
 
@@ -62,6 +65,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The next message sequence number.</returns>
     public long GetNextMessageSequence(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
         long maxSequence = 0;
 
@@ -88,6 +92,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="request">The request record.</param>
     public void AppendRequest(string projectRoot, ConversationRequestRecord request)
     {
+        Log.Ins.Debug("시작");
         string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
         AppendJsonLine(requestPath, request);
     }
@@ -100,6 +105,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="importanceWeight">The importance weight from 0 to 10.</param>
     public void UpdateRequestImportanceWeight(string projectRoot, string requestId, int importanceWeight)
     {
+        Log.Ins.Debug("시작");
         string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
         List<ConversationRequestRecord> requests = ReadJsonLines<ConversationRequestRecord>(requestPath);
         bool updated = false;
@@ -131,6 +137,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="message">The message record.</param>
     public void AppendMessage(string projectRoot, ConversationMessageRecord message)
     {
+        Log.Ins.Debug("시작");
         string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
         AppendJsonLine(messagePath, message);
     }
@@ -142,6 +149,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="toolCall">The tool call record.</param>
     public void AppendToolCall(string projectRoot, ConversationToolCallRecord toolCall)
     {
+        Log.Ins.Debug("시작");
         string toolCallPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.ToolCallsFileName);
         AppendJsonLine(toolCallPath, toolCall);
     }
@@ -153,6 +161,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="requestId">The chat request identifier.</param>
     public void DeleteConversation(string projectRoot, string requestId)
     {
+        Log.Ins.Debug("시작");
         string compressionRequestId = requestId + "c";
         string conversationsDirectory = GetConversationsDirectory(projectRoot);
 
@@ -184,6 +193,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="content">The new assistant message content.</param>
     public void UpdateAssistantMessageContent(string projectRoot, string requestId, string content)
     {
+        Log.Ins.Debug("시작");
         string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
 
         if (!File.Exists(messagePath))
@@ -220,6 +230,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>True when the record belongs to the conversation being deleted.</returns>
     private static bool IsTargetRequest(string recordRequestId, string requestId, string compressionRequestId)
     {
+        Log.Ins.Debug("시작");
         return string.Equals(recordRequestId, requestId, StringComparison.Ordinal)
             || string.Equals(recordRequestId, compressionRequestId, StringComparison.Ordinal);
     }
@@ -232,6 +243,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="shouldRemove">The predicate selecting records to remove.</param>
     private static void RemoveJsonLines<TValue>(string path, Func<TValue, bool> shouldRemove)
     {
+        Log.Ins.Debug("시작");
         if (!File.Exists(path))
         {
             return;
@@ -256,6 +268,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="path">The file path.</param>
     private static void DeleteFileIfExists(string path)
     {
+        Log.Ins.Debug("시작");
         if (File.Exists(path))
         {
             File.Delete(path);
@@ -270,6 +283,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The recent messages.</returns>
     public IReadOnlyList<ConversationMessageRecord> GetRecentMessages(string projectRoot, int maxMessages)
     {
+        Log.Ins.Debug("시작");
         string messagePath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.MessagesFileName);
 
         if (!File.Exists(messagePath))
@@ -294,6 +308,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The parsed records.</returns>
     private static List<TValue> ReadJsonLines<TValue>(string path)
     {
+        Log.Ins.Debug("시작");
         List<TValue> values = [];
 
         if (!File.Exists(path))
@@ -328,6 +343,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <returns>The conversations directory path.</returns>
     private static string GetConversationsDirectory(string projectRoot)
     {
+        Log.Ins.Debug("시작");
         string conversationsDirectory = Path.Combine(
             Path.GetFullPath(projectRoot),
             LlmIdeLayout.MetadataDirectoryName,
@@ -343,6 +359,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="value">The value to append.</param>
     private static void AppendJsonLine<TValue>(string path, TValue value)
     {
+        Log.Ins.Debug("시작");
         string json = JsonSerializer.Serialize(value, JsonOptions.Compact);
         File.AppendAllText(path, json + Environment.NewLine);
     }
@@ -355,6 +372,7 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     /// <param name="values">The records to write.</param>
     private static void WriteJsonLines<TValue>(string path, IReadOnlyList<TValue> values)
     {
+        Log.Ins.Debug("시작");
         List<string> lines = [];
 
         foreach (TValue value in values)
