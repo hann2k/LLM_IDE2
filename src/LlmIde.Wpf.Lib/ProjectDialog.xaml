@@ -76,21 +76,6 @@
                     Click="BrowsePathButton_Click" />
         </Grid>
 
-        <TextBlock x:Name="ProjectApiKeyLabel"
-                   Grid.Row="3"
-                   Grid.Column="0"
-                   Visibility="Collapsed"
-                   Text="API 키"
-                   FontSize="16"
-                   VerticalAlignment="Center"
-                   Margin="0,0,12,12" />
-        <TextBox x:Name="ProjectApiKeyTextBox"
-                 Grid.Row="3"
-                 Grid.Column="1"
-                 Visibility="Collapsed"
-                 FontSize="16"
-                 Margin="0,0,0,12" />
-
         <CheckBox x:Name="ConversationTypeCheckBox"
                   Grid.Row="4"
                   Grid.ColumnSpan="2"

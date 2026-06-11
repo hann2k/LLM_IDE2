@@ -40,6 +40,13 @@ public partial class ProjectDialog : Window
     private readonly bool requiresApiKeyConfirmation;
 
     /// <summary>
+    /// The default project data root: a per-user writable location (%LOCALAPPDATA%\LlmIde2).
+    /// New projects start here unless the user changes the path.
+    /// </summary>
+    private static readonly string DefaultDataRoot =
+        System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "LlmIde2");
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="ProjectDialog"/> class.
     /// </summary>
     /// <param name="mode">The dialog operation mode.</param>
@@ -75,17 +82,6 @@ public partial class ProjectDialog : Window
         get
         {
             return ProjectPathTextBox.Text.Trim();
-        }
-    }
-
-    /// <summary>
-    /// Gets the requested provider API key.
-    /// </summary>
-    public string ProjectApiKey
-    {
-        get
-        {
-            return ProjectApiKeyTextBox.Text.Trim();
         }
     }
 
@@ -134,9 +130,8 @@ public partial class ProjectDialog : Window
         ProjectIdTextBox.Visibility = Visibility.Collapsed;
         ProjectPathLabel.Text = "시작위치";
 
-        // API key is entered during project creation.
-        ProjectApiKeyLabel.Visibility = Visibility.Visible;
-        ProjectApiKeyTextBox.Visibility = Visibility.Visible;
+        // Always start under the per-user writable data root; the user can still change it.
+        ProjectPathTextBox.Text = DefaultDataRoot;
 
         // Conversation type is selected during project creation.
         ConversationTypeCheckBox.Visibility = Visibility.Visible;
@@ -211,7 +206,7 @@ public partial class ProjectDialog : Window
 
         if (string.IsNullOrWhiteSpace(selectedPath))
         {
-            selectedPath = AppContext.BaseDirectory;
+            selectedPath = DefaultDataRoot;
         }
 
         using Forms.FolderBrowserDialog dialog = new Forms.FolderBrowserDialog

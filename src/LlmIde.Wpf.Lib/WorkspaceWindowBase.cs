@@ -117,16 +117,7 @@ public abstract class WorkspaceWindowBase : Window
             projectInfo.LongTermConversation = dialog.IsLongTermConversation;
             ProjectStore.SaveProjectInfo(result.ProjectRoot, projectInfo);
 
-            // Store the API key entered during project creation.
-            string apiKey = dialog.ProjectApiKey;
-
-            if (!string.IsNullOrWhiteSpace(apiKey))
-            {
-                ProviderSettingsDocument settings = ProviderSettingsStore.Load(result.ProjectRoot);
-                GetDefaultProviderSettings(settings).ApiKey = apiKey;
-                ProviderSettingsStore.Save(result.ProjectRoot, settings);
-            }
-
+            // API keys are managed centrally via 편집 > LLM (common providers), not per project.
             LoadProjects();
             SelectProjectByRoot(result.ProjectRoot);
             System.Windows.MessageBox.Show(this, "프로젝트를 생성했습니다.", "프로젝트 생성", MessageBoxButton.OK, MessageBoxImage.Information);
@@ -372,26 +363,4 @@ public abstract class WorkspaceWindowBase : Window
         }
     }
 
-    /// <summary>
-    /// Gets the default provider settings from a settings document.
-    /// </summary>
-    /// <param name="document">The provider settings document.</param>
-    /// <returns>The default provider settings.</returns>
-    private static ProviderSettings GetDefaultProviderSettings(ProviderSettingsDocument document)
-    {
-        ProviderSettings? settings = document.Providers.FirstOrDefault(provider =>
-            string.Equals(provider.Name, document.DefaultProvider, StringComparison.OrdinalIgnoreCase));
-
-        if (settings is not null)
-        {
-            return settings;
-        }
-
-        if (document.Providers.Count > 0)
-        {
-            return document.Providers[0];
-        }
-
-        throw new InvalidOperationException("프로바이더 설정이 없습니다.");
-    }
 }
