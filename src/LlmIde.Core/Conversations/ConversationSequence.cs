@@ -18,11 +18,13 @@ public static class ConversationSequence
     }
 
     /// <summary>
-    /// Tries to parse a stored identifier as a positive sequence number.
+    /// Tries to parse a stored identifier as a sequence number. Chat/message sequences are
+    /// positive, compression sequences are negative (DEC-085); zero is not a valid sequence.
+    /// Legacy identifiers (GUIDs, 'c' suffix) fail to parse and are excluded from numbering.
     /// </summary>
     /// <param name="identifier">The stored identifier.</param>
     /// <param name="sequence">The parsed sequence number.</param>
-    /// <returns>True when the identifier is a positive numeric sequence.</returns>
+    /// <returns>True when the identifier is a non-zero numeric sequence.</returns>
     public static bool TryParse(string identifier, out long sequence)
     {
         Log.Ins.Debug("시작");
@@ -35,14 +37,14 @@ public static class ConversationSequence
 
         if (!long.TryParse(
             identifier,
-            System.Globalization.NumberStyles.None,
+            System.Globalization.NumberStyles.AllowLeadingSign,
             System.Globalization.CultureInfo.InvariantCulture,
             out long parsed))
         {
             return false;
         }
 
-        if (parsed <= 0)
+        if (parsed == 0)
         {
             return false;
         }

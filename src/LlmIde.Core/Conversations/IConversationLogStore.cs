@@ -28,6 +28,14 @@ public interface IConversationLogStore
     long GetNextMessageSequence(string projectRoot);
 
     /// <summary>
+    /// Gets the next compression request identifier number. Compression sequences are negative
+    /// (-1, -2, -3 ...) so the whole identifier pool stays integer-parseable (DEC-085).
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next (most negative minus one) compression sequence number.</returns>
+    long GetNextCompressionRequestSequence(string projectRoot);
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

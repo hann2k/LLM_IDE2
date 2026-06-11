@@ -386,11 +386,11 @@ public static class Program
         AssertEqual("1", messages[0].MessageId, "First stored user message should use a readable sequence identifier.");
         AssertEqual("2", messages[1].MessageId, "First stored assistant message should use a readable sequence identifier.");
         AssertEqual("1", requests[0].RequestId, "First chat request should use a readable sequence identifier.");
-        AssertEqual("1c", requests[1].RequestId, "First compression request should use a readable sequence identifier.");
+        AssertEqual("-1", requests[1].RequestId, "First compression request should use a negative sequence identifier (DEC-085).");
         AssertEqual(7, requests[0].ImportanceWeight, "Chat request should store the parsed importance weight.");
         AssertEqual(0, requests[1].ImportanceWeight, "Compression request should not store chat importance.");
         AssertFileExists(projectRoot, ".llmide/conversations/context-packages/1.json");
-        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/1c.json");
+        AssertFileExists(projectRoot, ".llmide/conversations/context-packages/-1.json");
         AssertFileExists(projectRoot, ".llmide/conversations/rolling-context/current.md");
         string rollingContext = File.ReadAllText(Path.Combine(projectRoot, ".llmide", "conversations", "rolling-context", "current.md"));
         AssertFalse(string.IsNullOrWhiteSpace(rollingContext), "Current rolling context should be updated.");
@@ -1620,19 +1620,32 @@ public static class Program
         DateTimeOffset now = DateTimeOffset.UtcNow;
 
         store.SaveContextPackage(root, new ContextPackage { RequestId = "1" });
-        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "1", RequestType = "chat", CreatedAt = now });
+        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "1", RequestType = "chat", CompressionRequestId = "-1", CreatedAt = now });
         store.AppendMessage(root, new ConversationMessageRecord { MessageId = "1", RequestId = "1", Role = "user", Content = "hi", CreatedAt = now });
         store.AppendMessage(root, new ConversationMessageRecord { MessageId = "2", RequestId = "1", Role = "assistant", Content = "yo", CreatedAt = now });
         store.AppendToolCall(root, new ConversationToolCallRecord { RequestId = "1", Sequence = 1, Tool = "web_search", Ok = true, CreatedAt = now });
 
+        // The compression turn is linked by fields, not by identifier derivation (DEC-085).
+        store.AppendRequest(root, new ConversationRequestRecord { RequestId = "-1", RequestType = "compression", SourceChatRequestId = "1", CreatedAt = now });
+
         store.AppendRequest(root, new ConversationRequestRecord { RequestId = "2", RequestType = "chat", CreatedAt = now });
         store.AppendMessage(root, new ConversationMessageRecord { MessageId = "3", RequestId = "2", Role = "user", Content = "keep", CreatedAt = now });
+
+        AssertEqual(
+            "-2",
+            ConversationSequence.ToId(store.GetNextCompressionRequestSequence(root)),
+            "Next compression sequence should be one below the stored minimum (DEC-085).");
 
         store.DeleteConversation(root, "1");
 
         IReadOnlyList<ConversationMessageRecord> messages = store.GetRecentMessages(root, int.MaxValue);
         AssertEqual(1, messages.Count, "Only the surviving conversation's messages should remain.");
         AssertEqual("2", messages[0].RequestId, "Remaining message should belong to conversation 2.");
+
+        string requestsPath = Path.Combine(root, ".llmide", "conversations", "requests.jsonl");
+        ConversationRequestRecord[] remainingRequests = ReadJsonLines<ConversationRequestRecord>(requestsPath);
+        AssertEqual(1, remainingRequests.Length, "The linked compression turn should be deleted with its chat.");
+        AssertEqual("2", remainingRequests[0].RequestId, "Only the surviving chat request should remain.");
     }
 
     /// <summary>

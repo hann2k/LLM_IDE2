@@ -169,6 +169,7 @@ public sealed class DeepSeekChatProvider : IChatProvider, IModelProvider
 
             if (!string.IsNullOrEmpty(content))
             {
+                // Log.Ins.Debug($"스트림 청크: {content}");
                 yield return content;
             }
         }

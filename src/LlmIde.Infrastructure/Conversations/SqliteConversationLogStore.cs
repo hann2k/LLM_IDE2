@@ -72,6 +72,27 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next compression request identifier number (negative sequence, DEC-085).
+    /// Scans stored compression_request_id values too, so identifiers assigned to skipped or
+    /// failed compressions are never reused.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next compression sequence number.</returns>
+    public long GetNextCompressionRequestSequence(string projectRoot)
+    {
+        Log.Ins.Debug("시작");
+        string databasePath = EnsureDatabase(projectRoot);
+        using SqliteConnection connection = OpenConnection(databasePath);
+        return GetNextCompressionSequence(
+            connection,
+            """
+            select request_id from conversation_turns
+            union all
+            select compression_request_id from conversation_turns;
+            """);
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -260,24 +281,56 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
 
     /// <summary>
     /// Deletes a conversation and its compression turn from SQLite. Rolling context is left intact.
+    /// The compression turn is resolved via the linkage fields (compression_request_id /
+    /// source_chat_request_id, DEC-085); the legacy 'c'-suffix identifier is still removed for old data.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="requestId">The chat request identifier.</param>
     public void DeleteConversation(string projectRoot, string requestId)
     {
         Log.Ins.Debug("시작");
-        string compressionRequestId = requestId + "c";
         string databasePath = EnsureDatabase(projectRoot);
         using SqliteConnection connection = OpenConnection(databasePath);
+
+        // Collect all identifiers to remove: the chat itself, its linked compression turn(s),
+        // and the legacy 'c'-suffix compression identifier.
+        List<string> targetIds = [requestId, requestId + "c"];
+
+        using (SqliteCommand lookup = connection.CreateCommand())
+        {
+            lookup.CommandText = """
+                select compression_request_id from conversation_turns where request_id = $request_id
+                union
+                select request_id from conversation_turns where source_chat_request_id = $request_id;
+                """;
+            lookup.Parameters.AddWithValue("$request_id", requestId);
+            using SqliteDataReader reader = lookup.ExecuteReader();
+
+            while (reader.Read())
+            {
+                string linkedId = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+
+                if (!string.IsNullOrWhiteSpace(linkedId) && !targetIds.Contains(linkedId))
+                {
+                    targetIds.Add(linkedId);
+                }
+            }
+        }
+
+        string parameterList = string.Join(", ", Enumerable.Range(0, targetIds.Count).Select(index => $"$id{index}"));
         using SqliteCommand command = connection.CreateCommand();
-        command.CommandText = """
-            delete from conversation_messages where request_id in ($request_id, $compression_request_id);
-            delete from agent_tool_calls where request_id in ($request_id, $compression_request_id);
-            delete from context_packages where request_id in ($request_id, $compression_request_id);
-            delete from conversation_turns where request_id in ($request_id, $compression_request_id);
+        command.CommandText = $"""
+            delete from conversation_messages where request_id in ({parameterList});
+            delete from agent_tool_calls where request_id in ({parameterList});
+            delete from context_packages where request_id in ({parameterList});
+            delete from conversation_turns where request_id in ({parameterList});
             """;
-        command.Parameters.AddWithValue("$request_id", requestId);
-        command.Parameters.AddWithValue("$compression_request_id", compressionRequestId);
+
+        for (int index = 0; index < targetIds.Count; index++)
+        {
+            command.Parameters.AddWithValue($"$id{index}", targetIds[index]);
+        }
+
         command.ExecuteNonQuery();
     }
 
@@ -510,6 +563,37 @@ public sealed class SqliteConversationLogStore : IConversationLogStore
         }
 
         return maxSequence + 1;
+    }
+
+    /// <summary>
+    /// Gets the next compression sequence number from stored identifiers: one below the most
+    /// negative stored sequence, starting at -1 (DEC-085). Positive and legacy identifiers are ignored.
+    /// </summary>
+    /// <param name="connection">The SQLite connection.</param>
+    /// <param name="selectIdentifiersSql">The SQL that selects identifier values.</param>
+    /// <returns>The next compression sequence number.</returns>
+    private static long GetNextCompressionSequence(SqliteConnection connection, string selectIdentifiersSql)
+    {
+        Log.Ins.Debug("시작");
+        long minSequence = 0;
+        using SqliteCommand command = connection.CreateCommand();
+        command.CommandText = selectIdentifiersSql;
+        using SqliteDataReader reader = command.ExecuteReader();
+
+        while (reader.Read())
+        {
+            if (reader.IsDBNull(0) || !ConversationSequence.TryParse(reader.GetString(0), out long sequence))
+            {
+                continue;
+            }
+
+            if (sequence < minSequence)
+            {
+                minSequence = sequence;
+            }
+        }
+
+        return minSequence - 1;
     }
 
     /// <summary>

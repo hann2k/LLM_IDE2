@@ -433,6 +433,8 @@ public sealed class ChatService
                 {
                     content.Append(chunk);
                     onChunk(chunk);
+
+                    Log.Ins.Debug($"수신 Content: {content.ToString()}");
                 }
             }
             catch (Exception ex)
@@ -761,7 +763,11 @@ public sealed class ChatService
         bool longTerm = projectStore.ReadProjectInfo(projectRoot).LongTermConversation;
         long nextRequestSequence = conversationLogStore.GetNextRequestSequence(projectRoot);
         string requestId = ConversationSequence.ToId(nextRequestSequence);
-        string compressionRequestId = requestId + "c";
+
+        // Compression requests use a separate negative sequence (-1, -2, ...) so every stored
+        // identifier stays integer-parseable (DEC-085).
+        string compressionRequestId = ConversationSequence.ToId(
+            conversationLogStore.GetNextCompressionRequestSequence(projectRoot));
 
         // Long-term conversations also send the most recent 5 user turns (request + response) verbatim.
         IReadOnlyList<ConversationMessageRecord> recentMessages = longTerm

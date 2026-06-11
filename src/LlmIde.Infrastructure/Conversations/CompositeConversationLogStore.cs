@@ -94,6 +94,30 @@ public sealed class CompositeConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next compression request identifier number from all stores (negative sequence,
+    /// DEC-085). The most advanced value across stores is the smallest (most negative) one.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next compression sequence number.</returns>
+    public long GetNextCompressionRequestSequence(string projectRoot)
+    {
+        Log.Ins.Debug("시작");
+        long nextSequence = -1;
+
+        foreach (IConversationLogStore store in stores)
+        {
+            long storeSequence = store.GetNextCompressionRequestSequence(projectRoot);
+
+            if (storeSequence < nextSequence)
+            {
+                nextSequence = storeSequence;
+            }
+        }
+
+        return nextSequence;
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>

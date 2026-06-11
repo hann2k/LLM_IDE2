@@ -86,6 +86,35 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
     }
 
     /// <summary>
+    /// Gets the next compression request identifier number (negative sequence, DEC-085).
+    /// Scans stored compression_request_id values too, so identifiers assigned to skipped or
+    /// failed compressions are never reused.
+    /// </summary>
+    /// <param name="projectRoot">The project root path.</param>
+    /// <returns>The next compression sequence number.</returns>
+    public long GetNextCompressionRequestSequence(string projectRoot)
+    {
+        Log.Ins.Debug("시작");
+        string requestPath = Path.Combine(GetConversationsDirectory(projectRoot), LlmIdeLayout.RequestsFileName);
+        long minSequence = 0;
+
+        foreach (ConversationRequestRecord request in ReadJsonLines<ConversationRequestRecord>(requestPath))
+        {
+            if (ConversationSequence.TryParse(request.RequestId, out long sequence) && sequence < minSequence)
+            {
+                minSequence = sequence;
+            }
+
+            if (ConversationSequence.TryParse(request.CompressionRequestId, out long linkedSequence) && linkedSequence < minSequence)
+            {
+                minSequence = linkedSequence;
+            }
+        }
+
+        return minSequence - 1;
+    }
+
+    /// <summary>
     /// Appends a request record.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
@@ -156,33 +185,50 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
 
     /// <summary>
     /// Deletes a conversation and its compression turn from the JSONL logs and context packages.
+    /// The compression turn is resolved via the linkage fields (CompressionRequestId /
+    /// SourceChatRequestId, DEC-085); the legacy 'c'-suffix identifier is still removed for old data.
     /// </summary>
     /// <param name="projectRoot">The project root path.</param>
     /// <param name="requestId">The chat request identifier.</param>
     public void DeleteConversation(string projectRoot, string requestId)
     {
         Log.Ins.Debug("시작");
-        string compressionRequestId = requestId + "c";
         string conversationsDirectory = GetConversationsDirectory(projectRoot);
+        string requestPath = Path.Combine(conversationsDirectory, LlmIdeLayout.RequestsFileName);
+
+        // Collect all identifiers to remove: the chat itself, its linked compression turn(s),
+        // and the legacy 'c'-suffix compression identifier.
+        HashSet<string> targetIds = new HashSet<string>(StringComparer.Ordinal) { requestId, requestId + "c" };
+
+        foreach (ConversationRequestRecord request in ReadJsonLines<ConversationRequestRecord>(requestPath))
+        {
+            if (string.Equals(request.RequestId, requestId, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(request.CompressionRequestId))
+            {
+                targetIds.Add(request.CompressionRequestId);
+            }
+
+            if (string.Equals(request.SourceChatRequestId, requestId, StringComparison.Ordinal)
+                && !string.IsNullOrWhiteSpace(request.RequestId))
+            {
+                targetIds.Add(request.RequestId);
+            }
+        }
 
         string messagePath = Path.Combine(conversationsDirectory, LlmIdeLayout.MessagesFileName);
-        RemoveJsonLines<ConversationMessageRecord>(
-            messagePath,
-            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+        RemoveJsonLines<ConversationMessageRecord>(messagePath, record => targetIds.Contains(record.RequestId));
 
-        string requestPath = Path.Combine(conversationsDirectory, LlmIdeLayout.RequestsFileName);
-        RemoveJsonLines<ConversationRequestRecord>(
-            requestPath,
-            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+        RemoveJsonLines<ConversationRequestRecord>(requestPath, record => targetIds.Contains(record.RequestId));
 
         string toolCallPath = Path.Combine(conversationsDirectory, LlmIdeLayout.ToolCallsFileName);
-        RemoveJsonLines<ConversationToolCallRecord>(
-            toolCallPath,
-            record => IsTargetRequest(record.RequestId, requestId, compressionRequestId));
+        RemoveJsonLines<ConversationToolCallRecord>(toolCallPath, record => targetIds.Contains(record.RequestId));
 
         string packageDirectory = Path.Combine(conversationsDirectory, LlmIdeLayout.ContextPackagesDirectoryName);
-        DeleteFileIfExists(Path.Combine(packageDirectory, $"{requestId}.json"));
-        DeleteFileIfExists(Path.Combine(packageDirectory, $"{compressionRequestId}.json"));
+
+        foreach (string targetId in targetIds)
+        {
+            DeleteFileIfExists(Path.Combine(packageDirectory, $"{targetId}.json"));
+        }
     }
 
     /// <summary>
@@ -219,20 +265,6 @@ public sealed class JsonlConversationLogStore : IConversationLogStore
         {
             WriteJsonLines(messagePath, messages);
         }
-    }
-
-    /// <summary>
-    /// Determines whether a record's request identifier is the chat or its compression request.
-    /// </summary>
-    /// <param name="recordRequestId">The record's request identifier.</param>
-    /// <param name="requestId">The chat request identifier.</param>
-    /// <param name="compressionRequestId">The compression request identifier.</param>
-    /// <returns>True when the record belongs to the conversation being deleted.</returns>
-    private static bool IsTargetRequest(string recordRequestId, string requestId, string compressionRequestId)
-    {
-        Log.Ins.Debug("시작");
-        return string.Equals(recordRequestId, requestId, StringComparison.Ordinal)
-            || string.Equals(recordRequestId, compressionRequestId, StringComparison.Ordinal);
     }
 
     /// <summary>
